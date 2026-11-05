@@ -329,7 +329,7 @@ export const LEVELS = prepareCampaign([
     stages: [
       {
         tip: 'Fill the NUKE gate to wipe the screen and blast the fort!',
-        tower: 6000,
+        tower: 4200,
         waves: { every: 3.0, swarm: 8, tank: { every: 3, hp: 30 }, ramp: 0.4 },
         gates: [
           { t: 'mul', v: 2, x: -4.6, d: 14, w: 3.4 },
