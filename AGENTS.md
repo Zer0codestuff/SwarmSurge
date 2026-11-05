@@ -13,6 +13,7 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 - Optional older bot tools require `npm install` in `tools/`. Their Chromium path is currently hardcoded to `/usr/bin/chromium`, and screenshot tools assume `/tmp/ss` exists. Adapt these prerequisites before running them on macOS. No automated test script is configured in package.json.
 
 ## Current status and recent changes
+- `src/unit-assets.js` builds beveled armored troops and eight distinct weapon meshes. Instanced leg motion uses simulation time and matching depth and distance shaders, so animation and shadows freeze together when paused. Enemy equipment overlays fit the taller helmets. The eight weapon models are ready; combat expansion is the next integration.
 - Storm Peaks clouds now form lateral banks outside the camera corridor, including the opening swoop. Twenty-seven focused checks include transformed cloud bounds; the focused world-19 campaign still clears.
 - `src/tutorials.js` persists first-introduction lessons in `swarm-tutorials`. Basic lessons are limited to world one; movement gates share one lesson. Replays, retries, returning players and debug runs skip repeat prose. Opening the map does not consume a lesson. Policy checks run with `node tools/tutorial-checks.mjs`.
 - Balls absorb continuous contact and ranged damage even during deployment, preserve unused troop power and grant a four-second x2 wreck bonus. Charged giants preserve output in a full pool and receive that multiplier too.
