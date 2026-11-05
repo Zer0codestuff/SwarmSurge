@@ -237,6 +237,7 @@
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
 </style>
+<link rel="stylesheet" href="./src/map.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -268,10 +269,12 @@
 </div>
 
 <div id="menu" class="overlay hidden">
-  <div id="title">SWARM<br><b>SURGE</b></div>
-  <div id="sub">Build your tank. Arm the swarm. Call the air wing.</div>
-  <div id="levels"></div>
-  <div id="howto">Drag or use A/D and arrow keys to aim. Chain gates to multiply your army. Feed gold crates to unlock tanks, troop weapons and air support for the level. Troops evolve through 13 ranks, from blue recruits to prismatic elites. Extra power fuses into troops when the road gets crowded. Smash rolling swarms for a four-second x2 bonus. Keep your hearts to earn three stars.</div>
+  <div class="campaign-head">
+    <div><div id="title">SWARM <b>SURGE</b></div><div id="sub">Twenty worlds. One unstoppable swarm.</div></div>
+    <div class="campaign-route"><span id="mapcount"></span><button id="mapresume"></button></div>
+  </div>
+  <div id="levels" aria-label="Campaign map"></div>
+  <div id="howto">Clear a world to unlock the next island. Replay any cleared world for more stars.<br>Drag or use A/D to aim. Feed gold crates for tanks, weapons and air support.</div>
 </div>
 
 <div id="result" class="overlay hidden">

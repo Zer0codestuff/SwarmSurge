@@ -2,6 +2,7 @@
 
 A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your cannon, fire a stream of blue units through multiplier gates, and let the swarm grow from a handful to billions before it crashes into the enemy fort or boss.
 
+- A winding map of 20 biome islands. Clear a world to unlock the next, replay earlier worlds for stars
 - 20 levels, 3 stages each, across 20 themed worlds
 - Gates (`+`, `x`, `÷`, flip, slot machine, phasing), barriers, ice vaults, portals, jump pads, loops and conveyor belts
 - Equipment crates unlock Bulldog and Siege tanks, armor, blasters, splash rockets, chain-lightning rifles and repeated air strikes
@@ -34,7 +35,7 @@ CHROME_PATH=/path/to/chrome node check-game.mjs
 CHROME_PATH=/path/to/chrome node check-game.mjs --campaign
 ```
 
-The first command checks ball collision, airborne immunity, weapon line of sight, power conservation, armor, Rapid and retry state. The second also simulates all 20 campaigns with the smart policy and seed 42. JSON results go to `tools/out/campaign.json`. Chrome is discovered in standard application and Linux locations; set `CHROME_PATH` for a cached headless browser. `GAME_URL` overrides the default server URL.
+The first command checks ball collision, airborne immunity, weapon line of sight, power conservation, armor, Rapid, retry state, map locks, legacy progress and immediate victory saves. The second also simulates all 20 campaigns with the smart policy and seed 42. JSON results go to `tools/out/campaign.json`. Chrome is discovered in standard application and Linux locations; set `CHROME_PATH` for a cached headless browser. `GAME_URL` overrides the default server URL.
 
 ## Bot harness (`tools/`)
 

@@ -7,6 +7,7 @@ import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
 import { RANKS, rankOf, WEAPONS, CHASSIS, sweptCircle } from './arsenal.js';
+import { campaignProgress, renderCampaignMap } from './map.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -364,6 +365,12 @@ function loadProgress() {
   return { stars: [] };
 }
 let progress = loadProgress();
+function recordVictory() {
+  const stars = G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1;
+  if (stars <= (progress.stars[G.levelIdx] || 0)) return;
+  progress.stars[G.levelIdx] = stars;
+  try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
+}
 
 // ---------------------------------------------------------------- level construction
 function gateColor(def, cur) {
@@ -2099,6 +2106,7 @@ function stageCleared(S) {
 }
 function bossDefeated(S) {
   logStage(S, 'won');
+  recordVictory();
   const b = S.boss;
   b.alive = false;
   const overkill = -b.hp;
@@ -2430,20 +2438,16 @@ function showMenu() {
   G.phase = 'menu';
   hud.root.classList.add('hidden');
   $('result').classList.add('hidden');
-  const list = $('levels');
-  list.innerHTML = LEVELS.map((L, i) => `
-    <button class="card t-${L.theme}" data-level="${i}" style="animation-delay:${(i * 0.045).toFixed(3)}s">
-      <div class="num">${i + 1}</div>
-      <div class="info">
-        <div class="name">${L.name} <span class="diff d${tier(i)}">${TIERS[tier(i)]}</span></div>
-        <div class="feat">★ ${L.feature}</div>
-        <div class="blurb">${L.blurb}</div>
-        <div class="enemy">⚠ ${L.enemy}</div>
-      </div>
-      <div class="stars">${starsHtml(progress.stars[i] || 0)}</div>
-    </button>`).join('');
-  list.querySelectorAll('.card').forEach((b) => b.addEventListener('click', () => { sound.unlock(); startLevel(+b.dataset.level); }));
+  const status = renderCampaignMap($('levels'), LEVELS, THEMES, progress, index => { sound.unlock(); startLevel(index); });
+  $('mapcount').textContent = `${status.cleared} / ${LEVELS.length} worlds cleared`;
+  $('mapresume').textContent = status.complete ? 'Replay the finale' : `${status.unlocked ? 'Continue' : 'Play'} / ${status.unlocked + 1}`;
+  $('mapresume').onclick = () => { sound.unlock(); startLevel(status.unlocked); };
   $('menu').classList.remove('hidden');
+  requestAnimationFrame(() => {
+    if (G.phase !== 'menu') return;
+    if (innerWidth <= 600 && status.unlocked >= 6) $('levels').querySelector('.current')?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    else $('menu').scrollTop = 0;
+  });
   for (const L of bruteLabels) hideLabel(L);
   for (const p of popups) { p.life = 0; p.el.style.display = 'none'; }
   for (const S of G.stages) {
@@ -2455,10 +2459,7 @@ function showMenu() {
 }
 function showResult(win) {
   const stars = win ? (G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1) : 0;
-  if (win && stars > (progress.stars[G.levelIdx] || 0)) {
-    progress.stars[G.levelIdx] = stars;
-    try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
-  }
+  if (win) recordVictory();
   $('rtitle').textContent = win ? 'LEVEL COMPLETE!' : 'DEFEATED';
   $('rtitle').className = win ? 'win' : 'lose';
   $('rstars').innerHTML = win ? starsHtml(stars) : '';

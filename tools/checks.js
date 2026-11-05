@@ -70,6 +70,30 @@ window.runGameChecks = (g) => {
     $('rretry').click();
     return {pass:G.chassis===1 && G.weapon===3 && G.aircraft===1 && G.rate===2 && G.power===2 && G.shield===3};
   })()`);
+  check('Campaign unlocks one world at a time and preserves legacy wins', `(() => {
+    const fresh=campaignProgress([],20), first=campaignProgress([3],20), legacy=campaignProgress([0,0,0,2],20);
+    return {pass:fresh.unlocked===0 && first.unlocked===1 && legacy.unlocked===4};
+  })()`);
+  check('Map locks block play and unlocked islands launch their level', `(() => {
+    const saved=progress;
+    try {
+      progress={stars:[3]}; showMenu();
+      const buttons=[...document.querySelectorAll('.map-stop')];
+      buttons[2].click(); const blocked=G.phase==='menu'; buttons[1].click();
+      return {pass:buttons.length===20 && buttons.filter(b=>!b.disabled).length===2 && blocked && G.levelIdx===1};
+    } finally { progress=saved; }
+  })()`);
+  check('Victory saves progress before the result animation', `(() => {
+    const saved=progress, stored=localStorage.getItem('swarm-progress');
+    try {
+      progress={stars:[]}; startLevel(0,2); G.lives=9; bossDefeated(G.stage);
+      const stars=JSON.parse(localStorage.getItem('swarm-progress')).stars;
+      return {pass:G.phase==='won' && !G.shown && stars[0]===3 && campaignProgress(stars,20).unlocked===1};
+    } finally {
+      progress=saved;
+      if(stored===null) localStorage.removeItem('swarm-progress'); else localStorage.setItem('swarm-progress',stored);
+    }
+  })()`);
   g.start(1); g.pause();
   return results;
 };

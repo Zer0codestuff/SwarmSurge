@@ -1,7 +1,7 @@
 # Swarm Surge
 
 ## Purpose and architecture
-Browser crowd shooter with 20 levels and three stages per level. Plain JavaScript ES modules and vendored Three.js, with no build step or backend. `index.html` contains the UI and import map. `src/main.js` owns rendering, simulation, input, and debug hooks. Level definitions are in `src/levels.js` and `src/levels2.js`; `src/campaign.js` applies equipment routes and pacing. `src/arsenal.js` defines 13 troop ranks and continuous circle collision. The other modules generate models, worlds, effects, props, bosses, and audio.
+Browser crowd shooter with 20 levels and three stages per level. Plain JavaScript ES modules and vendored Three.js, with no build step or backend. `index.html` contains the UI and import map. `src/main.js` owns rendering, simulation, input, and debug hooks. Level definitions are in `src/levels.js` and `src/levels2.js`; `src/campaign.js` applies equipment routes and pacing. `src/arsenal.js` defines 13 troop ranks and continuous circle collision. `src/map.js` and `src/map.css` render the biome island map and derive unlocks from saved stars. The other modules generate models, worlds, effects, props, bosses, and audio.
 
 ## Run and verification
 - From the project root: `python3 -m http.server 8000 --bind 127.0.0.1`.
@@ -16,17 +16,19 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 - Rapid doubles rate to x8; Power triples output. Added Bulldog and Siege tank transformations with armor, three troop weapons, and repeated air strikes. Equipment persists across stages and retries.
 - All 60 stages have equipment routes and revised pacing. Long fights expose armor gradually, increasing hit damage up to x4. Preserved the largest multiplier routes and extra crowd capacity on surge stages.
 - Added 13 troop colors, smaller troop scaling, 24-halo limit, weapon instances, procedural armory icons, textured roads, tank animation, and aircraft. Hidden future stage geometry during play.
-- Eleven focused gameplay regressions passed in Chromium. Final seed-42 campaign run completed all 20 levels. Desktop and 390 x 844 layouts were inspected with no document overflow.
+- Added a winding campaign map with 20 procedural biome dioramas, progressive unlocks, replayable worlds, stars and a continue button. Legacy late-world wins keep earlier worlds accessible. Victory saves immediately before the result animation.
+- Fourteen focused gameplay and progression regressions passed in Chromium. Final seed-42 campaign run completed all 20 levels. Desktop and 390 x 844 layouts were inspected with no document overflow.
 
 ## Constraints and next steps
 - Keep project artifacts in English and do not use em dashes.
 - Preserve the existing visual identity and mechanics unless a change is requested.
 - Progress and mute settings use browser localStorage.
 - Campaign checks use a bot and do not replace human balance feedback. Sustained performance and physical mobile devices remain unvalidated.
-- User requests a biome campaign map with progressive unlocks next, and frequent logical commits.
+- User requests frequent logical commits. Keep the biome map and progressive unlocks; preserve existing localStorage progress.
 
 ## Do not
 - Do not introduce a build system, backend, or external asset dependency just to serve the game.
+- Do not restore the flat level-card grid or erase legacy progress when changing unlock rules.
 - Do not remove the deliberately overpowered multiplier routes or collapse the intermediate troop ranks.
 - Do not spend excessive time on UI testing; keep browser checks focused.
 - Do not commit generated screenshots, node_modules, or unrelated user changes.
