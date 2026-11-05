@@ -9,21 +9,18 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 - `?level=12&stage=2` selects a stage; `speed=2` accelerates simulation and `turbo=1` skips rendering for bots.
 - Inspect the browser console and `window.__game.state` for focused checks. Check desktop and mobile viewports when changing UI.
 - Focused regressions: `cd tools && npm ci`, then `CHROME_PATH=/path/to/chrome node check-game.mjs`. Add `--campaign` to simulate all 20 campaigns with the smart policy and seed 42. Reports go to ignored `tools/out/`.
+- Use `--levels=8` or a comma-separated world list for focused balance runs. These write separate reports so the full-campaign report is preserved.
 - Optional older bot tools require `npm install` in `tools/`. Their Chromium path is currently hardcoded to `/usr/bin/chromium`, and screenshot tools assume `/tmp/ss` exists. Adapt these prerequisites before running them on macOS. No automated test script is configured in package.json.
 
 ## Current status and recent changes
-- Troop weapons now spend firing capacity only on valid targets, search past enemies behind cover, and reacquire quickly when idle. Front-line troops cannot be starved by idle back-line troops. Eighteen focused regressions pass.
-- Beam effects use a reusable 128-slot instanced pool in `src/fx.js`. The isolated 64-trace case needs one extra draw call instead of 64 and stops allocating a geometry per shot. Nineteen focused regressions cover expiry and capacity as well.
-- Pause uses the HUD button, Escape or P. Losing focus pauses active play and clears held controls. The pause menu can return to the map while retaining the current run in memory; Resume restores the exact battle. Starting another world replaces that run. Pause freezes simulation, sound, HUD animations and repeated rendering. Twenty-two focused regressions cover these transitions.
-- Worlds 5 onward have up to two announced side reinforcements on normal stages, using biome-specific enemy types. Tutorial worlds and surge stages keep their original rhythm. Reinforcements do not scale with army power. Twenty-four focused regressions pass; the updated seed-42 smart bot still clears all 20 worlds and 60 stages.
-- Worlds 8, 12 and 14 include escort-cannon crates, with distinct armory icons and two armor points per escort. Charged giants now preserve output when the unit pool is full and receive the wreck multiplier. Giant launches use a short heavy-shot sound rather than the equipment-unlock chime. Twenty-six focused regressions cover charged output and escort volleys.
-- Added continuous ball collision during deployment delays, remaining-power conservation, damage feedback, and a four-second x2 wreck bonus.
-- Rapid doubles rate to x8; Power triples output. Added Bulldog and Siege tank transformations with armor, three troop weapons, and repeated air strikes. Equipment persists across stages and retries.
-- All 60 stages have equipment routes and revised pacing. Long fights expose armor gradually, increasing hit damage up to x4. Preserved the largest multiplier routes and extra crowd capacity on surge stages.
-- Added 13 troop colors, smaller troop scaling, 24-halo limit, weapon instances, procedural armory icons, textured roads, tank animation, and aircraft. Hidden future stage geometry during play.
-- Added a winding campaign map with 20 procedural biome dioramas, progressive unlocks, replayable worlds, stars and a continue button. Legacy late-world wins keep earlier worlds accessible. Victory saves immediately before the result animation.
-- Limited combo messages to two at once, respected reduced-motion camera preferences, removed the old card-grid styles and stopped battlefield rendering behind the opaque map.
-- Fixed restarting during grouped nuke effects. Fifteen focused gameplay and progression regressions cover the new mechanics. Final seed-42 campaign run completed all 20 levels. Desktop and 390 x 844 layouts were inspected with no document overflow.
+- Balls absorb continuous contact and ranged damage even during deployment, preserve unused troop power and grant a four-second x2 wreck bonus. Charged giants preserve output in a full pool and receive that multiplier too.
+- Rapid doubles rate to x8; Power triples output. Bulldog and Siege tanks add armor. Three troop weapons, escort cannons and repeated air strikes persist through stages and retries. Escorts appear in worlds 8, 12 and 14.
+- Weapons select visible targets through the spatial grid and spend firing capacity only on actual shots. Idle back-line troops cannot starve the front line.
+- All 60 stages have equipment routes and revised pacing. Later normal stages have limited, announced biome flanks. Tutorials and surge stages keep their rhythm. Long fights expose armor up to x4 hit damage. Moon Base's first stage was shortened after focused balance runs.
+- Thirteen troop colors, smaller units, capped halos and combo messages, instanced weapons, textured roads, animated tanks and aircraft reduce clutter. A reusable 128-slot tracer pool adds one draw call for simultaneous shots. Future-stage geometry is hidden.
+- The 20-island biome map has progressive unlocks, replayable worlds, stars and legacy-save support. Victories persist before the result animation.
+- Pause with the HUD button, Escape or P. Losing focus clears held input and pauses simulation, sound, HUD animation and rendering. The map retains one exact battle in memory until another world starts or the page reloads. Resize redraws a frozen scene once.
+- Restart cleanup handles grouped nuke effects. Twenty-six focused regressions pass. The latest full seed-42 smart-bot run cleared all 20 worlds and 60 stages; a focused Moon Base run cleared stage one in 22.3 seconds. Desktop and 390 x 844 bounds were inspected. Ten rendered restarts kept geometry, texture and shader counts stable.
 
 ## Constraints and next steps
 - Keep project artifacts in English and do not use em dashes.

@@ -37,9 +37,10 @@ Serve the game, install the optional tools with `cd tools && npm ci`, then run:
 ```sh
 CHROME_PATH=/path/to/chrome node check-game.mjs
 CHROME_PATH=/path/to/chrome node check-game.mjs --campaign
+CHROME_PATH=/path/to/chrome node check-game.mjs --levels=8
 ```
 
-The first command checks ball collision, airborne immunity, weapon line of sight, power conservation, armor, Rapid, retry state, map locks, legacy progress and immediate victory saves. The second also simulates all 20 campaigns with the smart policy and seed 42. JSON results go to `tools/out/campaign.json`. Chrome is discovered in standard application and Linux locations; set `CHROME_PATH` for a cached headless browser. `GAME_URL` overrides the default server URL.
+The first command checks ball collision, airborne immunity, weapon targeting, power conservation, armor, Rapid, retries, map locks, victory saves, pause transitions and side reinforcements. The second also simulates all 20 campaigns with the smart policy and seed 42. JSON results go to `tools/out/campaign.json`. Use `--levels=8` or a comma-separated world list for a focused run and a separate report. Chrome is discovered in standard application and Linux locations; set `CHROME_PATH` for a cached headless browser. `GAME_URL` overrides the default server URL.
 
 ## Bot harness (`tools/`)
 
