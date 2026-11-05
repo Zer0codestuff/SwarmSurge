@@ -51,8 +51,8 @@ export function merge(parts) {
 }
 
 // ---------- units (instanced; instance color multiplies the baked vertex colors) ----------
-export function blueUnitGeo() {
-  return troopGeometry();
+export function blueUnitGeo(detail = 'high') {
+  return troopGeometry(false, detail);
 }
 
 // Separate instanced overlays keep weapons visible without adding a draw call per troop.
@@ -61,8 +61,8 @@ export function troopWeaponGeo(kind) {
   geometry.userData.shared = false;
   return geometry;
 }
-export function redUnitGeo() {
-  return troopGeometry(true);
+export function redUnitGeo(detail = 'high') {
+  return troopGeometry(true, detail);
 }
 export function bombGeo() {
   const b = new THREE.SphereGeometry(0.2, 10, 8); b.translate(0, 1.18, 0); paint(b, 0x222222);

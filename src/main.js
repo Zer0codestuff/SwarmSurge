@@ -120,7 +120,11 @@ function instanced(geo, mat, n, shadow = true) {
 const unitMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const blueMesh = instanced(M.blueUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x0c3060, gradientMap: M.toonGradient() }), MAX_BLUE);
 const redMesh = instanced(M.redUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x400808, gradientMap: M.toonGradient() }), MAX_RED);
-for (const mesh of [blueMesh,redMesh]) {
+const blueFarMesh = instanced(M.blueUnitGeo('low').scale(1.2, 1.2, 1.2), blueMesh.material, MAX_BLUE);
+const redFarMesh = instanced(M.redUnitGeo('low').scale(1.2, 1.2, 1.2), redMesh.material, MAX_RED);
+const troopMeshes = [blueMesh, redMesh, blueFarMesh, redFarMesh];
+for (const mesh of troopMeshes) {
+  mesh.geometry.setAttribute('unitMotion', new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count * 2), 2).setUsage(THREE.DynamicDrawUsage));
   installTroopMotion(mesh.material);
   mesh.customDepthMaterial = mesh.material.userData.troopMotion.depthMaterial;
   mesh.customDistanceMaterial = mesh.material.userData.troopMotion.distanceMaterial;
@@ -143,7 +147,8 @@ function makePool(N) {
   P.kind = new Uint8Array(N);
   P.st = new Uint8Array(N);
   P.weapon = new Uint8Array(N);
-  P.arrs = [P.x, P.z, P.px, P.pz, P.vx, P.vz, P.hp, P.phase, P.flash, P.cm, P.sc, P.rad, P.wake, P.age, P.mx, P.stk, P.air, P.adur, P.ax0, P.az0, P.ax1, P.az1, P.mask, P.mask2, P.kind, P.st, P.shot, P.weapon, P.burn, P.burnDamage, P.chill];
+  P.detail = new Uint8Array(N);
+  P.arrs = [P.x, P.z, P.px, P.pz, P.vx, P.vz, P.hp, P.phase, P.flash, P.cm, P.sc, P.rad, P.wake, P.age, P.mx, P.stk, P.air, P.adur, P.ax0, P.az0, P.ax1, P.az1, P.mask, P.mask2, P.kind, P.st, P.shot, P.weapon, P.burn, P.burnDamage, P.chill, P.detail];
   return P;
 }
 const B = makePool(MAX_BLUE), R = makePool(MAX_RED);
@@ -162,6 +167,7 @@ function spawn(P, x, z, hp, kind, mask = 0, mask2 = 0) {
   P.vx[i] = P.vz[i] = 0; P.hp[i] = hp; P.kind[i] = kind; P.mask[i] = mask; P.mask2[i] = mask2;
   P.phase[i] = Math.random() * 6.28; P.flash[i] = 0; P.cm[i] = 1; P.sc[i] = 1; P.rad[i] = 0.3; P.st[i] = 0; P.wake[i] = 0; P.age[i] = 0; P.mx[i] = hp; P.stk[i] = 0; P.air[i] = 0; P.adur[i] = 0; P.shot[i] = Math.random() * 0.9; P.weapon[i] = P === B ? nextTroopWeapon() : 0;
   P.burn[i] = P.burnDamage[i] = P.chill[i] = 0;
+  P.detail[i] = 0;
   return i;
 }
 function compact(P) {
@@ -2246,8 +2252,25 @@ function lose(msg) {
 }
 
 // ---------------------------------------------------------------- rendering
+let troopPixelScale = 1;
+function troopInstance(P, i, near, far) {
+  const distance = Math.hypot(P.x[i] - camera.position.x, camera.position.y, P.z[i] - camera.position.z);
+  const pixels = P.sc[i] * troopPixelScale / Math.max(1, distance);
+  P.detail[i] = pixels > (P.detail[i] ? 20 : 24) ? 1 : 0;
+  const mesh = P.detail[i] ? near : far, at = mesh.count++;
+  const motion = mesh.geometry.attributes.unitMotion.array;
+  motion[at * 2] = P.phase[i];
+  motion[at * 2 + 1] = P.st[i] || P.adur[i] > 0 ? 0 : Math.min(1, Math.hypot(P.vx[i], P.vz[i]) / 6);
+  return mesh;
+}
+function finishTroopMeshes(near, far) {
+  for (const mesh of [near, far]) {
+    mesh.instanceMatrix.needsUpdate = mesh.instanceColor.needsUpdate = true;
+    mesh.geometry.attributes.unitMotion.needsUpdate = true;
+  }
+}
 function writeBlue() {
-  const m = blueMesh.instanceMatrix.array, c = blueMesh.instanceColor.array;
+  blueMesh.count = blueFarMesh.count = 0;
   const counts = weaponCounts; counts.fill(0);
   const rb = ((G.t * 5) | 0) % 32;
   let haloCount = 0, topRank = 0;
@@ -2255,26 +2278,26 @@ function writeBlue() {
     const hp = B.hp[i], s = B.sc[i], tier = rankOf(hp);
     topRank = Math.max(topRank, tier);
     const col = tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : B.kind[i] && tier < 2 ? GIANT_RGB : TIER_RGB[tier];
-    writeMatrix(m, i, B, s, 1);
+    const body = troopInstance(B, i, blueMesh, blueFarMesh), index = body.count - 1;
+    const m = body.instanceMatrix.array, c = body.instanceColor.array;
+    writeMatrix(m, i, B, s, 1, index);
     if (tier >= 5 && haloCount < 24 && i % 7 === 0) {
       halos.add(B.x[i], 0.3, B.z[i], col, 1.45 * s, 0.19); haloCount++;
     }
     const weapon = B.weapon[i];
     if (weapon) {
       const mesh = weaponMeshes[weapon], at = counts[weapon]++;
-      mesh.instanceMatrix.array.set(m.subarray(i * 16, i * 16 + 16), at * 16);
+      mesh.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), at * 16);
     }
     const f = Math.max(0, B.flash[i]) * 0.45;
-    c[i * 3] = col[0] + (1 - col[0]) * f; c[i * 3 + 1] = col[1] + (1 - col[1]) * f; c[i * 3 + 2] = col[2] + (1 - col[2]) * f;
+    c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
   }
   G.rank = topRank;
   for (let k = 1; k < weaponMeshes.length; k++) { weaponMeshes[k].count = counts[k]; weaponMeshes[k].instanceMatrix.needsUpdate = true; }
-  blueMesh.count = B.n;
-  blueMesh.instanceMatrix.needsUpdate = true;
-  blueMesh.instanceColor.needsUpdate = true;
+  finishTroopMeshes(blueMesh, blueFarMesh);
 }
 // unit matrix: heading + forward lean while running, squash & stretch on each step, pop-in when spawned
-function writeMatrix(m, i, P, s, lean) {
+function writeMatrix(m, i, P, s, lean, instance = i) {
   const vx = P.vx[i], vz = P.vz[i];
   const ang = Math.atan2(vx, vz);
   const c = Math.cos(ang), si = Math.sin(ang);
@@ -2287,7 +2310,7 @@ function writeMatrix(m, i, P, s, lean) {
   const sy = s * pop * (1 + st), sxz = s * pop * (1 - st * 0.5);
   let y = Math.abs(Math.sin(ph)) * 0.14 * s * (0.3 + run);
   if (P.adur[i] > 0) { const p = P.air[i] / P.adur[i]; y += Math.sin(Math.PI * Math.min(1, p)) * (2.5 + P.adur[i] * 4); }
-  const o = i * 16;
+  const o = instance * 16;
   m[o] = c * sxz; m[o + 1] = 0; m[o + 2] = -si * sxz; m[o + 3] = 0;
   m[o + 4] = si * sp * sy; m[o + 5] = cp * sy; m[o + 6] = c * sp * sy; m[o + 7] = 0;
   m[o + 8] = si * cp * sxz; m[o + 9] = -sp * sxz; m[o + 10] = c * cp * sxz; m[o + 11] = 0;
@@ -2295,22 +2318,22 @@ function writeMatrix(m, i, P, s, lean) {
 }
 const ovCount = { 2: 0, 3: 0, 5: 0, 6: 0 };
 function writeRed() {
-  const m = redMesh.instanceMatrix.array, c = redMesh.instanceColor.array;
+  redMesh.count = redFarMesh.count = 0;
   for (const k in ovCount) ovCount[k] = 0;
   let labels = 0;
   for (let i = 0; i < R.n; i++) {
     const kind = R.kind[i], col = R.chill[i] > 0 ? TIER_RGB[1] : R.burn[i] > 0 ? TIER_RGB[6] : RED_RGB[kind];
     if (R.st[i]) { R.vx[i] = 0; R.vz[i] = 0.01; }
-    writeMatrix(m, i, R, R.sc[i], R.st[i] ? 0 : 0.8);
+    const body = troopInstance(R, i, redMesh, redFarMesh), index = body.count - 1;
+    const m = body.instanceMatrix.array, c = body.instanceColor.array;
+    writeMatrix(m, i, R, R.sc[i], R.st[i] ? 0 : 0.8, index);
     const f = Math.max(0, R.flash[i]) * 0.75;
-    c[i * 3] = col[0] + (1 - col[0]) * f; c[i * 3 + 1] = col[1] + (1 - col[1]) * f; c[i * 3 + 2] = col[2] + (1 - col[2]) * f;
+    c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
     const ov = overlays[kind];
-    if (ov) { ov.instanceMatrix.array.set(m.subarray(i * 16, i * 16 + 16), ovCount[kind] * 16); ovCount[kind]++; }
+    if (ov) { ov.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), ovCount[kind] * 16); ovCount[kind]++; }
     if ((kind === 1 || kind === 5) && labels < bruteLabels.length) placeLabel(bruteLabels[labels++], R.x[i], 1.2 + R.sc[i] * 0.9, R.z[i], fmtHp(R.hp[i]));
   }
-  redMesh.count = R.n;
-  redMesh.instanceMatrix.needsUpdate = true;
-  redMesh.instanceColor.needsUpdate = true;
+  finishTroopMeshes(redMesh, redFarMesh);
   for (const k in overlays) { overlays[k].count = ovCount[k]; overlays[k].instanceMatrix.needsUpdate = true; }
   for (let k = labels; k < bruteLabels.length; k++) hideLabel(bruteLabels[k]);
 }
@@ -2494,6 +2517,7 @@ function renderWorld(dt) {
     }
   }
 
+  troopPixelScale = innerHeight * 1.2 / (2 * Math.tan(camera.fov * Math.PI / 360));
   halos.begin();
   writeBlue();
   halos.end();
