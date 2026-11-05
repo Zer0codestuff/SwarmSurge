@@ -5,6 +5,7 @@ import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 // instances own only their scene nodes and instance buffers. Use rig.dispose()
 // when removing a cannon; do not dispose its shared geometry in a scene walk.
 const templates = new Map();
+const barrelGeometries = new Map();
 const surface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.47, metalness: 0.18 });
 const luminous = new THREE.MeshBasicMaterial({ vertexColors: true });
 surface.userData.shared = luminous.userData.shared = true;
@@ -100,6 +101,36 @@ function batch() {
     },
   };
   return api;
+}
+
+/** Shared vertex-colored barrel geometry, mounted at Z=0 and firing toward -Z. */
+export function cannonBarrelGeometry(tint = 0x2f8bff) {
+  if (!barrelGeometries.has(tint)) {
+    const b = batch();
+    b.cylinder(0.18, 0.2, 0, 0, -0.11, NAVY, 'z', 0.18, 12);
+    b.cylinder(0.185, 0.07, 0, 0, -0.035, STEEL, 'z', 0.185, 12);
+    b.box(0.36, 0.32, 0.64, 0, 0, -0.47, tint);
+    b.box(0.23, 0.035, 0.52, 0, 0.17, -0.46, IVORY);
+    b.box(0.2, 0.075, 0.73, 0, -0.145, -0.53, NAVY);
+    b.add(new THREE.CylinderGeometry(0.135, 0.135, 0.51, 12, 1, true), DARK, 0, 0, -0.9, Math.PI / 2);
+    b.add(new THREE.CylinderGeometry(0.18, 0.18, 0.2, 12, 1, true), IVORY, 0, 0, -1.145, Math.PI / 2);
+    b.add(new THREE.RingGeometry(0.115, 0.18, 12), IVORY, 0, 0, -1.245, 0, Math.PI);
+    // Reverse the inner sleeve's winding so the bore has visible inside walls.
+    const bore = new THREE.CylinderGeometry(0.115, 0.115, 0.18, 12, 1, true);
+    const indices = bore.index.array;
+    for (let k = 0; k < indices.length; k += 3) {
+      const first = indices[k]; indices[k] = indices[k + 2]; indices[k + 2] = first;
+    }
+    bore.computeVertexNormals();
+    b.add(bore, 0x0a1726, 0, 0, -1.155, Math.PI / 2);
+    b.add(new THREE.CircleGeometry(0.115, 12), 0x070f1c, 0, 0, -1.064, 0, Math.PI);
+    for (const side of [-1, 1]) for (const z of [-0.34, -0.6]) {
+      b.add(new THREE.BoxGeometry(0.012, 0.1, 0.14), NAVY, side * 0.181, 0.015, z);
+      b.add(new THREE.BoxGeometry(0.014, 0.027, 0.1), CYAN, side * 0.182, 0.015, z);
+    }
+    barrelGeometries.set(tint, b.geometry());
+  }
+  return barrelGeometries.get(tint);
 }
 
 function node(parent, name, x = 0, y = 0, z = 0) {
@@ -448,9 +479,11 @@ export function createVehicleRig(tint = 0x2f8bff) {
   function animate(time, dt = 0, recoil = 0, speed = 0, charge = 0) {
     if (!form) return;
     const p = form.parts, motion = Math.min(1, Math.abs(speed) * 0.07);
-    travel += Math.max(0, Math.min(dt, 0.1)) * (0.85 + Math.min(7, Math.abs(speed)) * 0.18);
+    const advance = Math.max(0, Math.min(dt, 0.1)) * Math.min(10, Math.abs(speed)) * 0.3;
+    travel += advance;
     const stride = travel * 6, kick = Math.max(0, Math.min(1, recoil));
-    if (p.belt) { placeInstances(p.belt, travel * 0.8); placeInstances(p.rollers, -travel * 3.3); }
+    const breathing = Math.sin(time * 2.4) * 0.012;
+    if (p.belt && advance > 0) { placeInstances(p.belt, travel * 0.8); placeInstances(p.rollers, -travel * 3.3); }
     if (formId === 3) {
       p.legs.forEach((leg, index) => {
         const a = stride + leg.userData.phase, lift = Math.max(0, Math.sin(a));
@@ -458,7 +491,7 @@ export function createVehicleRig(tint = 0x2f8bff) {
         leg.rotation.z = -leg.userData.side * lift * 0.09;
         p.knees[index].rotation.z = leg.userData.side * lift * 0.22;
       });
-      p.torso.position.y = Math.sin(stride * 2) * 0.025;
+      p.torso.position.y = breathing + Math.sin(stride * 2) * 0.025 * motion;
       p.torso.rotation.x = kick * 0.035;
     }
     if (p.hover) {
@@ -480,10 +513,10 @@ export function createVehicleRig(tint = 0x2f8bff) {
         leg.rotation.x = Math.sin(a) * 0.18;
         p.knees[index].rotation.x = Math.max(0, -Math.sin(a)) * 0.29;
       });
-      p.torso.position.y = Math.abs(Math.cos(stride * 0.72)) * 0.035;
-      p.torso.rotation.z = Math.sin(stride * 0.72) * 0.018;
+      p.torso.position.y = breathing + Math.abs(Math.cos(stride * 0.72)) * 0.035 * motion;
+      p.torso.rotation.z = Math.sin(stride * 0.72) * 0.018 * motion;
       p.torso.rotation.x = kick * 0.055;
-      p.arms.forEach(arm => { arm.rotation.x = Math.sin(stride * 0.72 + arm.userData.side * Math.PI / 2) * 0.1; });
+      p.arms.forEach(arm => { arm.rotation.x = Math.sin(stride * 0.72 + arm.userData.side * Math.PI / 2) * 0.1 * motion; });
     }
   }
   function clear() {

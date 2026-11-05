@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
 import { troopGeometry, weaponGeometry } from './unit-assets.js';
-import { createVehicleRig } from './vehicle-assets.js';
+import { createVehicleRig, cannonBarrelGeometry } from './vehicle-assets.js';
 
 // ---------- helpers ----------
 const matCache = new Map();
@@ -151,7 +151,7 @@ export function textPlane(L, w, h, depthTest = true) {
 export function buildCannon(tint = 0x2f8bff) {
   const g = new THREE.Group();
   const base = new THREE.Group(); base.name = 'base-cannon'; g.add(base);
-  const dark = lam(0x2b2f3a), blue = lam(tint), deep = lam(new THREE.Color(tint).multiplyScalar(0.62).getHex()), black = lam(0x15161a), red = lam(0xe8333a);
+  const dark = lam(0x2b2f3a), blue = lam(tint), black = lam(0x15161a), red = lam(0xe8333a);
   base.add(mesh(new THREE.BoxGeometry(1.5, 0.38, 1.7), dark, 0, 0.42, 0));
   base.add(mesh(new THREE.BoxGeometry(1.56, 0.12, 1.76), red, 0, 0.6, 0));
   const wheelGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.3, 12); wheelGeo.rotateZ(Math.PI / 2);
@@ -166,8 +166,7 @@ export function buildCannon(tint = 0x2f8bff) {
   body.scale.set(1, 0.9, 1.05);
   base.add(body);
   const barrels = new THREE.Group(); barrels.position.set(0, 1.1, -0.2); g.add(barrels);
-  const barrelGeo = new THREE.CylinderGeometry(0.19, 0.25, 1.1, 14); barrelGeo.rotateX(Math.PI / 2); barrelGeo.translate(0, 0, -0.55);
-  const ringGeo = new THREE.TorusGeometry(0.21, 0.06, 8, 16); ringGeo.translate(0, 0, -1.1);
+  const barrelGeo = cannonBarrelGeometry(tint), barrelMaterial = lam(0xffffff, { vertexColors: true });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2),
     new THREE.MeshLambertMaterial({ color: 0xbff3ff, transparent: true, opacity: 0.55, emissive: 0x3aa0c0 }));
   dome.position.set(0, 1.55, 0.2); base.add(dome);
@@ -193,9 +192,9 @@ export function buildCannon(tint = 0x2f8bff) {
     barrels.clear();
     const sp = n > 4 ? 0.3 : 0.42;
     for (let i = 0; i < n; i++) {
-      const b = new THREE.Group();
+      const b = mesh(barrelGeo, barrelMaterial);
       b.position.x = (i - (n - 1) / 2) * sp;
-      b.add(mesh(barrelGeo, deep), mesh(ringGeo, blue));
+      b.scale.setScalar(n > 4 ? .76 : 1);
       barrels.add(b);
     }
   }

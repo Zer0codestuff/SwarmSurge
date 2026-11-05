@@ -395,6 +395,7 @@ airWing.group.visible = false;
 scene.add(cannon.group, twinCannon.group, airWing.group);
 const weaponMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1), unitMat, MAX_BLUE, false))];
 const weaponCounts = new Uint16Array(WEAPONS.length);
+const cannonMuzzle = new THREE.Vector3();
 cannon.group.visible = twinCannon.group.visible = false;
 const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
 const buzz = (p) => { if (!TURBO && isTouch && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
@@ -759,14 +760,19 @@ function cannonUnit(x, power, kind = 0) {
   }
   return -1;
 }
-function fireFrom(cx) {
+function fireFrom(cx, actor = cannon) {
   const sp = G.barrels > 4 ? 0.3 : 0.42;
   for (let b = 0; b < G.barrels; b++) {
     const off = (b - (G.barrels - 1) / 2) * sp;
     const power = G.power * (G.overdrive > 0 ? 2 : 1);
     const i = cannonUnit(clamp(cx+off+rand(-.06,.06),-XLIM,XLIM),power);
     if (i >= 0) { B.vz[i] = -BLUE_SPEED; B.flash[i] = 0.7; }
-    spark(cx + off, 1.15, G.cannonZ - 2.3, G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, 0.12, 0);
+    if (!TURBO) {
+      const barrel = actor.barrels.children[b];
+      barrel.localToWorld(cannonMuzzle.set(0, 0, -1.245));
+      cannonMuzzle.x += cx - actor.group.position.x;
+      spark(cannonMuzzle.x, cannonMuzzle.y, cannonMuzzle.z, G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, .12, 0);
+    }
   }
 }
 function fireCannon(dt) {
@@ -775,8 +781,8 @@ function fireCannon(dt) {
   while (G.fireT <= 0) {
     G.fireT += interval;
     fireFrom(G.cx);
-    if (G.twin) fireFrom(twinX());
-    for (let k = 0; k < G.squad; k++) fireFrom(squadX(k));
+    if (G.twin) fireFrom(twinX(), twinCannon);
+    for (let k = 0; k < G.squad; k++) fireFrom(squadX(k), squadCannons[k]);
     G.charge++;
     if (G.charge >= CHARGE_MAX) {
       G.charge = 0;
