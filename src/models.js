@@ -18,7 +18,9 @@ export function lam(hex, opts = {}) {
   const key = hex + JSON.stringify(opts);
   if (!matCache.has(key)) {
     const { flatShading, ...rest } = opts;
-    matCache.set(key, new THREE.MeshToonMaterial({ color: hex, gradientMap: toonGradient(), ...rest }));
+    const material = new THREE.MeshToonMaterial({ color: hex, gradientMap: toonGradient(), ...rest });
+    material.userData.shared = true;
+    matCache.set(key, material);
   }
   return matCache.get(key);
 }
@@ -60,8 +62,24 @@ export function blueUnitGeo() {
   }
   for (const sx of [-1, 1]) {
     const f = new THREE.SphereGeometry(0.1, 6, 4); f.scale(1, 0.6, 1.3); f.translate(sx * 0.13, 0.06, 0.03); parts.push(paint(f, 0xcfe2ff));
+    const arm = new THREE.CapsuleGeometry(0.075, 0.17, 3, 6); arm.rotateZ(sx * 0.3); arm.translate(sx * 0.28, 0.4, 0.04); parts.push(paint(arm, 0xddeaff));
   }
+  const visor = new THREE.BoxGeometry(0.38, 0.09, 0.06); visor.translate(0, 0.69, 0.23); parts.push(paint(visor, 0xffffff));
+  const pack = new THREE.BoxGeometry(0.26, 0.28, 0.14); pack.translate(0, 0.43, -0.25); parts.push(paint(pack, 0x546782));
   return merge(parts);
+}
+
+// Separate instanced overlays keep weapons visible without adding a draw call per troop.
+export function troopWeaponGeo(kind) {
+  const parts = [];
+  const body = new THREE.BoxGeometry(kind === 2 ? 0.19 : 0.12, 0.15, kind === 2 ? 0.6 : 0.44);
+  body.translate(0.29, 0.44, 0.27); parts.push(paint(body, 0x233c58));
+  const muzzle = new THREE.CylinderGeometry(0.065, 0.065, 0.14, 6); muzzle.rotateX(Math.PI / 2); muzzle.translate(0.29, 0.45, 0.58);
+  parts.push(paint(muzzle, kind === 3 ? 0x77fff0 : kind === 2 ? 0xffad45 : 0xd8f7ff));
+  if (kind === 2) {
+    const tip = new THREE.ConeGeometry(0.1, 0.2, 6); tip.rotateX(Math.PI / 2); tip.translate(0.29, 0.45, 0.68); parts.push(paint(tip, 0xff704b));
+  }
+  return merge(parts).scale(1.2, 1.2, 1.2);
 }
 export function redUnitGeo() {
   const parts = [];
@@ -182,6 +200,32 @@ export function buildCannon(tint = 0x2f8bff) {
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xaef6ff });
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), glowMat);
   glow.position.set(0, 1.6, 0.2); g.add(glow);
+  const armor = new THREE.Group(); armor.visible = false; g.add(armor);
+  const tracks = [];
+  for (const side of [-1, 1]) {
+    const track = new THREE.Group(); track.position.set(side * 0.9, 0.4, 0); armor.add(track);
+    track.add(mesh(new THREE.BoxGeometry(0.48, 0.6, 2.3), dark));
+    for (let k = 0; k < 5; k++) {
+      const wheel = mesh(wheelGeo, deep, side * 0.12, 0, (k - 2) * 0.44); track.add(wheel); tracks.push(wheel);
+    }
+    armor.add(mesh(new THREE.BoxGeometry(0.6, 0.16, 2.45), blue, side * 0.92, 0.77, 0));
+  }
+  armor.add(mesh(new THREE.BoxGeometry(1.6, 0.38, 1.85), deep, 0, 0.84, 0.1));
+  const siege = new THREE.Group(); siege.visible = false; armor.add(siege);
+  for (const side of [-1, 1]) {
+    siege.add(mesh(new THREE.BoxGeometry(0.38, 0.44, 1.3), lam(0xffca53), side * 1.02, 1.15, 0.2));
+    for (let k = 0; k < 3; k++) siege.add(mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.65, 6).rotateX(Math.PI / 2), dark, side * 1.02, 1.25, (k - 1) * 0.27));
+  }
+  const antenna = mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.95, 5), dark, 0.5, 1.9, 0.55); armor.add(antenna);
+  armor.add(mesh(new THREE.SphereGeometry(0.08, 6, 4), glowMat, 0.5, 2.4, 0.55, false));
+  const shield = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshPhongMaterial({ color: 0x75ebff, emissive: 0x124762, transparent: true, opacity: 0.1, depthWrite: false, shininess: 90 }));
+  shield.visible = false; g.add(shield);
+  function setChassis(tier) {
+    armor.visible = tier > 0; siege.visible = tier > 1;
+    wheels.forEach(w => { w.visible = !tier; });
+    body.scale.set(tier ? 1.2 : 1, tier ? 0.72 : 0.9, tier ? 1.2 : 1.05);
+  }
   function setBarrels(n) {
     barrels.clear();
     const sp = n > 4 ? 0.3 : 0.42;
@@ -193,7 +237,7 @@ export function buildCannon(tint = 0x2f8bff) {
     }
   }
   setBarrels(1);
-  return { group: g, setBarrels, barrels, glow, glowMat, bodyMat: blue, wheels };
+  return { group: g, setBarrels, setChassis, barrels, glow, glowMat, bodyMat: blue, wheels: [...wheels, ...tracks], shield };
 }
 
 // ---------- gates ----------
@@ -738,6 +782,25 @@ export function buildWorld(theme, len) {
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; g.add(ground);
   const road = mesh(new THREE.PlaneGeometry(15, total), lam(T.road), 0, 0, zc, false);
   road.rotation.x = -Math.PI / 2; road.receiveShadow = true; g.add(road);
+  // A printed road surface gives the arena scale without another asset request.
+  const surface = document.createElement('canvas'); surface.width = surface.height = 128;
+  const ink = surface.getContext('2d');
+  ink.fillStyle = '#' + T.road.toString(16).padStart(6, '0'); ink.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 1500; i++) {
+    const v = Math.random() > 0.5 ? 255 : 0;
+    ink.fillStyle = `rgba(${v},${v},${v},.045)`; ink.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
+  }
+  ink.strokeStyle = '#ffffff12'; ink.lineWidth = 1; ink.strokeRect(1, 1, 126, 126);
+  const roadTexture = new THREE.CanvasTexture(surface); roadTexture.colorSpace = THREE.SRGBColorSpace;
+  roadTexture.wrapS = roadTexture.wrapT = THREE.RepeatWrapping; roadTexture.repeat.set(3, total / 5);
+  road.material = new THREE.MeshStandardMaterial({ map: roadTexture, roughness: .88, metalness: .08 });
+  const count = Math.ceil(total / 5), matrix = new THREE.Matrix4();
+  const markings = new THREE.InstancedMesh(new THREE.PlaneGeometry(.07, 1.1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .17 }), count * 2);
+  for (let i = 0; i < count; i++) for (let side = 0; side < 2; side++) {
+    matrix.makeRotationX(-Math.PI / 2); matrix.setPosition(side ? 2.2 : -2.2, .015, zc - total / 2 + i * 5);
+    markings.setMatrixAt(i * 2 + side, matrix);
+  }
+  g.add(markings);
   const glowRoad = ['neon', 'void', 'casino', 'crystal', 'blackhole'].includes(theme);
   const lineMat = new THREE.MeshBasicMaterial({ color: glowRoad ? T.rail : 0xf4f4f4 });
   for (const x of [-6.7, 6.7]) {

@@ -1,0 +1,51 @@
+#menu { background: #173249; padding: 24px max(16px, env(safe-area-inset-left)); }
+.campaign-head { width: min(880px, 100%); display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 4px 20px 12px; }
+#menu #title { font-size: clamp(30px, 5vw, 46px); text-align: left; letter-spacing: -1.5px; line-height: 1; margin: 0; -webkit-text-stroke: 0; text-shadow: 0 4px 0 #0a2034; white-space: nowrap; }
+#menu #title b { margin-left: 0; color: #ffa47d; }
+#menu #sub { margin: 9px 0 0; text-align: left; color: #c4d9e6; font-size: 12px; }
+.campaign-route { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+#mapcount { font-family: system-ui, sans-serif; font-size: 11px; color: #c4d9e6; }
+#mapresume { font-family: var(--font); background: #ffe4a5; color: #29394b; border: 1px solid #fff7d9; border-radius: 13px; padding: 10px 16px; font-size: 13px; box-shadow: 0 4px 0 #a77b4a; cursor: pointer; }
+#mapresume:active { transform: translateY(2px); box-shadow: 0 2px 0 #a77b4a; }
+#levels { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); grid-auto-rows: 136px; gap: 0; position: relative; width: min(880px, 100%); padding: 0; flex: none; }
+.map-trail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.map-trail path { fill: none; stroke-linecap: round; stroke-width: 3px; vector-effect: non-scaling-stroke; }
+.trail-future { stroke: #7894a658; stroke-dasharray: 2 8; }
+.trail-done { stroke: #ffd18d; stroke-dasharray: 2 7; }
+.cols-3 { display: none; }
+.map-stop { grid-column: var(--col); grid-row: var(--row); width: min(156px,100%); height: 132px; align-self: center; justify-self: center; position: relative; padding: 0 3px; border: 0; background: transparent; color: #fff; font-family: var(--font); cursor: pointer; isolation: isolate; }
+.map-stop > svg { display: block; margin: -5px auto -1px; width: 138px; max-width: 100%; height: 90px; transition: transform .16s ease-out; filter: drop-shadow(0 4px 1px #0e253766); }
+.map-stop:not(:disabled):hover > svg { transform: translateY(-4px); }
+.map-stop:not(:disabled):active > svg { transform: translateY(1px); }
+.map-number { position: absolute; top: 54px; left: 21px; display: grid; place-items: center; width: 27px; height: 27px; font-size: 13px; border-radius: 50%; background: #28485e; border: 2px solid #d3e6ee; box-shadow: 0 2px 0 #102a40; }
+.map-number svg { width: 13px; height: 13px; }
+.current .map-number { background: #ffd18d; color: #273c50; border-color: #fff1d8; }
+.current::before { content: ''; position: absolute; width: 96px; height: 37px; border: 1px solid #ffe5ae88; border-radius: 50%; top: 51px; left: 50%; transform: translateX(-50%); z-index: -1; box-shadow: 0 0 22px #ffd18d1f; }
+.map-name { display: block; min-height: 16px; font-size: 12px; line-height: 1.2; text-shadow: 0 2px 1px #102a40; }
+.map-stars { display: flex; gap: 2px; justify-content: center; margin-top: 3px; font-size: 12px; line-height: 1; }
+.map-stars i { font-style: normal; color: #688092; }
+.map-stars .earned { color: #ffdc8a; }
+.locked { cursor: default; color: #93aaba; }
+.locked > svg { filter: saturate(.72) brightness(.8); opacity: .85; }
+.locked .map-number { background: #223d51; border-color: #7291a2; color: #a2b9c7; }
+.locked .map-number > svg { position: absolute; right: -6px; bottom: -3px; width: 15px; height: 15px; padding: 2px; background: #223d51; border-radius: 50%; }
+.locked .map-stars { visibility: hidden; }
+#menu #howto { width: min(650px,100%); padding: 12px 18px; margin-top: 18px; background: #112a3e; font-size: 12px; text-align: center; }
+@media (max-width: 600px) {
+  #menu { padding: max(18px, env(safe-area-inset-top)) 10px max(16px, env(safe-area-inset-bottom)); }
+  .campaign-head { align-items: flex-start; gap: 12px; padding: 2px 8px 20px; }
+  #menu #title { font-size: 28px; white-space: normal; }
+  #menu #title b { display: block; }
+  #menu #sub { max-width: 175px; line-height: 1.4; }
+  #mapresume { padding: 10px 12px; font-size: 11px; }
+  .campaign-route { padding-top: 5px; }
+  #mapcount { font-size: 10px; }
+  #levels { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .cols-5 { display: none; }
+  .cols-3 { display: block; }
+  .map-stop { grid-column: var(--mcol); grid-row: var(--mrow); }
+  .map-stop > svg { height: 86px; }
+  .map-name { font-size: 10px; min-height: 25px; }
+  .map-number { left: 9px; top: 51px; width: 24px; height: 24px; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { .map-stop > svg { transition: none; } }

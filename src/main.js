@@ -6,6 +6,8 @@ import * as FX from './fx.js';
 import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
+import { RANKS, rankOf, WEAPONS, CHASSIS, sweptCircle } from './arsenal.js';
+import { campaignProgress, renderCampaignMap } from './map.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -16,7 +18,7 @@ const STAGE_GAP = 80, TOWER_D = 58, SPAWN_D = 55, XLIM = 6.45, BASE_LIVES = 10;
 const MAX_BLUE = 1000, MAX_RED = 900, MAX_PART = 1800;
 const MAX_POWER = 1e30; // per unit: keeps Float32 math far away from Infinity
 const RESERVE = 80; // blue slots only the cannon may use, so the stream never starves
-const BLUE_SPEED = 9, GIANT_SPEED = 6.2, GIANT_HP = 15, CHARGE_MAX = 30, BASE_INTERVAL = 0.15, SPLIT_MAX = 8;
+const BLUE_SPEED = 9, GIANT_SPEED = 6.2, GIANT_HP = 15, CHARGE_MAX = 30, BASE_INTERVAL = 0.15, SPLIT_MAX = 3;
 // atk: how much blue power it costs to kill one point of its hp; armor: fraction of damage it actually takes
 const RED_TYPES = [
   { speed: 3.4, r: 0.32, hp: 1, dmg: 1, atk: 1.5, scale: 1, color: 0xff2a2a },                        // 0 swarm
@@ -46,7 +48,7 @@ const SQUAD_OFF = [-1.8, 1.8, -3.6, 3.6];
 const MAX_LIVES = 15;
 const rgb = (h) => { const c = new THREE.Color(h); return [c.r, c.g, c.b]; };
 const RED_RGB = RED_TYPES.map((t) => rgb(t.color));
-const TIER_RGB = [rgb(0x3aaeff), rgb(0x2f6bff), rgb(0x9a5aff), rgb(0xffc21a), rgb(0xff3fd0)];
+const TIER_RGB = RANKS.map(r => rgb(r.color));
 const GIANT_RGB = rgb(0x2266ff);
 const RAINBOW = Array.from({ length: 32 }, (_, k) => { const c = new THREE.Color().setHSL(k / 32, 1, 0.6); return [c.r, c.g, c.b]; });
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -67,10 +69,13 @@ const fmtHp = (n) => (n < 100000 ? String(Math.max(0, Math.ceil(n))) : fmt(n));
 // ---------------------------------------------------------------- renderer / scene
 const canvas = document.getElementById('c');
 const isTouch = matchMedia('(pointer: coarse)').matches;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.75 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 400);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8a9a, 1.7);
@@ -122,12 +127,13 @@ partMesh.count = MAX_PART;
 // ---------------------------------------------------------------- unit pools (struct of arrays)
 function makePool(N) {
   const P = { n: 0, N };
-  for (const k of ['x', 'z', 'px', 'pz', 'vx', 'vz', 'hp', 'phase', 'flash', 'cm', 'sc', 'rad', 'wake', 'age', 'mx', 'stk', 'air', 'adur', 'ax0', 'az0', 'ax1', 'az1']) P[k] = new Float32Array(N);
+  for (const k of ['x', 'z', 'px', 'pz', 'vx', 'vz', 'hp', 'phase', 'flash', 'cm', 'sc', 'rad', 'wake', 'age', 'mx', 'stk', 'air', 'adur', 'ax0', 'az0', 'ax1', 'az1', 'shot']) P[k] = new Float32Array(N);
   P.mask = new Uint32Array(N);
   P.mask2 = new Uint32Array(N);
   P.kind = new Uint8Array(N);
   P.st = new Uint8Array(N);
-  P.arrs = [P.x, P.z, P.px, P.pz, P.vx, P.vz, P.hp, P.phase, P.flash, P.cm, P.sc, P.rad, P.wake, P.age, P.mx, P.stk, P.air, P.adur, P.ax0, P.az0, P.ax1, P.az1, P.mask, P.mask2, P.kind, P.st];
+  P.weapon = new Uint8Array(N);
+  P.arrs = [P.x, P.z, P.px, P.pz, P.vx, P.vz, P.hp, P.phase, P.flash, P.cm, P.sc, P.rad, P.wake, P.age, P.mx, P.stk, P.air, P.adur, P.ax0, P.az0, P.ax1, P.az1, P.mask, P.mask2, P.kind, P.st, P.shot, P.weapon];
   return P;
 }
 const B = makePool(MAX_BLUE), R = makePool(MAX_RED);
@@ -136,7 +142,7 @@ function spawn(P, x, z, hp, kind, mask = 0, mask2 = 0) {
   const i = P.n++;
   P.x[i] = P.px[i] = x; P.z[i] = P.pz[i] = z;
   P.vx[i] = P.vz[i] = 0; P.hp[i] = hp; P.kind[i] = kind; P.mask[i] = mask; P.mask2[i] = mask2;
-  P.phase[i] = Math.random() * 6.28; P.flash[i] = 0; P.cm[i] = 1; P.sc[i] = 1; P.rad[i] = 0.3; P.st[i] = 0; P.wake[i] = 0; P.age[i] = 0; P.mx[i] = hp; P.stk[i] = 0; P.air[i] = 0; P.adur[i] = 0;
+  P.phase[i] = Math.random() * 6.28; P.flash[i] = 0; P.cm[i] = 1; P.sc[i] = 1; P.rad[i] = 0.3; P.st[i] = 0; P.wake[i] = 0; P.age[i] = 0; P.mx[i] = hp; P.stk[i] = 0; P.air[i] = 0; P.adur[i] = 0; P.shot[i] = Math.random() * 0.9; P.weapon[i] = P === B ? G.weapon : 0;
   return i;
 }
 function compact(P) {
@@ -278,12 +284,18 @@ const popups = Array.from({ length: 18 }, () => {
   return { el, inner, life: 0, x: 0, y: 0, z: 0, dy: 0, combo: false };
 });
 let popHead = 0;
+let popSerial = 0;
 function popup(text, cls, x, y, z, life = 1.3) {
   if (TURBO) return;
   const p = popups[popHead]; popHead = (popHead + 1) % popups.length;
   p.x = x; p.y = y; p.z = z; p.life = life;
   // stack combo popups that are still fresh so they don't overlap
   p.combo = cls.startsWith('combo');
+  p.serial = ++popSerial;
+  if (p.combo) {
+    const previous = popups.filter(q => q !== p && q.combo && q.life > 0).sort((a,b) => b.serial - a.serial);
+    for (const q of previous.slice(1)) { q.life = 0; q.el.style.display = 'none'; }
+  }
   p.dy = 0;
   if (p.combo) for (const q of popups) if (q !== p && q.combo && q.life > 0.6) p.dy = Math.min(p.dy, q.dy - 1);
   p.inner.textContent = text;
@@ -320,7 +332,7 @@ function showTip(text) {
   if (TURBO || !text) return;
   hud.tip.textContent = text;
   hud.tip.className = 'show stroke';
-  tipTimer = 4.5;
+  tipTimer = 5.5;
 }
 function whiteFlash() {
   if (TURBO) return;
@@ -341,11 +353,15 @@ const G = {
   shake: 0, recoil: 0, kills: 0, time: 0, explosions: [], splits: [], revives: [], effects: [], army: 0, maxArmy: 0, bestCombo: 1, fps: 60,
   moveFrom: 0, moveTo: 0, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, armyPrev: 0, pumpT: 0,
   squad: 0, rad: 0, zones: [], nextMile: 1000, armyAvg: 0,
+  chassis: 0, weapon: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
 };
 const cannon = M.buildCannon();
 const twinCannon = M.buildCannon(0xff4fd8);
 const squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.group.scale.setScalar(0.85); c.group.visible = false; scene.add(c.group); return c; });
-scene.add(cannon.group, twinCannon.group);
+const airWing = P.buildSupportPlane();
+airWing.group.visible = false;
+scene.add(cannon.group, twinCannon.group, airWing.group);
+const weaponMeshes = [null, ...[1, 2, 3].map(k => instanced(M.troopWeaponGeo(k), unitMat, MAX_BLUE, false))];
 cannon.group.visible = twinCannon.group.visible = false;
 const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
 const buzz = (p) => { if (!TURBO && isTouch && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
@@ -355,6 +371,12 @@ function loadProgress() {
   return { stars: [] };
 }
 let progress = loadProgress();
+function recordVictory() {
+  const stars = G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1;
+  if (stars <= (progress.stars[G.levelIdx] || 0)) return;
+  progress.stars[G.levelIdx] = stars;
+  try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
+}
 
 // ---------------------------------------------------------------- level construction
 function gateColor(def, cur) {
@@ -362,7 +384,7 @@ function gateColor(def, cur) {
   if (def.color && def.t !== 'flip') return GATE_COLORS[def.color];
   return GATE_COLORS[cur.t] ?? GATE_COLORS.mul;
 }
-const UP_NAMES = { barrel: '+1 GUN', rapid: 'RAPID', power: 'POWER x2', twin: 'TWIN GUN', squad: 'SQUAD +1' };
+const UP_NAMES = { barrel: '+2 GUNS', rapid: 'RAPID x2', power: 'POWER x3', twin: 'TWIN GUN', squad: 'ESCORT +1', tank: 'TANK', rifle: 'BLASTERS', rockets: 'ROCKETS', arc: 'ARC RIFLES', air: 'AIR WING' };
 const SLOT_FACES = ['x100', '÷3', 'x7', '÷2', 'x50', 'x3', '777'];
 const opText = (c, boost = 1) => (c.t === 'mul' ? 'x' + fmt(c.v * boost) : c.t === 'add' ? '+' + fmt(c.v * boost) : '÷' + c.v);
 function refreshGate(g) {
@@ -391,11 +413,12 @@ function refreshGate(g) {
     if (g.spin > 0) M.drawLabel(L, SLOT_FACES[(Math.random() * SLOT_FACES.length) | 0], 'SLOT', -1, '#fff4a0');
     else M.drawLabel(L, opText(c, c.t === 'div' ? 1 : g.boost), 'SLOT', -1, c.t === 'div' ? '#ffd9d9' : '#ffffff');
   } else if (t === 'heart') M.drawLabel(L, '+' + (g.def.v ?? 1) + ' ♥', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffd0e0');
-  else if (t === 'hangar') M.drawLabel(L, 'SQUAD +1', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
+  else if (t === 'hangar') M.drawLabel(L, 'AIR WING', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
   else if (t === 'tesla') M.drawLabel(L, g.active ? 'ZAP!' : 'TESLA', g.active ? 'ONLINE' : `${fmt(g.prog)}/${fmt(g.need)}`, g.active ? 1 : g.prog / g.need, '#bff6ff');
   else if (REDGATES.has(t)) M.drawLabel(L, (t === 'redmul' ? 'x' : '+') + g.def.v, 'SMASH ' + fmtHp(g.hp), -1, '#c81020');
 }
 function buildGateModel(gd, cur) {
+  if (gd.t === 'upgrade') return P.buildArmory(gd.w, gd.up);
   if (gd.t === 'ice') return M.buildIceWall(gd.w);
   if (gd.t === 'fence') return M.buildFence(gd.w);
   if (gd.t === 'statue') return M.buildStatue(gd.w, gd.small);
@@ -407,9 +430,10 @@ function buildGateModel(gd, cur) {
   return M.buildGate(gd.w, gateColor(gd, cur), gd.mega);
 }
 function buildStage(sd, i, root, theme) {
+  const group = new THREE.Group(); root.add(group); root = group;
   const z0 = -i * STAGE_GAP;
   const st = {
-    def: sd, i, z0, gates: [], walls: [], saws: [], spawners: [], crushers: [], turrets: [], exits: [],
+    def: sd, i, z0, group, gates: [], walls: [], saws: [], spawners: [], crushers: [], turrets: [], exits: [],
     belts: [], pillars: [], tornados: [], holes: [], balls: [], metT: sd.meteors?.every ?? 0,
     tower: null, boss: null, fort: null, waveT: 2.0, waveN: 0, time: 0, enraged: false, comboNext: 10,
   };
@@ -449,7 +473,7 @@ function buildStage(sd, i, root, theme) {
     const m = P.buildPillar();
     m.group.position.set(pd.x, 0, z0 - pd.d);
     root.add(m.group);
-    st.pillars.push({ def: pd, x: pd.x, z: z0 - pd.d, hp: pd.hp, max: pd.hp, alive: true, fall: 0, dir: pd.fall ?? (pd.x > 0 ? -1 : 1), model: m, label: makeLabel('tower'), flash: 0 });
+    st.pillars.push({ def: pd, x: pd.x, z: z0 - pd.d, hp: pd.hp, max: pd.hp, alive: true, fall: 0, dir: pd.fall ?? (pd.x > 0 ? -1 : 1), model: m, label: makeLabel('pillar'), flash: 0 });
   });
   sd.tornados?.forEach((td) => {
     const m = P.buildTornado(td.r);
@@ -525,10 +549,17 @@ function buildStage(sd, i, root, theme) {
 function disposeLevel() {
   if (!G.root) return;
   scene.remove(G.root);
+  const geometries = new Set(), materials = new Set(), textures = new Set();
   G.root.traverse((o) => {
-    if (o.geometry) o.geometry.dispose();
-    if (o.material && o.material.map && o.material.map !== M.shineTexture()) o.material.map.dispose();
+    if (o.geometry) geometries.add(o.geometry);
+    for (const material of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+      if (material.map && material.map !== M.shineTexture()) textures.add(material.map);
+      if (!material.userData.shared) materials.add(material);
+    }
   });
+  geometries.forEach(geometry => geometry.dispose());
+  textures.forEach(texture => texture.dispose());
+  materials.forEach(material => material.dispose());
   G.root = null;
   for (const st of G.stages) {
     for (const s of [...st.spawners, ...st.turrets, ...st.pillars, ...st.balls]) s.label.el.remove();
@@ -590,13 +621,16 @@ function startLevel(idx, stageIdx = 0) {
   G.explosions.length = 0;
   G.splits.length = 0;
   G.revives = [];
-  for (const e of G.effects) for (const m of [e.mesh, e.outer, e.inner]) if (m) m.geometry.dispose();
+  // disposeLevel traverses effects too, including mushroom clouds made of nested groups.
   G.effects.length = 0;
   Object.assign(G, {
+    paused: false, weaponCursor: 0, t: 0,
     log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgTotal: 0, army: 0, squad: 0, nextMile: 1000, armyAvg: 0,
+    chassis: 0, weapon: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
   });
   setBarrels(1);
+  cannon.setChassis(0); twinCannon.setChassis(0);
   cannon.group.visible = true;
   twinCannon.group.visible = false;
   enterStage(stageIdx);
@@ -615,19 +649,20 @@ function addBall(S, root, x, z, hp, r, speed, def = {}) {
   const m = P.buildSwarmBall(r);
   m.group.position.set(x, r, z);
   root.add(m.group);
-  const b = { def, x, z, r0: r, r, hp, max: hp, speed, alive: true, model: m, label: makeLabel('ball'), delay: def.delay ?? 0, flash: 0 };
+  const b = { def, x, z, px: x, pz: z, impact: 0, r0: r, r, hp, max: hp, speed, alive: true, model: m, label: makeLabel('ball'), delay: def.delay ?? 0, flash: 0 };
   S.balls.push(b);
   return b;
 }
 function enterStage(i) {
-  G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives };
-  G.rad = 0; G.armyAvg = 0;
+  G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives, chassis: G.chassis, weapon: G.weapon, aircraft: G.aircraft, shield: G.shield };
+  G.rad = 0; G.armyAvg = 0; G.overdrive = 0; G.airPass = 0; G.airT = 2;
   for (const zn of G.zones) if (zn.mesh) { G.root.remove(zn.mesh); zn.mesh.geometry.dispose(); }
   G.zones.length = 0;
   G.stageIdx = i;
   G.stage = G.stages[i];
   G.shown = false;
   G.z0 = G.cannonZ = G.camZ = G.stage.z0;
+  G.camLag = G.cx; G.prevCx = G.cx;
   G.phase = 'intro';
   G.phaseT = 0;
   const isBoss = !!G.stage.boss;
@@ -653,7 +688,10 @@ function renderUps() {
   if (G.rate > 1) html += `<span class="up">RAPID ×${G.rate.toFixed(1)}</span>`;
   if (G.power > 1) html += `<span class="up pw">POWER ×${G.power}</span>`;
   if (G.twin) html += `<span class="up tw">TWIN</span>`;
-  if (G.squad) html += `<span class="up sq">SQUAD ×${G.squad + 1}</span>`;
+  if (G.squad) html += `<span class="up sq">ESCORT ×${G.squad}</span>`;
+  if (G.chassis) html += `<span class="up pw">${CHASSIS[G.chassis]}</span>`;
+  if (G.weapon) html += `<span class="up tw">${WEAPONS[G.weapon]}</span>`;
+  if (G.aircraft) html += `<span class="up sq">Air wing ${G.aircraft > 1 ? 'x' + G.aircraft : ''}</span>`;
   hud.ups.innerHTML = html;
 }
 
@@ -667,7 +705,14 @@ function fireFrom(cx) {
   const sp = G.barrels > 4 ? 0.3 : 0.42;
   for (let b = 0; b < G.barrels; b++) {
     const off = (b - (G.barrels - 1) / 2) * sp;
-    const i = spawn(B, clamp(cx + off + rand(-0.06, 0.06), -XLIM, XLIM), G.z0 - 1.7, G.power, 0);
+    const power = G.power * (G.overdrive > 0 ? 2 : 1);
+    const i = spawn(B, clamp(cx + off + rand(-0.06, 0.06), -XLIM, XLIM), G.z0 - 1.7, power, 0);
+    if (i < 0) {
+      // A full pool must preserve cannon output too. Reinforce a living troop near the muzzle.
+      let best = -1, dist = Infinity;
+      for (let j = 0; j < B.n; j++) if (B.hp[j] > 0) { const d = Math.abs(B.x[j] - cx) + Math.abs(B.z[j] - G.z0); if (d < dist) { dist = d; best = j; } }
+      if (best >= 0) B.hp[best] = Math.min(MAX_POWER, B.hp[best] + power);
+    }
     if (i >= 0) { B.vz[i] = -BLUE_SPEED; B.flash[i] = 0.7; }
     spark(cx + off, 1.15, G.cannonZ - 2.3, G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, 0.12, 0);
   }
@@ -690,6 +735,107 @@ function fireCannon(dt) {
     }
     G.recoil = 1;
     sound.play('shoot');
+  }
+}
+
+function shotBlocked(S, x, z, tx, tz) {
+  for (const g of S.gates) {
+    if (!g.alive || g.on === false || !(BLOCKERS.has(g.def.t) || REDGATES.has(g.def.t)) || g.z <= Math.min(z, tz) || g.z >= Math.max(z, tz)) continue;
+    const at = x + (tx - x) * ((g.z - z) / (tz - z));
+    if (Math.abs(at - g.x) < g.w / 2) return true;
+  }
+  for (const w of S.walls) {
+    if ((x - w.x) * (tx - w.x) >= 0) continue;
+    const at = z + (tz - z) * ((w.x - x) / (tx - x));
+    if (at < w.zBot && at > w.zTop) return true;
+  }
+  return false;
+}
+function rangedHit(target, damage) {
+  if (!target || !target.alive || target.hp <= 0) return;
+  const d = Math.min(target.hp, damage);
+  target.hp -= d; target.flash = 1; G.dmgTotal += d;
+  if (target === G.stage.tower || target === G.stage.boss) G.dmgAcc += d;
+}
+function updateArsenal(S, dt) {
+  let budget = 5;
+  for (let i = 0; i < B.n; i++) B.shot[i] -= dt;
+  const cursor = (G.weaponCursor || 0) % Math.max(1, B.n);
+  for (let offset = 0; offset < B.n && budget > 0; offset++) {
+    const i = (cursor + offset) % B.n;
+    if (B.hp[i] <= 0 || !B.weapon[i] || B.adur[i] > 0) continue;
+    if (B.shot[i] > 0 || budget <= 0) continue;
+    B.shot[i] = B.weapon[i] === 2 ? 1.25 : B.weapon[i] === 3 ? 0.8 : 0.95;
+    budget--;
+    G.weaponCursor = i + 1;
+    const x = B.x[i], z = B.z[i], weapon = B.weapon[i];
+    const damage = B.hp[i] * (weapon === 2 ? 0.85 : weapon === 3 ? 0.5 : 0.3);
+    const color = weapon === 3 ? 0x8affed : weapon === 2 ? 0xffb454 : 0xc2f2ff;
+    // Balls get priority and absorb ranged fire while stationary as well as rolling.
+    const ball = S.balls.find(b => b.alive && b.hp > 0 && b.z < z && Math.hypot(b.x - x, b.z - z) < 8 + b.r && !shotBlocked(S, x, z, b.x, b.z));
+    let j = nearestRed(x, z - 3, weapon === 2 ? 7 : 6);
+    if (ball) {
+      rangedHit(ball, damage); ball.impact = 0.15;
+      addBeam(x, 0.65, z, ball.x, ball.r, ball.z, color, 0.09);
+      if (ball.hp <= 0) ballDies(S, ball, false);
+    } else if (j >= 0 && R.z[j] < z && !shotBlocked(S, x, z, R.x[j], R.z[j])) {
+      const tx = R.x[j], tz = R.z[j];
+      addBeam(x, 0.65, z, tx, 0.6, tz, color, 0.09);
+      R.hp[j] -= damage; R.flash[j] = 1;
+      if (R.hp[j] <= 0) killRed(j);
+      if (weapon === 2) {
+        addRing(tx, tz, 1.6, color, 0.2);
+        for (let k = 0; k < R.n; k++) if (k !== j && R.hp[k] > 0 && (R.x[k] - tx) ** 2 + (R.z[k] - tz) ** 2 < 2.56 && !shotBlocked(S, tx, tz + 0.01, R.x[k], R.z[k])) {
+          R.hp[k] -= damage * 0.65; R.flash[k] = 1; if (R.hp[k] <= 0) killRed(k);
+        }
+      } else if (weapon === 3) {
+        const visited = new Set([j]);
+        let fromX = tx, fromZ = tz;
+        for (let chain = 0; chain < 2; chain++) {
+          j = nearestRed(fromX, fromZ, 3.5, visited);
+          if (j < 0 || shotBlocked(S, fromX, fromZ + 0.01, R.x[j], R.z[j])) break;
+          visited.add(j);
+          addBeam(fromX, 0.7, fromZ, R.x[j], 0.7, R.z[j], color, 0.12);
+          R.hp[j] -= damage * 0.7; R.flash[j] = 1;
+          fromX = R.x[j]; fromZ = R.z[j];
+          if (R.hp[j] <= 0) killRed(j);
+        }
+      }
+    } else {
+      const target = [S.tower, S.boss, ...S.spawners, ...S.turrets].find(t => t?.alive && t.hp > 0 && Math.hypot((t.x ?? 0) - x, t.z - z) < 10 && !shotBlocked(S, x, z, t.x ?? 0, t.z));
+      if (target) {
+        rangedHit(target, damage * (S.breach || 1));
+        addBeam(x, 0.65, z, target.x ?? 0, 2, target.z, color, 0.08);
+      }
+    }
+  }
+  if (!G.aircraft) return;
+  G.airT -= dt;
+  if (G.airT <= 0 && G.airPass <= 0) {
+    G.airT = 7 / Math.sqrt(G.aircraft); G.airPass = 2.2; G.airHit = false; G.airX = G.cx;
+    popup('AIR SUPPORT', 'combo c1', G.cx, 4, G.z0 - 12, 0.9);
+  }
+  if (G.airPass <= 0) return;
+  G.airPass -= dt;
+  if (G.airPass < 0.85 && !G.airHit) {
+    G.airHit = true;
+    const damage = Math.max(20 * G.power, G.armyAvg * 0.16);
+    for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.x[j] - G.airX) < 3) {
+      R.hp[j] -= damage; if (R.hp[j] <= 0) killRed(j); else R.flash[j] = 1;
+    }
+    for (const ball of S.balls) if (ball.alive && Math.abs(ball.x - G.airX) < ball.r + 2) {
+      rangedHit(ball, damage * 2); if (ball.hp <= 0) ballDies(S, ball, false);
+    }
+    const target = S.tower?.alive ? S.tower : S.boss;
+    if (target?.alive) rangedHit(target, Math.min(target.max * 0.065, damage * 2));
+    for (const t of [...S.spawners, ...S.turrets]) if (Math.abs(t.x - G.airX) < 3) rangedHit(t, damage);
+    for (let k = 0; k < 5; k++) {
+      const z = G.z0 - 17 - k * 8;
+      addBeam(G.airX, 7, z, G.airX, 0.3, z, 0xffcf65, 0.16);
+      addRing(G.airX, z, 2.5, 0xffb34a, 0.45);
+      burst(G.airX, 0.5, z, PCOL.orange, 12, 4);
+    }
+    G.shake = Math.max(G.shake, 0.2); sound.play('boom');
   }
 }
 
@@ -765,24 +911,37 @@ function applyGate(S, g, i) {
   const total = B.hp[i] * f;
   const cm = Math.min(1e37, B.cm[i] * f);
   // keep RESERVE slots free for the cannon: past that, power is folded into bigger units instead
-  const n = Math.max(0, Math.min(Math.round(f) - 1, B.N - RESERVE - B.n, SPLIT_MAX));
+  const n = Math.max(0, Math.min(Math.round(f) - 1, (S.def.surge ? 620 : 420) - B.n, B.N - RESERVE - B.n, SPLIT_MAX));
   const share = Math.min(MAX_POWER, total / (n + 1));
   B.hp[i] = share; B.cm[i] = cm; B.flash[i] = 1;
   const lo = g.x - g.w / 2 + 0.25, hi = g.x + g.w / 2 - 0.25;
   for (let k = 0; k < n; k++) {
     const j = spawn(B, clamp(B.x[i] + rand(-0.6, 0.6), lo, hi), B.z[i] - Math.random() * 0.8, share, B.kind[i], B.mask[i], B.mask2[i]);
     // copies inherit the loop counter too, or they could loop forever
-    B.vx[j] = B.vx[i] + rand(-1.5, 1.5); B.vz[j] = B.vz[i]; B.flash[j] = 1; B.cm[j] = cm; B.stk[j] = B.stk[i];
+    B.vx[j] = B.vx[i] + rand(-1.5, 1.5); B.vz[j] = B.vz[i]; B.flash[j] = 1; B.cm[j] = cm; B.stk[j] = B.stk[i]; B.weapon[j] = B.weapon[i];
   }
   comboCheck(S, i, g.x, g.z);
 }
 function upgradeCannon(up) {
-  if (up === 'barrel') { G.barrels = Math.min(6, G.barrels + 1); setBarrels(G.barrels); banner('+1 GUN!', 'gold'); }
-  else if (up === 'squad') { G.squad = Math.min(SQUAD_OFF.length, G.squad + 1); banner(`SQUAD x${G.squad + 1}!`, 'gold'); buzz(80); }
-  else if (up === 'rapid') { G.rate = Math.min(3.2, G.rate * 1.45); banner('RAPID FIRE!', 'gold'); }
-  else if (up === 'power') { G.power = Math.min(64, G.power * 2); banner(`POWER x${G.power}!`, 'gold'); }
-  else if (up === 'twin') { G.twin = true; twinCannon.group.visible = true; banner('TWIN CANNON!', 'gold'); }
-  renderUps();
+  if (up === 'barrel') { G.barrels = Math.min(6, G.barrels + 2); setBarrels(G.barrels); banner('+2 GUNS!', 'gold'); }
+  else if (up === 'squad') { G.squad = Math.min(SQUAD_OFF.length, G.squad + 1); G.shield = Math.min(6, G.shield + 2); banner('ESCORT ONLINE!', 'gold'); buzz(80); }
+  else if (up === 'rapid') { G.rate = Math.min(8, G.rate * 2); banner(`RAPID x${G.rate}!`, 'gold'); }
+  else if (up === 'power') { G.power = Math.min(243, G.power * 3); banner(`POWER x${G.power}!`, 'gold'); }
+  else if (up === 'twin') { G.twin = true; twinCannon.group.visible = true; G.shield = Math.min(6, G.shield + 1); banner('TWIN CANNON!', 'gold'); }
+  else if (up === 'tank') {
+    G.chassis = Math.min(2, G.chassis + 1); G.power = Math.min(243, G.power * 2);
+    G.barrels = Math.min(6, G.barrels + 1); G.shield = Math.min(6, G.shield + 3);
+    setBarrels(G.barrels); cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
+    banner(CHASSIS[G.chassis].toUpperCase() + '!', 'gold');
+  } else if (up === 'air') { G.aircraft = Math.min(3, G.aircraft + 1); G.airT = 0.2; banner('AIR WING INBOUND!', 'gold'); }
+  else {
+    const weapon = { rifle: 1, rockets: 2, arc: 3 }[up];
+    if (!weapon) return;
+    G.weapon = Math.max(G.weapon, weapon);
+    for (let i = 0; i < B.n; i++) B.weapon[i] = G.weapon;
+    banner(WEAPONS[G.weapon].toUpperCase() + ' ONLINE!', 'gold');
+  }
+  G.cannonPulse = 1; renderUps();
 }
 // NUKE: wipes every enemy (and irradiates the field so new ones melt for a few seconds), flattens turrets, spawners,
 // enemy gates and swarm balls, blasts half the fort/boss, stuns the boss and pumps your army x5
@@ -862,7 +1021,7 @@ function absorb(S, g, i) {
       burst(g.x, 1.5, g.z, t === 'star' ? PCOL.pink : t === 'nuke' ? PCOL.green : PCOL.gold, 40, 7);
       if (t === 'upgrade' || t === 'hangar') {
         g.alive = false; g.dying = 1;
-        upgradeCannon(t === 'hangar' ? 'squad' : g.cur.up);
+        upgradeCannon(t === 'hangar' ? 'air' : g.cur.up);
         burst(G.cx, 1.5, G.z0, PCOL.gold, 30, 6);
         if (!TURBO) sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.gold, 60, 0.5, 1.2);
         G.cannonPulse = 1;
@@ -930,7 +1089,7 @@ function teleport(S, g, i) {
 }
 
 function damageTarget(t, i, col) {
-  const d = B.hp[i];
+  const d = B.hp[i] * ((t === G.stage.tower || t === G.stage.boss) ? G.stage.breach || 1 : 1);
   t.hp -= d;
   t.flash = 1;
   G.dmgAcc += d; G.dmgTotal += d;
@@ -939,12 +1098,22 @@ function damageTarget(t, i, col) {
   B.hp[i] = 0;
 }
 
-// damage a side target (pillar, swarm ball): the unit is spent, its power comes off the target
+// Spend only the power absorbed by a pillar or ball. Surviving troops keep the remainder.
 function hitThing(t, i, col) {
-  t.hp -= B.hp[i]; t.flash = 1;
-  G.dmgTotal += B.hp[i];
-  burst(B.x[i], 1, B.z[i], col, B.kind[i] || B.hp[i] > 30 ? 6 : 2, 3);
-  B.hp[i] = 0;
+  const damage = Math.min(t.hp, B.hp[i]);
+  if (damage <= 0) return;
+  t.hp -= damage; B.hp[i] -= damage; t.flash = 1;
+  G.dmgTotal += damage;
+  burst(B.x[i], 1, B.z[i], col, B.kind[i] || damage > 30 ? 6 : 2, 3);
+}
+function collideBalls(S, i) {
+  for (const ball of S.balls) {
+    if (!ball.alive || ball.hp <= 0) continue;
+    if (!sweptCircle(B.px[i], B.pz[i], B.x[i], B.z[i], ball.px, ball.pz, ball.x, ball.z, ball.r + B.rad[i])) continue;
+    hitThing(ball, i, PCOL.red); ball.impact = 0.22;
+    if (ball.hp <= 0) ballDies(S, ball, false);
+    if (B.hp[i] <= 0) return;
+  }
 }
 function moveBlue(S, dt) {
   const boss = S.boss && S.boss.alive ? S.boss : null;
@@ -1004,6 +1173,9 @@ function moveBlue(S, dt) {
     B.phase[i] += dt * (giant ? 9 : 15);
     if (B.flash[i] > 0) B.flash[i] -= dt * 2.5;
 
+    // Balls intercept troops before gates, combat and the fort, including during deployment delay.
+    collideBalls(S, i);
+    if (B.hp[i] <= 0) continue;
     // gates
     const pz = B.pz[i];
     for (const g of S.gates) {
@@ -1601,10 +1773,10 @@ function updateObstacles(S, dt) {
 }
 
 // ---------------------------------------------------------------- level 11-20 mechanics
-function nearestRed(x, z, range) {
+function nearestRed(x, z, range, excluded = null) {
   let best = range * range, bi = -1;
   for (let j = 0; j < R.n; j++) {
-    if (R.hp[j] <= 0) continue;
+    if (R.hp[j] <= 0 || excluded?.has(j)) continue;
     const d2 = (R.x[j] - x) ** 2 + (R.z[j] - z) ** 2;
     if (d2 < best) { best = d2; bi = j; }
   }
@@ -1643,7 +1815,11 @@ function ballDies(S, b, crashed) {
     G.lives -= b.def.dmg ?? 3;
     hurtFlash();
     popup(`-${b.def.dmg ?? 3} ♥`, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.0);
-  } else popup('SMASHED!', 'combo c3', b.x, 3, b.z, 1.2);
+  } else {
+    G.overdrive = Math.max(G.overdrive, 4);
+    popup('WRECK BONUS x2!', 'combo c3', b.x, 3, b.z, 1.2);
+    addRing(b.x, b.z, b.r * 2.5, 0xffce55, 0.6);
+  }
 }
 function hurtFlash() {
   buzz(70);
@@ -1757,20 +1933,16 @@ function updateMechanics(S, dt) {
   }
   for (const b of S.balls) {
     if (!b.alive) continue;
+    b.px = b.x; b.pz = b.z;
     if (b.hp <= 0) { ballDies(S, b, false); continue; }
     b.r = b.r0 * Math.max(0.4, Math.cbrt(b.hp / b.max));
     if (G.phase !== 'play') continue;
     if (b.delay > 0) { b.delay -= dt; continue; }
-    const sp = b.speed * (S.enraged ? 1.6 : 1);
+    const sp = b.speed * (S.enraged ? 1.6 : 1) * (b.impact > 0 ? 0.45 : 1);
+    b.impact = Math.max(0, b.impact - dt);
     b.z += sp * dt;
     b.x = clamp(b.x + clamp(G.cx - b.x, -1, 1) * (b.def.home ?? 0.25) * dt, -XLIM + b.r * 0.6, XLIM - b.r * 0.6);
     b.model.spin.rotation.x += (sp * dt) / b.r;
-    const rr = (b.r + 0.3) ** 2;
-    for (let i = 0; i < B.n; i++) {
-      if (B.hp[i] <= 0 || B.adur[i] > 0) continue;
-      if ((B.x[i] - b.x) ** 2 + (B.z[i] - b.z) ** 2 < rr) { hitThing(b, i, PCOL.red); if (b.hp <= 0) break; }
-    }
-    if (b.hp <= 0) { ballDies(S, b, false); continue; }
     if (b.z > G.z0 - 1.5) ballDies(S, b, true);
   }
   for (const p of S.pillars) {
@@ -1801,6 +1973,8 @@ function step(dt) {
   G.t += dt;
   G.phaseT += dt;
   const S = G.stage;
+  const livesBefore = G.lives;
+  G.overdrive = Math.max(0, G.overdrive - dt);
   G.cx += (G.aim - G.cx) * Math.min(1, dt * 14);
   if (G.phase === 'intro' && G.phaseT > 1.2) { G.phase = 'play'; G.phaseT = 0; G.fireT = 0; }
   if (G.phase === 'play') { G.time += dt; fireCannon(dt); }
@@ -1808,6 +1982,8 @@ function step(dt) {
   updateMechanics(S, dt);
   if (G.phase === 'play') {
     S.time += dt;
+    S.breach = Math.min(4, 1 + Math.max(0, S.time - S.def.targetTime) / 7);
+    if (S.breach >= 2 && !S.breachShown) { S.breachShown = true; banner('ARMOR BREACHED!', 'gold'); }
     // stuck? remind the player of the trick for this stage
     if (S.time > 40 && !S.reminded) {
       const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
@@ -1855,6 +2031,8 @@ function step(dt) {
   moveRed(S, dt);
   buildGrid(gR, R);
   combat();
+  if (G.phase === 'play') updateArsenal(S, dt);
+  if (G.lives < livesBefore && G.shield > 0) { const saved = Math.min(livesBefore - G.lives, G.shield); G.lives += saved; G.shield -= saved; G.cannonPulse = 0.45; }
   compact(B); compact(R);
   let army = 0;
   for (let i = 0; i < B.n; i++) {
@@ -1862,10 +2040,12 @@ function step(dt) {
     army += hp;
     B.age[i] += dt;
     // unit size follows its power (cheap version of the render-time scale, used for collisions)
-    const s = B.kind[i] ? Math.max(1.9, 1 + Math.min(1.6, Math.log10(hp) * 0.38)) : hp > 1.5 ? 1 + Math.min(1.6, Math.log10(hp) * 0.38) : 1;
+    const s = B.kind[i] ? Math.max(1.9, 1 + Math.min(0.85, Math.log10(hp) * 0.13)) : hp > 1.5 ? 1 + Math.min(0.85, Math.log10(hp) * 0.13) : 1;
     B.sc[i] = s; B.rad[i] = 0.28 * s;
   }
   G.army = army;
+  G.rank = 0;
+  for (let i = 0; i < B.n; i++) G.rank = Math.max(G.rank, rankOf(B.hp[i]));
   G.armyAvg += (army - G.armyAvg) * Math.min(1, dt / 3);
   if (army > G.maxArmy) G.maxArmy = army;
   if (army >= G.nextMile && G.phase === 'play') {
@@ -1932,6 +2112,7 @@ function stageCleared(S) {
 }
 function bossDefeated(S) {
   logStage(S, 'won');
+  recordVictory();
   const b = S.boss;
   b.alive = false;
   const overkill = -b.hp;
@@ -1962,20 +2143,27 @@ function lose(msg) {
 // ---------------------------------------------------------------- rendering
 function writeBlue() {
   const m = blueMesh.instanceMatrix.array, c = blueMesh.instanceColor.array;
-  const rb = ((G.t * 18) | 0) % 32;
+  const counts = [0, 0, 0, 0];
+  const rb = ((G.t * 5) | 0) % 32;
+  let haloCount = 0, topRank = 0;
   for (let i = 0; i < B.n; i++) {
-    const hp = B.hp[i], s = B.sc[i];
-    let col;
-    if (hp >= 1e9) col = RAINBOW[(rb + i) & 31];
-    else {
-      const tier = hp < 3 ? 0 : hp < 30 ? 1 : hp < 1000 ? 2 : hp < 1e6 ? 3 : 4;
-      col = B.kind[i] && tier < 2 ? GIANT_RGB : TIER_RGB[tier];
-    }
+    const hp = B.hp[i], s = B.sc[i], tier = rankOf(hp);
+    topRank = Math.max(topRank, tier);
+    const col = tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : B.kind[i] && tier < 2 ? GIANT_RGB : TIER_RGB[tier];
     writeMatrix(m, i, B, s, 1);
-    if (hp >= 1000 || (B.kind[i] && hp >= 15)) halos.add(B.x[i], 0.55 * s, B.z[i], col, (hp >= 1e6 ? 2.6 : 2.0) * s, hp >= 1000 ? 0.55 : 0.3);
-    const f = Math.max(0, B.flash[i]) * 0.75;
+    if (tier >= 5 && haloCount < 24 && i % 7 === 0) {
+      halos.add(B.x[i], 0.3, B.z[i], col, 1.45 * s, 0.19); haloCount++;
+    }
+    const weapon = B.weapon[i];
+    if (weapon) {
+      const mesh = weaponMeshes[weapon], at = counts[weapon]++;
+      mesh.instanceMatrix.array.set(m.subarray(i * 16, i * 16 + 16), at * 16);
+    }
+    const f = Math.max(0, B.flash[i]) * 0.45;
     c[i * 3] = col[0] + (1 - col[0]) * f; c[i * 3 + 1] = col[1] + (1 - col[1]) * f; c[i * 3 + 2] = col[2] + (1 - col[2]) * f;
   }
+  G.rank = topRank;
+  for (let k = 1; k <= 3; k++) { weaponMeshes[k].count = counts[k]; weaponMeshes[k].instanceMatrix.needsUpdate = true; }
   blueMesh.count = B.n;
   blueMesh.instanceMatrix.needsUpdate = true;
   blueMesh.instanceColor.needsUpdate = true;
@@ -2028,17 +2216,17 @@ function renderWorld(dt) {
   const t = clamp((aspect - 0.5) / 0.5, 0, 1);
   const vf = clamp(2 * Math.atan(Math.tan((46 * Math.PI) / 360) / aspect) * (180 / Math.PI), 50, 80);
   G.kick = Math.max(0, (G.kick || 0) - dt * 2.5);
-  const fov = vf + G.kick * 7;
+  const fov = vf + (reducedMotion ? 0 : G.kick * 2);
   if (Math.abs(camera.fov - fov) > 0.01) {
     camera.fov = fov; camera.updateProjectionMatrix();
     FX.setGlowScale((innerHeight * renderer.getPixelRatio()) / (2 * Math.tan((fov * Math.PI) / 360)));
   }
   G.shake = Math.max(0, G.shake - dt * 2.2);
-  const sh = G.shake * 0.5;
+  const sh = reducedMotion ? 0 : Math.min(0.22, G.shake * 0.22);
   // swoop in at the start of every stage, push toward the boss after a win
-  const intro = G.phase === 'intro' ? 1 - Math.min(1, G.phaseT / 1.2) : 0;
+  const intro = !reducedMotion && G.phase === 'intro' ? 1 - Math.min(1, G.phaseT / 1.2) : 0;
   const swoop = intro * intro * (3 - 2 * intro);
-  const win = G.phase === 'won' ? Math.min(1, G.phaseT / 2.2) : 0;
+  const win = !reducedMotion && G.phase === 'won' ? Math.min(1, G.phaseT / 2.2) : 0;
   const push = win * win * (3 - 2 * win) * 16;
   G.camLag = (G.camLag ?? G.cx) + (G.cx - (G.camLag ?? G.cx)) * Math.min(1, dt * 4);
   camera.position.set(G.camLag * 0.22 + rand(-sh, sh), 18 + t * 4 + swoop * 9 - push * 0.25 + rand(-sh, sh), G.camZ + 13.5 + t * 6.5 + swoop * 10 - push);
@@ -2056,7 +2244,10 @@ function renderWorld(dt) {
   cannon.group.position.set(G.cx, 0, G.cannonZ + G.recoil * 0.12);
   cannon.group.rotation.y = (G.cx - G.aim) * 0.08;
   cannon.group.rotation.z = clamp(-vel * 0.012, -0.18, 0.18);
-  cannon.group.scale.setScalar(1 + G.cannonPulse * 0.25 + G.recoil * 0.03);
+  cannon.shield.visible = G.shield > 0 && G.phase !== 'menu';
+  cannon.shield.rotation.y += dt * 0.3;
+  cannon.shield.material.opacity = 0.06 + G.cannonPulse * 0.25;
+  cannon.group.scale.setScalar((G.chassis ? 1.12 : 1) + G.cannonPulse * 0.25 + G.recoil * 0.03);
   const roll = dt * (G.phase === 'move' ? 14 : 0) + Math.abs(vel) * dt * 1.5;
   for (const w of cannon.wheels) w.rotation.x -= roll;
   for (const w of twinCannon.wheels) w.rotation.x -= roll;
@@ -2080,9 +2271,17 @@ function renderWorld(dt) {
     twinCannon.glowMat.color.copy(cannon.glowMat.color);
   }
 
+  airWing.group.visible = G.airPass > 0 && G.phase !== 'menu';
+  if (airWing.group.visible) {
+    const p = 1 - G.airPass / 2.2;
+    airWing.group.position.set((G.airX ?? 0) + Math.sin(p * Math.PI * 2) * 1.1, 6.5 + Math.sin(p * Math.PI) * 2, G.cannonZ + 5 - p * 79);
+    airWing.group.rotation.z = Math.sin(p * Math.PI * 2) * 0.25;
+    airWing.engines.forEach(e => e.scale.setScalar(0.8 + Math.sin(G.t * 40) * 0.2));
+  }
   // stage objects
   for (const S of G.stages) {
     const cur = S === G.stage;
+    S.group.visible = cur || G.phase === 'move' && S.i === G.stageIdx + 1;
     for (const g of S.gates) {
       const grp = g.model.group;
       if (!g.alive) {
@@ -2093,6 +2292,7 @@ function renderWorld(dt) {
       grp.position.x = g.x;
       if (g.dirty && G.t - g.refT > 0.08) { g.refT = G.t; refreshGate(g); }
       const t = g.def.t;
+      if (g.model.icon) { g.model.icon.rotation.y = Math.sin(G.t * 1.5 + g.ph) * .35; g.model.icon.position.y = 2.8 + Math.sin(G.t * 2 + g.ph) * .12; }
       if (g.def.phase) {
         const P2 = g.def.phase, ph = (G.t + (P2.off ?? 0)) % P2.period, edge = g.on ? P2.on - ph : P2.period - ph;
         const blink = edge < 0.5 && Math.sin(G.t * 40) > 0;
@@ -2129,13 +2329,19 @@ function renderWorld(dt) {
       b.flash = Math.max(0, b.flash - dt * 5);
       b.model.group.position.set(b.x, b.r, b.z);
       b.model.spin.scale.setScalar(b.r * (1 + b.flash * 0.05));
-      if (cur) placeLabel(b.label, b.x, b.r * 2 + 0.8, b.z, fmtHp(b.hp)); else hideLabel(b.label);
+      b.model.inst.count = Math.max(12, Math.ceil(b.model.count * Math.max(0, b.hp / b.max)));
+      b.model.material.color.set(b.flash > 0.1 ? 0xffc7a0 : 0xe8222a);
+      b.model.warning.position.y = -b.r + 0.035;
+      b.model.warning.scale.setScalar(b.r + 0.5);
+      b.model.warning.material.opacity = b.delay > 0 ? 0.18 + Math.sin(G.t * 6) * 0.08 : 0.32;
+      b.label.el.style.setProperty('--health', `${Math.max(0, b.hp / b.max) * 100}%`);
+      if (cur) placeLabel(b.label, b.x, b.r * 2 + 0.8, b.z, `${fmtHp(b.hp)}${b.delay > 0 ? ' / ' + Math.ceil(b.delay) + 's' : ''}`); else hideLabel(b.label);
     }
     for (const p of S.pillars) {
       if (!p.alive) continue;
       p.flash = Math.max(0, p.flash - dt * 5);
       p.model.group.position.x = p.x + Math.sin(G.t * 60) * p.flash * 0.06;
-      if (cur) placeLabel(p.label, p.x, 10.8, p.z, fmtHp(p.hp)); else hideLabel(p.label);
+      if (cur && (p.hp < p.max || Math.abs(p.x - G.cx) < 1.5)) placeLabel(p.label, p.x, 10.8, p.z, fmtHp(p.hp)); else hideLabel(p.label);
     }
     for (const s of S.saws) {
       s.model.group.position.x = s.x;
@@ -2216,33 +2422,36 @@ function renderWorld(dt) {
   setHud('armyTier', hud.army, G.army >= 1e9 ? 't4' : G.army >= 1e6 ? 't3' : G.army >= 1000 ? 't2' : '', 'className');
   setHud('lives', hud.lives, `<span class="heart">❤</span>${Math.max(0, G.lives)}`, 'innerHTML');
   if (hudCache.livesLow !== G.lives <= 3) { hudCache.livesLow = G.lives <= 3; hud.lives.classList.toggle('low', G.lives <= 3); }
+  const rank = RANKS[G.rank];
+  setHud('rank', $('rankname'), rank.name);
+  $('rankdot').style.backgroundColor = '#' + rank.color.toString(16).padStart(6, '0');
+  const target = G.stage?.tower?.alive ? G.stage.tower : G.stage?.boss;
+  const health = target ? Math.max(0, target.hp / target.max) : 0;
+  setHud('targetHealth', $('targetfill'), `${health * 100}%`, 'width');
+  setHud('targetText', $('targetname'), `${G.stage?.boss ? 'Boss' : 'Fort'} ${Math.ceil(health * 100)}%`);
+  setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
+  setHud('surge', $('surge'), G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : '');
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) hud.banner.className = ''; }
   if (tipTimer > 0) { tipTimer -= dt; if (tipTimer <= 0) hud.tip.className = 'stroke'; }
 }
 
 // ---------------------------------------------------------------- menus
-const TIERS = ['EASY', 'NORMAL', 'HARD', 'EXTREME'];
-const tier = (i) => (i < 3 ? 0 : i < 10 ? 1 : i < 15 ? 2 : 3);
 function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
 function showMenu() {
   G.phase = 'menu';
   hud.root.classList.add('hidden');
   $('result').classList.add('hidden');
-  const list = $('levels');
-  list.innerHTML = LEVELS.map((L, i) => `
-    <button class="card t-${L.theme}" data-level="${i}" style="animation-delay:${(i * 0.045).toFixed(3)}s">
-      <div class="num">${i + 1}</div>
-      <div class="info">
-        <div class="name">${L.name} <span class="diff d${tier(i)}">${TIERS[tier(i)]}</span></div>
-        <div class="feat">★ ${L.feature}</div>
-        <div class="blurb">${L.blurb}</div>
-        <div class="enemy">⚠ ${L.enemy}</div>
-      </div>
-      <div class="stars">${starsHtml(progress.stars[i] || 0)}</div>
-    </button>`).join('');
-  list.querySelectorAll('.card').forEach((b) => b.addEventListener('click', () => { sound.unlock(); startLevel(+b.dataset.level); }));
+  const status = renderCampaignMap($('levels'), LEVELS, THEMES, progress, index => { sound.unlock(); startLevel(index); });
+  $('mapcount').textContent = `${status.cleared} / ${LEVELS.length} worlds cleared`;
+  $('mapresume').textContent = status.complete ? 'Replay the finale' : `${status.unlocked ? 'Continue' : 'Play'} / ${status.unlocked + 1}`;
+  $('mapresume').onclick = () => { sound.unlock(); startLevel(status.unlocked); };
   $('menu').classList.remove('hidden');
+  requestAnimationFrame(() => {
+    if (G.phase !== 'menu') return;
+    if (innerWidth <= 600 && status.unlocked >= 6) $('levels').querySelector('.current')?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    else $('menu').scrollTop = 0;
+  });
   for (const L of bruteLabels) hideLabel(L);
   for (const p of popups) { p.life = 0; p.el.style.display = 'none'; }
   for (const S of G.stages) {
@@ -2254,10 +2463,7 @@ function showMenu() {
 }
 function showResult(win) {
   const stars = win ? (G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1) : 0;
-  if (win && stars > (progress.stars[G.levelIdx] || 0)) {
-    progress.stars[G.levelIdx] = stars;
-    try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
-  }
+  if (win) recordVictory();
   $('rtitle').textContent = win ? 'LEVEL COMPLETE!' : 'DEFEATED';
   $('rtitle').className = win ? 'win' : 'lose';
   $('rstars').innerHTML = win ? starsHtml(stars) : '';
@@ -2296,8 +2502,9 @@ $('rnext').addEventListener('click', () => startLevel(G.levelIdx + 1));
 $('rretry').addEventListener('click', () => {
   const snap = G.snap;
   startLevel(G.levelIdx, snap.stage);
-  Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, lives: Math.max(snap.lives, 5) });
+  Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, aircraft: snap.aircraft, shield: snap.shield, lives: Math.max(snap.lives, 5) });
   setBarrels(G.barrels);
+  cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
   twinCannon.group.visible = G.twin;
   renderUps();
   G.snap = { ...snap, lives: G.lives };
@@ -2345,6 +2552,9 @@ function frame(now) {
   last = now;
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { G.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
+  // The map is opaque, so rendering the battlefield behind it only spends GPU time.
+  if (G.phase === 'menu') { acc = 0; return; }
+  if (G.paused) { if (!TURBO) { renderWorld(0); renderer.render(scene, camera); } return; }
   if (TURBO) {
     // headless balance testing: burn ~30ms of CPU per frame on simulation, render nothing
     const t0 = performance.now();
@@ -2361,9 +2571,6 @@ function frame(now) {
     while (acc >= STEP && n < 6 * SPEED) { step(STEP); acc -= STEP; n++; }
     if (n >= 6 * SPEED) acc = 0;
     renderWorld(dt * SPEED * slow);
-  } else {
-    G.t += dt;
-    renderWorld(dt);
   }
   renderer.render(scene, camera);
 }
@@ -2382,7 +2589,7 @@ window.__game = {
     return {
       phase: G.phase, level: G.levelIdx + 1, stage: G.stageIdx + 1, blueUnits: B.n, redUnits: R.n, army: G.army, maxArmy: G.maxArmy,
       bestCombo: G.bestCombo, lives: G.lives, towerHp: S?.tower ? S.tower.hp : null, bossHp: S?.boss ? S.boss.hp : null,
-      bossZ: S?.boss ? +(G.z0 - S.boss.z).toFixed(1) : null, guns: G.barrels, rate: G.rate, power: G.power, twin: G.twin,
+      bossZ: S?.boss ? +(G.z0 - S.boss.z).toFixed(1) : null, guns: G.barrels, rate: G.rate, power: G.power, twin: G.twin, chassis: G.chassis, weapon: G.weapon, aircraft: G.aircraft, shield: G.shield, rank: G.rank,
       log: G.log, fps: G.fps, time: +G.time.toFixed(1), stageTime: +(S?.time ?? 0).toFixed(1), dmgTotal: G.dmgTotal, kills: G.kills,
     };
   },
@@ -2399,7 +2606,7 @@ window.__game = {
     return {
       walls: S.def.walls || [], saws: S.saws.map((s) => ({ x: s.x, d: G.z0 - s.z, r: s.r })), crushers: S.crushers.map((c) => ({ x: c.x, d: G.z0 - c.z, w: c.w })),
       turrets: S.turrets.filter((t) => t.alive).map((t) => ({ x: t.x, d: G.z0 - t.z, hp: t.hp })),
-      balls: S.balls.filter((b) => b.alive).map((b) => ({ x: b.x, d: G.z0 - b.z, r: b.r, hp: b.hp })),
+      balls: S.balls.filter((b) => b.alive).map((b) => ({ x: b.x, d: G.z0 - b.z, r: b.r, hp: b.hp, max: b.max, delay: b.delay })),
       holes: S.holes.filter((h) => h.alive).map((h) => ({ x: h.x, d: G.z0 - h.z, r: h.r, need: h.need, prog: h.prog })),
       tornados: S.tornados.map((t) => ({ x: t.x, d: G.z0 - t.z, r: t.r })),
       belts: S.belts.map((b) => ({ x: b.x, w: b.w, v: b.v, d1: G.z0 - b.zBot, d2: G.z0 - b.zTop })),
@@ -2413,6 +2620,7 @@ window.__game = {
   threats() { return G.effects.filter((e) => e.kind === 'tele' && e.cannon).map((e) => ({ x: e.x, w: e.a, t: e.life })); },
   start(level, stage = 1) { startLevel(level - 1, stage - 1); },
   setBot(fn) { G.bot = fn; },
+  pause(value = true) { G.paused = value; },
   // red units closer than maxD to the cannon: [x, d, hp]
   reds(maxD = 16) { const out = []; for (let i = 0; i < R.n; i++) { const d = G.z0 - R.z[i]; if (R.hp[i] > 0 && d < maxD) out.push([R.x[i], d, R.hp[i]]); } return out; },
   // debug only: evaluate an expression inside the engine module (tools/peek, tools/probe)

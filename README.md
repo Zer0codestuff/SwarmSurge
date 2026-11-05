@@ -2,13 +2,18 @@
 
 A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your cannon, fire a stream of blue units through multiplier gates, and let the swarm grow from a handful to billions before it crashes into the enemy fort or boss.
 
+- A winding map of 20 biome islands. Clear a world to unlock the next, replay earlier worlds for stars
 - 20 levels, 3 stages each, across 20 themed worlds
 - Gates (`+`, `x`, `÷`, flip, slot machine, phasing), barriers, ice vaults, portals, jump pads, loops and conveyor belts
-- Upgrades you charge with your own units: extra guns, rapid fire, POWER x2, twin gun, SQUAD side cannons, NUKE, hearts and tesla coils
+- Equipment crates unlock Bulldog and Siege tanks, armor, blasters, splash rockets, chain-lightning rifles and repeated air strikes
+- Rapid doubles rate up to x8, Power triples output, and barrel crates add two guns
+- 13 troop ranks with distinct colors. Crowded armies fuse power into fewer troops, with extra crowd capacity in surge stages
+- Rolling swarms absorb damage even before rolling, shed troops as they shrink, and grant a four-second x2 wreck bonus
+- NUKE, gate-boosting stars, hearts and tesla coils
 - Enemy gates, rival cannons, tornadoes, black holes (feed them for a SUPERNOVA), rolling swarm balls, toppling pillars and meteors
 - 20 procedurally built bosses: every model is generated in code, with no asset files
 
-Difficulty: levels 1–3 very easy, 4–10 moderately easy, 11–15 medium-hard, 16–20 hard.
+Equipment persists through the three stages of each level, including stage retries. Longer fights gradually expose the fort or boss armor for up to x4 hit damage. The campaign favors short rounds and large power spikes.
 
 ## Run it
 
@@ -20,6 +25,17 @@ python3 -m http.server 8000
 ```
 
 Useful URL parameters: `?level=12&stage=2` jumps straight to a stage, `speed=2` runs the game faster, `turbo=1` runs it as fast as possible (for bots).
+
+## Focused checks
+
+Serve the game, install the optional tools with `cd tools && npm ci`, then run:
+
+```sh
+CHROME_PATH=/path/to/chrome node check-game.mjs
+CHROME_PATH=/path/to/chrome node check-game.mjs --campaign
+```
+
+The first command checks ball collision, airborne immunity, weapon line of sight, power conservation, armor, Rapid, retry state, map locks, legacy progress and immediate victory saves. The second also simulates all 20 campaigns with the smart policy and seed 42. JSON results go to `tools/out/campaign.json`. Chrome is discovered in standard application and Linux locations; set `CHROME_PATH` for a cached headless browser. `GAME_URL` overrides the default server URL.
 
 ## Bot harness (`tools/`)
 
@@ -37,7 +53,7 @@ python3 tune.py 3 --full 16:3 17:3  # rescale tower/boss HP toward a target clea
 
 `smart` plans the best route through the gates, defends against packs near the cannon and skips slow upgrades; `naive` plays like a casual player who chases the biggest number on screen.
 
-Balance targets: `naive` wins levels 1–3; `smart` wins 4–15 comfortably; 16–20 are close fights where `smart` sometimes loses.
+The current seed-42 smart-policy run clears all 20 worlds. Bot timings guide pacing; human feedback is still needed for difficulty and long-session balance.
 
 ## Tech
 

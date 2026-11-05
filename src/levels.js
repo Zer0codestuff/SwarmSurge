@@ -11,17 +11,18 @@
 //   charge    – starts at x`v`, grows +1 for every `per` power fed through it, up to x`max`
 //   barrier / ice / fence / statue – blockers: absorb `hp` power, then break
 //   upgrade   – absorbs `need` power, then upgrades the cannon for the rest of the level
-//               (`up`: barrel = +1 gun, rapid = faster fire, power = shots x2, twin = mirrored twin cannon)
+//               (`up`: barrel = +1 gun, rapid = faster fire, power = shots x3, twin = mirrored twin cannon)
 //   nuke      – absorbs `need` power, then wipes every red unit and blasts `dmg` of the fort/boss max hp
 //   star      – absorbs `need` power, then DOUBLES every multiplier gate of the stage (and the army on
 //               screen). Refillable, but each refill costs 3x more
 //   portal    – teleports units to `to: { x, d }`
 // Other stage parts: walls, saws, crushers, turrets, spawners, horde (sleeping red army), boss/tower.
 
+import { prepareCampaign } from './campaign.js';
 import { ladder, stack } from './levelkit.js';
 import { MORE_LEVELS } from './levels2.js';
 
-export const LEVELS = [
+export const LEVELS = prepareCampaign([
   // ------------------------------------------------------------------ 1
   {
     name: 'Sunny Speedway',
@@ -150,12 +151,12 @@ export const LEVELS = [
     name: 'Lava Gorge',
     theme: 'lava',
     threat: 1.0,
-    feature: 'Saws, barriers & POWER x2',
-    blurb: 'Spinning saws shred units. Grab POWER x2 early: every shot after it counts double!',
+    feature: 'Saws, barriers & POWER x3',
+    blurb: 'Spinning saws shred units. Grab POWER x3 early: every shot after it counts triple!',
     enemy: 'Bombers: explode when they die',
     stages: [
       {
-        tip: 'POWER x2 doubles every unit you fire for the rest of the level!',
+        tip: 'POWER x3 triples every unit you fire for the rest of the level!',
         tower: 3000,
         waves: { every: 3.0, swarm: 7, bomber: 2, ramp: 0.4 },
         walls: [{ x: 0, d1: 10, d2: 38 }],
@@ -246,7 +247,7 @@ export const LEVELS = [
         ],
       },
       {
-        tip: 'Ice Golem! POWER x2, smash the ice for x10 x5... and x25 deeper!',
+        tip: 'Ice Golem! POWER x3, smash the ice for x10 x5... and x25 deeper!',
         boss: { type: 'golem', hp: 400000, speed: 0.5 },
         waves: { every: 3.2, swarm: 10, shielder: 3, ramp: 0.4 },
         gates: [
@@ -300,7 +301,7 @@ export const LEVELS = [
         ],
       },
       {
-        tip: 'The Mega Brute! POWER x2 + charge gates = unstoppable!',
+        tip: 'The Mega Brute! POWER x3 + charge gates = unstoppable!',
         boss: { type: 'brute', hp: 3000000, speed: 0.5 },
         waves: { every: 3.0, swarm: 10, runner: 8, ramp: 0.4, brute: { every: 3, hp: 60 } },
         gates: [
@@ -611,7 +612,7 @@ export const LEVELS = [
     ],
   },
   ...MORE_LEVELS,
-];
+]);
 
 export const THEMES = {
   desert: { sky: 0x9fd8ff, fog: 0xf3dcb0, ground: 0xe9c88f, road: 0x8e939d, rail: 0xb9bec7, tower: 0xd23b30, roof: 0x7a1d1d },

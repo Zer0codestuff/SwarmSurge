@@ -1,7 +1,7 @@
 // Models for the level 11-20 mechanics: belts, jump pads, hangars, tesla coils, pillars, tornadoes,
 // black holes, rolling swarm balls, the rival cannon and spider webs.
 import * as THREE from 'three';
-import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon } from './models.js';
+import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, buildGate, troopWeaponGeo } from './models.js';
 
 function stripeTexture(a, b, n = 8, w = 128, h = 32) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -63,7 +63,49 @@ export function buildJumpPad(w) {
   return { group: g, panelMat, ...L, top, setColor() {} };
 }
 
-// gold-plane hangar (reference frames): fill it and a whole extra cannon joins your squad
+export function buildSupportPlane() {
+  const plane = new THREE.Group(), hull = lam(0xe3f3ff), dark = lam(0x28436a), amber = lam(0xffc54a);
+  const body = new THREE.CapsuleGeometry(0.24, 1.9, 4, 10); body.rotateX(Math.PI / 2);
+  plane.add(mesh(body, hull));
+  const wings = new THREE.Shape(); wings.moveTo(0, -0.45); wings.lineTo(1.7, 0.5); wings.lineTo(1.6, 0.85); wings.lineTo(0, 0.35); wings.lineTo(-1.6, 0.85); wings.lineTo(-1.7, 0.5);
+  const geo = new THREE.ExtrudeGeometry(wings, { depth: 0.09, bevelEnabled: false }); geo.rotateX(Math.PI / 2);
+  plane.add(mesh(geo, hull));
+  plane.add(mesh(new THREE.BoxGeometry(1.1, 0.08, 0.38), amber, 0, 0.12, 0.8));
+  plane.add(mesh(new THREE.BoxGeometry(0.07, 0.55, 0.5), dark, 0, 0.25, 0.85));
+  plane.add(mesh(new THREE.SphereGeometry(0.22, 10, 8), lam(0x45c7ed), 0, 0.18, -0.4));
+  const engines = [];
+  for (const side of [-1, 1]) {
+    plane.add(mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.9, 8).rotateX(Math.PI / 2), dark, side * 0.65, -0.12, 0.2));
+    const flame = mesh(new THREE.ConeGeometry(0.12, 0.65, 8).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x75e7ff }), side * 0.65, -0.12, 0.95, false);
+    plane.add(flame); engines.push(flame);
+  }
+  return { group: plane, engines };
+}
+
+export function buildArmory(w, upgrade) {
+  const model = buildGate(w, 0xffc54a);
+  const icon = new THREE.Group(); icon.position.y = 2.8; model.group.add(icon);
+  const metal = lam(0x28496b), gold = lam(0xffd571), light = lam(0xe1faff);
+  if (upgrade === 'tank') {
+    icon.add(mesh(new THREE.BoxGeometry(1.35, .35, 1), metal));
+    icon.add(mesh(new THREE.BoxGeometry(.7, .38, .65), gold, 0, .32, 0));
+    icon.add(mesh(new THREE.CylinderGeometry(.1, .1, .9, 8).rotateX(Math.PI / 2), light, 0, .32, -.65));
+    for (const x of [-.65, .65]) icon.add(mesh(new THREE.BoxGeometry(.32, .5, 1.3), metal, x, -.1, 0));
+  } else if (['rifle', 'rockets', 'arc'].includes(upgrade)) {
+    const gun = new THREE.Mesh(troopWeaponGeo({ rifle: 1, rockets: 2, arc: 3 }[upgrade]), new THREE.MeshToonMaterial({ vertexColors: true }));
+    gun.scale.setScalar(2); gun.position.set(-.65, -.9, -.7); gun.rotation.y = Math.PI / 2; icon.add(gun);
+  } else if (upgrade === 'air') {
+    const plane = buildSupportPlane(); plane.group.scale.setScalar(.5); icon.add(plane.group);
+  } else {
+    const bolt = new THREE.Shape(); bolt.moveTo(.12, .75); bolt.lineTo(-.4, -.05); bolt.lineTo(0, -.05); bolt.lineTo(-.12, -.7); bolt.lineTo(.45, .15); bolt.lineTo(.05, .15);
+    const geo = new THREE.ExtrudeGeometry(bolt, { depth: .12, bevelEnabled: false });
+    icon.add(mesh(geo, light));
+  }
+  model.icon = icon;
+  return model;
+}
+
+// Fill the hangar to unlock repeated bombing runs.
 export function buildHangar(w) {
   const g = new THREE.Group();
   const crate = lam(0x2a4aa8), crateDark = lam(0x1a2a6a), gold = lam(0xffc21a, { emissive: 0x553300 });
@@ -154,8 +196,9 @@ export function buildBlackHole(r) {
 let ballUnit = null;
 export function buildSwarmBall(r) {
   if (!ballUnit) ballUnit = redUnitGeo().scale(1.25, 1.25, 1.25);
-  const n = 220;
-  const inst = new THREE.InstancedMesh(ballUnit, lam(0xe8222a, { emissive: 0x3a0505 }), n);
+  const n = 144;
+  const material = new THREE.MeshToonMaterial({ color: 0xe8222a, emissive: 0x3a0505 });
+  const inst = new THREE.InstancedMesh(ballUnit, material, n);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1);
   for (let i = 0; i < n; i++) {
     const y = 1 - (2 * (i + 0.5)) / n, rr = Math.sqrt(1 - y * y), a = i * 2.39996;
@@ -164,13 +207,15 @@ export function buildSwarmBall(r) {
     m.compose(p.clone().multiplyScalar(0.92), q, s.setScalar(0.3 + Math.random() * 0.06));
     inst.setMatrixAt(i, m);
   }
-  inst.castShadow = true;
+  inst.castShadow = false;
   const g = new THREE.Group();
   const spin = new THREE.Group(); g.add(spin);
   const fill = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 12), lam(0xa8141c));
   spin.add(fill, inst);
   spin.scale.setScalar(r);
-  return { group: g, spin };
+  const warning = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 40), new THREE.MeshBasicMaterial({ color: 0xff6644, transparent: true, opacity: 0.45, depthWrite: false }));
+  warning.rotation.x = -Math.PI / 2; g.add(warning);
+  return { group: g, spin, inst, material, warning, count: n };
 }
 
 // the rival: a red cannon at the top of the road, firing enemies down at you
