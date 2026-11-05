@@ -141,6 +141,8 @@
   .lbl.ball { background: linear-gradient(90deg, #b83239 var(--health,100%), #3e2535 var(--health,100%)); border: 2px solid #ffd68b; font-size: clamp(16px, 3vw, 22px); padding: 3px 12px; box-shadow: 0 3px 0 #552436; }
   .lbl.pillar { font-size: 13px; background: #694c42; border: 1px solid #ffe3bb; border-radius: 5px; padding: 1px 6px; }
   .lbl.tower { font-size: 22px; border-width: 2px; padding: 2px 10px; }
+  .lbl { max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
+  .lbl.boss { font-size: clamp(26px, 5vw, 44px); -webkit-text-stroke-width: 1.5px; }
   #topbar { left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); }
   #armybox { background: var(--glass); border: 1px solid #c8eaff; border-radius: 16px; padding: 3px 14px 3px 8px; box-shadow: 0 4px 12px #142c4626; }
   #army { font-size: 27px; }

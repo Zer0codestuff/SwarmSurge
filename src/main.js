@@ -95,8 +95,10 @@ const debris = new FX.Debris(scene);
 const ambient = new FX.Ambient(scene);
 const tracers = new FX.Tracers(scene);
 let sceneReady = false;
+let labelBoundsDirty = true, labelTop = 110, labelBottom = innerHeight - 75;
 
 function resize() {
+  labelBoundsDirty = true;
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -281,7 +283,7 @@ function makeLabel(cls) {
   el.className = 'lbl ' + cls;
   el.style.display = 'none';
   labelLayer.appendChild(el);
-  return { el, text: null, vis: false };
+  return { el, cls, text: null, vis: false };
 }
 function project(x, y, z) {
   tmpV.set(x, y, z).project(camera);
@@ -291,7 +293,9 @@ function project(x, y, z) {
 }
 function placeLabel(L, x, y, z, text) {
   if (!project(x, y, z)) { hideLabel(L); return; }
-  L.el.style.transform = `translate(${tmpV.x.toFixed(1)}px,${tmpV.y.toFixed(1)}px) translate(-50%,-100%)`;
+  const height = L.cls === 'boss' ? 64 : 40;
+  if (tmpV.y - height < labelTop || tmpV.y > labelBottom || tmpV.x < -40 || tmpV.x > innerWidth + 40) { hideLabel(L); return; }
+  L.el.style.transform = `translate(${clamp(tmpV.x, 60, innerWidth - 60).toFixed(1)}px,${tmpV.y.toFixed(1)}px) translate(-50%,-100%)`;
   if (L.text !== text) { L.el.textContent = text; L.text = text; }
   if (!L.vis) { L.el.style.display = ''; L.vis = true; }
 }
@@ -717,6 +721,7 @@ function renderPips() {
   hud.pips.innerHTML = html;
 }
 function renderUps() {
+  labelBoundsDirty = true;
   let html = '';
   if (G.barrels > 1) html += `<span class="up">GUNS ×${G.barrels}</span>`;
   if (G.rate > 1) html += `<span class="up">RAPID ×${G.rate.toFixed(1)}</span>`;
@@ -2340,6 +2345,11 @@ function writeRed() {
 function renderWorld(dt) {
   updateTroopMotion(G.t);
   labelLayer.style.visibility = G.phase === 'menu' || G.shown ? 'hidden' : 'visible';
+  if (labelBoundsDirty && G.phase !== 'menu') {
+    labelTop = Math.max($('topbar').getBoundingClientRect().bottom, $('target').getBoundingClientRect().bottom) + 8;
+    labelBottom = $('bottom').getBoundingClientRect().top - 8;
+    labelBoundsDirty = false;
+  }
   // camera framing adapts to portrait (phones) and landscape (desktop)
   const aspect = innerWidth / innerHeight;
   const t = clamp((aspect - 0.5) / 0.5, 0, 1);
@@ -2499,7 +2509,7 @@ function renderWorld(dt) {
         T.model.group.scale.set(1 + T.flash * 0.015, 1 - T.flash * 0.035, 1);
         if (cur) placeLabel(T.label, 0, 9.4, T.z - 0.5, fmtHp(T.hp));
         else hideLabel(T.label);
-      }
+      } else hideLabel(T.label);
     }
     if (S.fort) { if (cur) placeLabel(S.fort.label, S.fort.x, 5.5, S.fort.z, fmtHp(S.fort.hp)); else hideLabel(S.fort.label); }
     if (S.boss) {
@@ -2562,7 +2572,7 @@ function renderWorld(dt) {
   const target = G.stage?.tower?.alive ? G.stage.tower : G.stage?.boss;
   const health = target ? Math.max(0, target.hp / target.max) : 0;
   setHud('targetHealth', $('targetfill'), `${health * 100}%`, 'width');
-  setHud('targetText', $('targetname'), `${G.stage?.boss ? 'Boss' : 'Fort'} ${Math.ceil(health * 100)}%`);
+  setHud('targetText', $('targetname'), `${G.stage?.boss ? 'Boss' : 'Fort'} ${fmtHp(Math.max(0, target?.hp || 0))} · ${Math.ceil(health * 100)}%`);
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
   setHud('surge', $('surge'), G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : '');
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
@@ -2679,6 +2689,7 @@ function resumeRun() {
   if (!G.resumePhase) return;
   G.phase = G.resumePhase; G.resumePhase = null; G.paused = false;
   $('menu').classList.add('hidden'); hud.root.classList.remove('hidden');
+  labelBoundsDirty = true;
   resetInput(); acc = 0; last = performance.now(); sound.setPaused(false);
   canvas.focus({ preventScroll: true });
 }
