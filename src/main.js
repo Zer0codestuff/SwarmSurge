@@ -1426,7 +1426,9 @@ function attackLightning(b, n) {
   }
 }
 function attackBall(S, b, frac, r = 2.2) {
-  const ball = addBall(S, G.root, clamp(b.x + rand(-2, 2), -4, 4), b.z + b.model.radius + r, b.max * frac, r, 2.2, { dmg: 2, home: 0.5 });
+  // like minions, a thrown ball is sized to your recent army (a few seconds of focused fire), capped by the boss's hp
+  const hp = Math.max(20 * threat(S), Math.min(b.max * frac, G.armyAvg * 0.6));
+  const ball = addBall(S, G.root, clamp(b.x + rand(-2, 2), -4, 4), b.z + b.model.radius + r, hp, r, 2.2, { dmg: 2, home: 0.5 });
   popup('INCOMING!', 'combo c2', ball.x, 4, ball.z, 1.0);
   sound.play('warn');
 }
