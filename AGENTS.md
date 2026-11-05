@@ -14,6 +14,7 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 
 ## Current status and recent changes
 - Storm Peaks clouds now form lateral banks outside the camera corridor, including the opening swoop. Twenty-seven focused checks include transformed cloud bounds; the focused world-19 campaign still clears.
+- `src/tutorials.js` persists first-introduction lessons in `swarm-tutorials`. Basic lessons are limited to world one; movement gates share one lesson. Replays, retries, returning players and debug runs skip repeat prose. Opening the map does not consume a lesson. Policy checks run with `node tools/tutorial-checks.mjs`.
 - Balls absorb continuous contact and ranged damage even during deployment, preserve unused troop power and grant a four-second x2 wreck bonus. Charged giants preserve output in a full pool and receive that multiplier too.
 - Rapid doubles rate to x8; Power triples output. Bulldog and Siege tanks add armor. Three troop weapons, escort cannons and repeated air strikes persist through stages and retries. Escorts appear in worlds 8, 12 and 14.
 - Weapons select visible targets through the spatial grid and spend firing capacity only on actual shots. Idle back-line troops cannot starve the front line.
