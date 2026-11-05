@@ -757,28 +757,46 @@ function rangedHit(target, damage) {
   target.hp -= d; target.flash = 1; G.dmgTotal += d;
   if (target === G.stage.tower || target === G.stage.boss) G.dmgAcc += d;
 }
+function nearestVisibleRed(S, x, z, range, excluded = null, forwardOnly = true) {
+  let best = range * range, index = -1;
+  const left = cellX(x - range), right = cellX(x + range);
+  const front = cellZ(z + range), back = cellZ(z - range);
+  for (let row = front; row <= back; row++) for (let col = left; col <= right; col++) {
+    for (let j = gR.head[row * GCOLS + col]; j !== -1; j = gR.next[j]) {
+      if (R.hp[j] <= 0 || excluded?.has(j) || forwardOnly && R.z[j] >= z) continue;
+      const d2 = (R.x[j] - x) ** 2 + (R.z[j] - z) ** 2;
+      if (d2 < best && !shotBlocked(S, x, z, R.x[j], R.z[j])) { best = d2; index = j; }
+    }
+  }
+  return index;
+}
 function updateArsenal(S, dt) {
-  let budget = 5;
+  let budget = 5, searches = 0;
   for (let i = 0; i < B.n; i++) B.shot[i] -= dt;
   const cursor = (G.weaponCursor || 0) % Math.max(1, B.n);
   for (let offset = 0; offset < B.n && budget > 0; offset++) {
     const i = (cursor + offset) % B.n;
-    if (B.hp[i] <= 0 || !B.weapon[i] || B.adur[i] > 0) continue;
-    if (B.shot[i] > 0 || budget <= 0) continue;
-    B.shot[i] = B.weapon[i] === 2 ? 1.25 : B.weapon[i] === 3 ? 0.8 : 0.95;
-    budget--;
     G.weaponCursor = i + 1;
+    if (B.hp[i] <= 0 || !B.weapon[i] || B.adur[i] > 0) continue;
+    if (B.shot[i] > 0) continue;
+    if (searches++ >= 48) break;
     const x = B.x[i], z = B.z[i], weapon = B.weapon[i];
+    const range = weapon === 2 ? 10 : 8;
     const damage = B.hp[i] * (weapon === 2 ? 0.85 : weapon === 3 ? 0.5 : 0.3);
     const color = weapon === 3 ? 0x8affed : weapon === 2 ? 0xffb454 : 0xc2f2ff;
     // Balls get priority and absorb ranged fire while stationary as well as rolling.
-    const ball = S.balls.find(b => b.alive && b.hp > 0 && b.z < z && Math.hypot(b.x - x, b.z - z) < 8 + b.r && !shotBlocked(S, x, z, b.x, b.z));
-    let j = nearestRed(x, z - 3, weapon === 2 ? 7 : 6);
+    const ball = S.balls.find(b => b.alive && b.hp > 0 && b.z < z && Math.hypot(b.x - x, b.z - z) < range + b.r && !shotBlocked(S, x, z, b.x, b.z));
+    let j = ball ? -1 : nearestVisibleRed(S, x, z, range);
+    const target = !ball && j < 0 ? [S.tower, S.boss, ...S.spawners, ...S.turrets].find(t => t?.alive && t.hp > 0 && t.z < z && Math.hypot((t.x ?? 0) - x, t.z - z) < range + 2 && !shotBlocked(S, x, z, t.x ?? 0, t.z)) : null;
+    if (!ball && j < 0 && !target) { B.shot[i] = .12; continue; }
+    B.shot[i] = weapon === 2 ? 1.25 : weapon === 3 ? .8 : .95;
+    budget--;
+    B.flash[i] = Math.max(B.flash[i], .25);
     if (ball) {
       rangedHit(ball, damage); ball.impact = 0.15;
       addBeam(x, 0.65, z, ball.x, ball.r, ball.z, color, 0.09);
       if (ball.hp <= 0) ballDies(S, ball, false);
-    } else if (j >= 0 && R.z[j] < z && !shotBlocked(S, x, z, R.x[j], R.z[j])) {
+    } else if (j >= 0) {
       const tx = R.x[j], tz = R.z[j];
       addBeam(x, 0.65, z, tx, 0.6, tz, color, 0.09);
       R.hp[j] -= damage; R.flash[j] = 1;
@@ -792,8 +810,8 @@ function updateArsenal(S, dt) {
         const visited = new Set([j]);
         let fromX = tx, fromZ = tz;
         for (let chain = 0; chain < 2; chain++) {
-          j = nearestRed(fromX, fromZ, 3.5, visited);
-          if (j < 0 || shotBlocked(S, fromX, fromZ + 0.01, R.x[j], R.z[j])) break;
+          j = nearestVisibleRed(S, fromX, fromZ, 3.5, visited, false);
+          if (j < 0) break;
           visited.add(j);
           addBeam(fromX, 0.7, fromZ, R.x[j], 0.7, R.z[j], color, 0.12);
           R.hp[j] -= damage * 0.7; R.flash[j] = 1;
@@ -802,7 +820,6 @@ function updateArsenal(S, dt) {
         }
       }
     } else {
-      const target = [S.tower, S.boss, ...S.spawners, ...S.turrets].find(t => t?.alive && t.hp > 0 && Math.hypot((t.x ?? 0) - x, t.z - z) < 10 && !shotBlocked(S, x, z, t.x ?? 0, t.z));
       if (target) {
         rangedHit(target, damage * (S.breach || 1));
         addBeam(x, 0.65, z, target.x ?? 0, 2, target.z, color, 0.08);

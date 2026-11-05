@@ -33,15 +33,33 @@ window.runGameChecks = (g) => {
     const j=spawn(R,0,-7,100,0), i=spawn(B,0,-3,10,0);
     B.weapon[i]=1; B.shot[i]=0;
     G.stage.gates.push({alive:true,def:{t:'barrier'},x:0,z:-5,w:4});
-    updateArsenal(G.stage,1); const blocked=R.hp[j]===100;
+    buildGrid(gR,R); updateArsenal(G.stage,1); const blocked=R.hp[j]===100;
     G.stage.gates.length=0; updateArsenal(G.stage,1);
     return {pass:blocked && R.hp[j]===97,hp:R.hp[j]};
   })()`);
   check('Arc rifles hit three different enemies', `(() => {
     for(let k=0;k<4;k++) spawn(R,k*.6,-5,100,0);
     const i=spawn(B,0,-3,10,0); B.weapon[i]=3; B.shot[i]=0;
-    updateArsenal(G.stage,1);
+    buildGrid(gR,R); updateArsenal(G.stage,1);
     return {pass:Array.from(R.hp.slice(0,4)).filter(x=>x<100).length===3,hp:Array.from(R.hp.slice(0,4))};
+  })()`);
+  check('Idle back-line troops do not consume the front-line firing budget', `(() => {
+    const j=spawn(R,0,-20,100,0);
+    for(let k=0;k<6;k++) { const i=spawn(B,0,k===5?-17:-2,10,0); B.weapon[i]=1; B.shot[i]=0; }
+    buildGrid(gR,R); updateArsenal(G.stage,1);
+    return {pass:R.hp[j]===97,hp:R.hp[j]};
+  })()`);
+  check('Troops choose a visible enemy when the closest enemy is behind cover', `(() => {
+    spawn(R,0,-6,100,0); const j=spawn(R,3,-6,100,0);
+    const i=spawn(B,0,-3,10,0); B.weapon[i]=1; B.shot[i]=0;
+    G.stage.gates.push({alive:true,def:{t:'barrier'},x:0,z:-5,w:1});
+    buildGrid(gR,R); updateArsenal(G.stage,1);
+    return {pass:R.hp[0]===100 && R.hp[j]===97,hp:R.hp[j]};
+  })()`);
+  check('Idle weapons stay ready to acquire incoming enemies', `(() => {
+    const i=spawn(B,0,-2,10,0); B.weapon[i]=1; B.shot[i]=0;
+    buildGrid(gR,R); updateArsenal(G.stage,STEP);
+    return {pass:B.shot[i]<=.13,cooldown:B.shot[i]};
   })()`);
   check('Gates preserve multiplied power at the population cap', `(() => {
     for(let k=0;k<420;k++) spawn(B,0,-8,1,0);
