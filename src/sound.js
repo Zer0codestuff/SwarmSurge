@@ -58,6 +58,7 @@ export class Sound {
     this.last[name] = now;
     switch (name) {
       case 'shoot': this.tone(180, 0.05, 'sine', 0.08, -60); break;
+      case 'heavy': this.tone(110,.09,'sine',.13,-45); break;
       case 'pop': this.tone(420 + Math.random() * 380, 0.06, 'triangle', 0.09, -200); break;
       case 'gate': this.tone(700 + Math.random() * 200, 0.08, 'square', 0.04, 500); break;
       case 'hit': this.tone(140, 0.25, 'sawtooth', 0.2, -80); break;

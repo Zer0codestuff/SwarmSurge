@@ -91,6 +91,12 @@ export function buildArmory(w, upgrade) {
     icon.add(mesh(new THREE.BoxGeometry(.7, .38, .65), gold, 0, .32, 0));
     icon.add(mesh(new THREE.CylinderGeometry(.1, .1, .9, 8).rotateX(Math.PI / 2), light, 0, .32, -.65));
     for (const x of [-.65, .65]) icon.add(mesh(new THREE.BoxGeometry(.32, .5, 1.3), metal, x, -.1, 0));
+  } else if (upgrade === 'squad') {
+    for (const side of [-1,1]) {
+      icon.add(mesh(new THREE.BoxGeometry(.58,.18,.7),metal,side*.4,-.1,0));
+      icon.add(mesh(new THREE.SphereGeometry(.26,8,6),gold,side*.4,.15,0));
+      icon.add(mesh(new THREE.CylinderGeometry(.09,.11,.55,8).rotateX(Math.PI/2),light,side*.4,.15,-.35));
+    }
   } else if (['rifle', 'rockets', 'arc'].includes(upgrade)) {
     const gun = new THREE.Mesh(troopWeaponGeo({ rifle: 1, rockets: 2, arc: 3 }[upgrade]), new THREE.MeshToonMaterial({ vertexColors: true }));
     gun.scale.setScalar(2); gun.position.set(-.65, -.9, -.7); gun.rotation.y = Math.PI / 2; icon.add(gun);

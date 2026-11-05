@@ -708,18 +708,26 @@ function twinX() {
   if (Math.abs(tx - G.cx) < 1.7) tx = G.cx + (G.cx >= 0 ? -1.7 : 1.7);
   return clamp(tx, -XLIM + 0.2, XLIM - 0.2);
 }
+function cannonUnit(x, power, kind = 0) {
+  const i = spawn(B,x,G.z0-(kind?1.9:1.7),power,kind);
+  if (i >= 0) return i;
+  let best = -1, dist = Infinity;
+  for (let j = 0; j < B.n; j++) if (B.hp[j] > 0) {
+    const d = Math.abs(B.x[j]-x)+Math.abs(B.z[j]-G.z0);
+    if (d < dist) { dist = d; best = j; }
+  }
+  if (best >= 0) {
+    B.hp[best] = Math.min(MAX_POWER,B.hp[best]+power);
+    B.kind[best] = Math.max(B.kind[best],kind); B.flash[best] = .7;
+  }
+  return -1;
+}
 function fireFrom(cx) {
   const sp = G.barrels > 4 ? 0.3 : 0.42;
   for (let b = 0; b < G.barrels; b++) {
     const off = (b - (G.barrels - 1) / 2) * sp;
     const power = G.power * (G.overdrive > 0 ? 2 : 1);
-    const i = spawn(B, clamp(cx + off + rand(-0.06, 0.06), -XLIM, XLIM), G.z0 - 1.7, power, 0);
-    if (i < 0) {
-      // A full pool must preserve cannon output too. Reinforce a living troop near the muzzle.
-      let best = -1, dist = Infinity;
-      for (let j = 0; j < B.n; j++) if (B.hp[j] > 0) { const d = Math.abs(B.x[j] - cx) + Math.abs(B.z[j] - G.z0); if (d < dist) { dist = d; best = j; } }
-      if (best >= 0) B.hp[best] = Math.min(MAX_POWER, B.hp[best] + power);
-    }
+    const i = cannonUnit(clamp(cx+off+rand(-.06,.06),-XLIM,XLIM),power);
     if (i >= 0) { B.vz[i] = -BLUE_SPEED; B.flash[i] = 0.7; }
     spark(cx + off, 1.15, G.cannonZ - 2.3, G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, 0.12, 0);
   }
@@ -735,10 +743,10 @@ function fireCannon(dt) {
     G.charge++;
     if (G.charge >= CHARGE_MAX) {
       G.charge = 0;
-      const i = spawn(B, G.cx, G.z0 - 1.9, GIANT_HP * G.power, 1);
+      const i = cannonUnit(G.cx,GIANT_HP*G.power*(G.overdrive>0?2:1),1);
       if (i >= 0) { B.vz[i] = -GIANT_SPEED; B.flash[i] = 1; }
       burst(G.cx, 1.5, G.z0 - 1.5, PCOL.blue, 12, 5);
-      sound.play('upgrade');
+      sound.play('heavy');
     }
     G.recoil = 1;
     sound.play('shoot');

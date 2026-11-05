@@ -7,6 +7,7 @@ A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your canno
 - Gates (`+`, `x`, `÷`, flip, slot machine, phasing), barriers, ice vaults, portals, jump pads, loops and conveyor belts
 - Equipment crates unlock Bulldog and Siege tanks, armor, blasters, splash rockets, chain-lightning rifles and repeated air strikes
 - Rapid doubles rate up to x8, Power triples output, and barrel crates add two guns
+- Escort cannons mirror your volleys and add armor. Their crates appear in Moon Base, Lucky Casino and Spooky Hollow
 - 13 troop ranks with distinct colors. Crowded armies fuse power into fewer troops, with extra crowd capacity in surge stages
 - Rolling swarms absorb damage even before rolling, shed troops as they shrink, and grant a four-second x2 wreck bonus
 - NUKE, gate-boosting stars, hearts and tesla coils
