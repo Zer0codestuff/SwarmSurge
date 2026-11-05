@@ -153,6 +153,22 @@ window.runGameChecks = (g) => {
     }
     return {pass:forms.every(Boolean) && G.shield===6 && G.power===144 && G.aircraft===1 && G.weapon===8,forms};
   })()`);
+  check('Grounded vehicle parts move only while driving', `(() => {
+    cannon.setChassis(1); cannon.animateVehicle(0,.1,0,0,0);
+    const belt=cannon.rig.group.getObjectByName('belt'), start=Array.from(belt.instanceMatrix.array);
+    cannon.animateVehicle(1,.1,0,0,0); const idle=start.every((v,i)=>v===belt.instanceMatrix.array[i]);
+    cannon.animateVehicle(2,.1,0,6,0); const moved=start.some((v,i)=>v!==belt.instanceMatrix.array[i]);
+    const stop=Array.from(belt.instanceMatrix.array); cannon.animateVehicle(3,.1,0,0,0);
+    const stopped=stop.every((v,i)=>v===belt.instanceMatrix.array[i]);
+    const feet=[];
+    for(const id of [3,6]) {
+      cannon.setChassis(id); cannon.animateVehicle(0,.1,0,0,0);
+      const leg=cannon.rig.group.getObjectByName(id===3?'spider-leg':'titan-leg'), a=leg.rotation.toArray();
+      cannon.animateVehicle(1,.1,0,0,0); const still=a.every((v,i)=>v===leg.rotation.toArray()[i]);
+      cannon.animateVehicle(2,.1,0,6,0); feet.push(still && a.some((v,i)=>v!==leg.rotation.toArray()[i]));
+    }
+    return {pass:idle && moved && stopped && feet.every(Boolean)};
+  })()`);
   check('Specialist transformations unlock their equipment and never downgrade', `(() => {
     upgradeCannon('spider'); const spider=G.chassis===3 && G.weapon===4 && G.rate===2;
     upgradeCannon('hover'); const hover=G.chassis===4 && (G.weaponMask & (1<<7));
