@@ -30,6 +30,7 @@ const LESSONS = {
   air: 'Call the air wing. It makes repeated bombing runs for this level.',
   rapid: 'Rapid doubles your firing rate. Stack it to reach x8.',
 };
+const FLANK_TYPES = { jungle:4, neon:7, candy:6, moon:5, sky:7, void:9, factory:8, casino:2, coral:4, spooky:9, arena:3, crystal:6, volcano:12, tomb:10, storm:7, blackhole:9 };
 
 export function prepareCampaign(levels) {
   return levels.map((level, li) => ({
@@ -38,6 +39,11 @@ export function prepareCampaign(levels) {
       const s = structuredClone(original), route = ROUTES[li];
       s.surge = [1, 8, 9, 16, 19].includes(li) && si === 2 || li === 1;
       s.targetTime = si === 2 ? 32 : s.surge ? 16 : 23;
+      // Small, announced side attacks break up stationary play. Surge stages keep their free-fire rhythm.
+      if (li >= 4 && !s.surge) s.flanks = {
+        kind: FLANK_TYPES[level.theme] ?? 4, count: level.theme === 'moon' ? 1 : li >= 10 ? 4 : 3,
+        start: si === 2 ? 10 : 7, every: 10, limit: si === 2 ? 1 : 2, warning: 1.4, firstSide: (li+si)%2,
+      };
       if (s.tower) s.tower = Math.max(250, Math.round(s.tower * route[3]));
       if (s.boss) s.boss.hp *= li < 2 ? 0.9 : 0.8;
       for (const g of s.gates) {

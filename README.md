@@ -11,6 +11,7 @@ A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your canno
 - Rolling swarms absorb damage even before rolling, shed troops as they shrink, and grant a four-second x2 wreck bonus
 - NUKE, gate-boosting stars, hearts and tesla coils
 - Enemy gates, rival cannons, tornadoes, black holes (feed them for a SUPERNOVA), rolling swarm balls, toppling pillars and meteors
+- Announced side reinforcements in later worlds give you reasons to change lanes. Surge stages preserve uninterrupted multiplier runs
 - 20 procedurally built bosses: every model is generated in code, with no asset files
 
 Equipment persists through the three stages of each level, including stage retries. Longer fights gradually expose the fort or boss armor for up to x4 hit damage. The campaign favors short rounds and large power spikes.
