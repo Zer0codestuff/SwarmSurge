@@ -22,14 +22,14 @@ export function lam(hex, opts = {}) {
   }
   return matCache.get(key);
 }
-function mesh(geo, mat, x = 0, y = 0, z = 0, cast = true) {
+export function mesh(geo, mat, x = 0, y = 0, z = 0, cast = true) {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
   m.castShadow = cast;
   return m;
 }
 // Bake a solid vertex color into a geometry so merged meshes can have several colors.
-function paint(geo, hex) {
+export function paint(geo, hex) {
   const c = new THREE.Color(hex);
   const n = geo.attributes.position.count;
   const a = new Float32Array(n * 3);
@@ -37,7 +37,7 @@ function paint(geo, hex) {
   geo.setAttribute('color', new THREE.BufferAttribute(a, 3));
   return geo;
 }
-function merge(parts) {
+export function merge(parts) {
   const clean = parts.map((g) => {
     const ng = g.index ? g.toNonIndexed() : g;
     for (const k of Object.keys(ng.attributes)) if (!['position', 'normal', 'color'].includes(k)) ng.deleteAttribute(k);
@@ -152,7 +152,7 @@ export function drawLabel(L, main, sub = '', prog = -1, color = '#ffffff') {
   }
   L.tex.needsUpdate = true;
 }
-function textPlane(L, w, h, depthTest = true) {
+export function textPlane(L, w, h, depthTest = true) {
   return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: L.tex, transparent: true, depthWrite: false, depthTest }));
 }
 
@@ -322,13 +322,13 @@ export function buildStatue(w, small) {
 }
 
 // portal: glowing ring you shoot through; exit pad on the ground
-export function buildPortal(w) {
+export function buildPortal(w, color = 0xff4fd8, inner = 0xc040ff) {
   const g = new THREE.Group();
   const r = Math.min(1.25, w / 2 - 0.1);
-  const ringMat = new THREE.MeshLambertMaterial({ color: 0xff4fd8, emissive: 0xa0108a });
+  const ringMat = new THREE.MeshLambertMaterial({ color, emissive: new THREE.Color(color).multiplyScalar(0.55) });
   const ring = mesh(new THREE.TorusGeometry(r, 0.16, 10, 32), ringMat, 0, r + 0.25, 0);
   g.add(ring);
-  const panelMat = new THREE.MeshBasicMaterial({ color: 0xc040ff, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
+  const panelMat = new THREE.MeshBasicMaterial({ color: inner, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
   const disc = new THREE.Mesh(new THREE.CircleGeometry(r - 0.08, 32), panelMat);
   disc.position.y = r + 0.25; g.add(disc);
   const swirl = new THREE.Mesh(new THREE.RingGeometry(r * 0.25, r * 0.75, 3, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
@@ -467,7 +467,7 @@ export function buildBoss(type) {
     default: return buildRobot();
   }
 }
-function buildKing(o) {
+export function buildKing(o) {
   const g = new THREE.Group();
   const red = lam(o.body ?? 0xe8262b, o.emissive ? { emissive: o.emissive } : {}), yellow = lam(o.belly ?? 0xffc21a), gold = lam(o.crown ?? 0xffd84d, { emissive: 0x553300 });
   const hornMat = lam(o.horn ?? 0xffc21a), white = lam(0xffffff), black = lam(0x140404);
@@ -503,7 +503,7 @@ function buildKing(o) {
     },
   };
 }
-function buildSkeleton(o) {
+export function buildSkeleton(o) {
   const g = new THREE.Group();
   const bone = new THREE.MeshLambertMaterial({ color: o.bone ?? 0xffe2b8, emissive: o.emissive ?? 0xff5a00, emissiveIntensity: 0.55 });
   const black = lam(0x120400);
@@ -553,7 +553,7 @@ function buildSkeleton(o) {
     },
   };
 }
-function buildGolem(o) {
+export function buildGolem(o) {
   const g = new THREE.Group();
   const rock = lam(o.rock ?? 0x8fb4d6, { flatShading: true }), rockDark = lam(o.dark ?? 0x6a8db4, { flatShading: true });
   const ice = lam(o.crystal ?? 0xc8f2ff, { flatShading: true, emissive: o.cEm ?? 0x2a6a90 });
@@ -584,7 +584,7 @@ function buildGolem(o) {
     },
   };
 }
-function buildDragon(o) {
+export function buildDragon(o) {
   const g = new THREE.Group();
   const body = lam(o.body ?? 0xc8202a, { flatShading: true }), belly = lam(o.belly ?? 0xffb23a), wingMat = new THREE.MeshLambertMaterial({ color: o.wing ?? 0x7a0d1a, side: THREE.DoubleSide });
   const horn = lam(o.horn ?? 0x2a1a1a), eye = new THREE.MeshBasicMaterial({ color: o.eye ?? 0xfff04d });
@@ -715,7 +715,7 @@ export function buildMushroom() {
 }
 
 // ---------- environment ----------
-function scatter(g, geo, mat, n, minX, spreadX, zc, total, sMin = 0.7, sMax = 1.6, y = 0, cast = true) {
+export function scatter(g, geo, mat, n, minX, spreadX, zc, total, sMin = 0.7, sMax = 1.6, y = 0, cast = true) {
   const inst = new THREE.InstancedMesh(geo, mat, n);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < n; i++) {
@@ -738,7 +738,7 @@ export function buildWorld(theme, len) {
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; g.add(ground);
   const road = mesh(new THREE.PlaneGeometry(15, total), lam(T.road), 0, 0, zc, false);
   road.rotation.x = -Math.PI / 2; road.receiveShadow = true; g.add(road);
-  const glowRoad = theme === 'neon' || theme === 'void';
+  const glowRoad = ['neon', 'void', 'casino', 'crystal', 'blackhole'].includes(theme);
   const lineMat = new THREE.MeshBasicMaterial({ color: glowRoad ? T.rail : 0xf4f4f4 });
   for (const x of [-6.7, 6.7]) {
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.2, total), lineMat); l.rotation.x = -Math.PI / 2; l.position.set(x, 0.01, zc); g.add(l);
