@@ -118,6 +118,15 @@ window.runGameChecks = (g) => {
     startLevel(0);
     return {pass:G.phase==='intro' && G.effects.length===0};
   })()`);
+  check('Tracer effects reuse a bounded pool and expire cleanly', `(() => {
+    const pool=new FX.Tracers(new THREE.Scene(),8);
+    for(let k=0;k<20;k++) pool.emit(0,1,0,k+1,1,-10,0xffffff,.2);
+    pool.update(.05); const bounded=pool.mesh.count===8 && pool.mesh.instanceMatrix.array.every(Number.isFinite);
+    pool.update(1); const expired=pool.mesh.count===0;
+    pool.emit(0,0,0,0,0,0,0xffffff,.2); pool.clear();
+    pool.mesh.geometry.dispose(); pool.mesh.material.dispose();
+    return {pass:bounded && expired && pool.mesh.count===0};
+  })()`);
   g.start(1); g.pause();
   return results;
 };
