@@ -217,6 +217,14 @@ window.runGameChecks = (g) => {
     R.st[far]=1; R.vz[near]=6; R.age[far]=R.age[near]=1; writeRed();
     return {pass:redMesh.count===1 && redFarMesh.count===1 && overlays[5].instanceMatrix.array[14]===-60 && overlays[2].instanceMatrix.array[14]===-3 && redFarMesh.geometry.attributes.unitMotion.array[1]===0};
   })()`);
+  check('World labels leave HUD space and target health stays visible', `(() => {
+    renderWorld(0);
+    const label=makeLabel('ball'), point=new THREE.Vector3(0,.99,0).unproject(camera);
+    placeLabel(label,point.x,point.y,point.z,'100'); const blocked=!label.vis;
+    point.set(0,0,0).unproject(camera); placeLabel(label,point.x,point.y,point.z,'100');
+    const visible=label.vis; label.el.remove();
+    return {pass:blocked && visible && $('targetname').textContent.includes(fmtHp(G.stage.tower.hp))};
+  })()`);
   check('Pause clears held input and resume preserves the battle', `(() => {
     G.paused=false; keys.left=true; drag={id:1,x:0,aim:0};
     const i=spawn(B,0,-3,10,0); G.time=7; upgradeCannon('tank');
