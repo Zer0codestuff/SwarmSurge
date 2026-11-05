@@ -135,6 +135,15 @@ window.runGameChecks = (g) => {
     upgradeCannon('tank'); addBall(G.stage,G.root,0,-1.4,20,1,0,{dmg:3});
     step(STEP); return {pass:G.lives===10 && G.shield===0,lives:G.lives,shield:G.shield};
   })()`);
+  check('Armor resolves each hit and only overflow costs hearts', `(() => {
+    G.shield=3; const first=damageCannon(2), firstLives=G.lives;
+    const second=damageCannon(3);
+    return {pass:first===0 && firstLives===10 && second===2 && G.lives===8 && G.shield===0 && G.guardFlash===1};
+  })()`);
+  check('Healing does not conceal armor damage during the same step', `(() => {
+    G.shield=2; G.lives=12; damageCannon(1);
+    return {pass:G.lives===12 && G.shield===1};
+  })()`);
   check('All six transformations preserve common guns and reach their rig', `(() => {
     const forms=[];
     for(let k=1;k<=6;k++) {

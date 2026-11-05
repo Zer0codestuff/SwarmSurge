@@ -385,7 +385,7 @@ const G = {
   shake: 0, recoil: 0, kills: 0, time: 0, explosions: [], splits: [], revives: [], effects: [], army: 0, maxArmy: 0, bestCombo: 1, fps: 60,
   moveFrom: 0, moveTo: 0, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, armyPrev: 0, pumpT: 0,
   squad: 0, rad: 0, zones: [], nextMile: 1000, armyAvg: 0,
-  chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
+  chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
 };
 const cannon = M.buildCannon();
 const twinCannon = M.buildCannon(0xff4fd8);
@@ -665,7 +665,7 @@ function startLevel(idx, stageIdx = 0) {
     paused: false, resumePhase: null, weaponCursor: 0, t: 0,
     log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgTotal: 0, army: 0, squad: 0, nextMile: 1000, armyAvg: 0,
-    chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
+    chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
   });
   setBarrels(1);
   cannon.setChassis(0); twinCannon.setChassis(0);
@@ -1419,11 +1419,10 @@ function moveRed(S, dt) {
     if (R.flash[i] > 0) R.flash[i] -= dt * 4;
     if (!T.ghost && !T.fly && S.saws.length && sawHit(S, x, z)) { R.hp[i] -= 4 + R.mx[i] * 0.05; if (R.hp[i] <= 0) { killRed(i); continue; } }
     if (z >= G.z0 - 0.9 && G.phase === 'play') {
-      G.lives -= T.dmg;
+      damageCannon(T.dmg);
       R.hp[i] = 0;
       burst(x, 0.8, z, PCOL.red, 12, 5);
       G.shake = 0.6;
-      hurtFlash();
     }
   }
 }
@@ -1684,10 +1683,9 @@ function attackSweep(b) {
     for (let k = 0; k < 10; k++) spark(x + rand(-1.4, 1.4), 1, z1 + (k / 10) * len, PCOL.orange, 3, 4, 1.2, 0.6);
     G.shake = 0.7; sound.play('boom');
     if (Math.abs(G.cx - x) < 1.9) {
-      G.lives -= 1;
+      const damage = damageCannon(1);
       burst(G.cx, 1.2, G.cannonZ, PCOL.orange, 30, 7);
-      hurtFlash();
-      popup('BURNED! -1 ❤', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 1.0);
+      if (damage) popup('BURNED! -1 ❤', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 1.0);
     } else popup('DODGED!', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 0.9);
   }, true);
 }
@@ -1930,14 +1928,27 @@ function ballDies(S, b, crashed) {
   G.shake = Math.max(G.shake, 0.8);
   sound.play('boom');
   if (crashed) {
-    G.lives -= b.def.dmg ?? 3;
-    hurtFlash();
-    popup(`-${b.def.dmg ?? 3} ♥`, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.0);
+    const damage = damageCannon(b.def.dmg ?? 3);
+    if (damage) popup(`-${damage} ♥`, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.0);
   } else {
     G.overdrive = Math.max(G.overdrive, 4);
     popup('WRECK BONUS x2!', 'combo c3', b.x, 3, b.z, 1.2);
     addRing(b.x, b.z, b.r * 2.5, 0xffce55, 0.6);
   }
+}
+function damageCannon(amount) {
+  const blocked = Math.min(G.shield, amount), damage = amount - blocked;
+  if (blocked > 0) {
+    G.shield -= blocked; G.guardFlash = 1; G.cannonPulse = .45;
+    if (G.t >= G.armorPopupT) {
+      G.armorPopupT = G.t + .4;
+      popup('ARMOR BLOCK', 'combo c1', G.cx, 2.5, G.cannonZ - 2, .8);
+      addRing(G.cx, G.cannonZ, 1.8, 0x9aeaff, .3);
+      sound.play('shield'); buzz(25);
+    }
+  }
+  if (damage > 0) { G.lives -= damage; hurtFlash(); }
+  return damage;
 }
 function hurtFlash() {
   buzz(70);
@@ -2092,7 +2103,7 @@ function step(dt) {
   G.t += dt;
   G.phaseT += dt;
   const S = G.stage;
-  const livesBefore = G.lives;
+  G.guardFlash = Math.max(0, G.guardFlash - dt * 3);
   G.overdrive = Math.max(0, G.overdrive - dt);
   G.cx += (G.aim - G.cx) * Math.min(1, dt * 14);
   if (G.phase === 'intro' && G.phaseT > 1.2) { G.phase = 'play'; G.phaseT = 0; G.fireT = 0; }
@@ -2150,7 +2161,6 @@ function step(dt) {
   buildGrid(gR, R);
   combat();
   if (G.phase === 'play') updateArsenal(S, dt);
-  if (G.lives < livesBefore && G.shield > 0) { const saved = Math.min(livesBefore - G.lives, G.shield); G.lives += saved; G.shield -= saved; G.cannonPulse = 0.45; }
   compact(B); compact(R);
   let army = 0;
   for (let i = 0; i < B.n; i++) {
@@ -2385,9 +2395,10 @@ function renderWorld(dt) {
   cannon.group.position.set(G.cx, 0, G.cannonZ + G.recoil * 0.12);
   cannon.group.rotation.y = (G.cx - G.aim) * 0.08;
   cannon.group.rotation.z = clamp(-vel * 0.012, -0.18, 0.18);
-  cannon.shield.visible = G.shield > 0 && G.phase !== 'menu';
+  cannon.shield.visible = (G.shield > 0 || G.guardFlash > 0) && G.phase !== 'menu';
   cannon.shield.rotation.y += dt * 0.3;
-  cannon.shield.material.opacity = 0.06 + G.cannonPulse * 0.25;
+  cannon.shield.material.opacity = .06 + G.cannonPulse * .25 + G.guardFlash * .35;
+  cannon.shield.material.color.setHex(G.guardFlash > 0 ? 0xd4fbff : 0x75ebff);
   cannon.group.scale.setScalar((G.chassis ? 1.12 : 1) + G.cannonPulse * 0.25 + G.recoil * 0.03);
   const roll = dt * (G.phase === 'move' ? 14 : 0) + Math.abs(vel) * dt * 1.5;
   const drive = Math.abs(vel) + (G.phase === 'move' ? 10 : 0);
