@@ -90,6 +90,13 @@ window.runGameChecks = (g) => {
     B.shot[i]=0; buildGrid(gR,R); updateArsenal(G.stage,1);
     return {pass:slowed && thawed && ball.hp<100 && ball.chill===1.8,slowed,thawed,chill:ball.chill};
   })()`);
+  check('Ball frost and impact timers expire during deployment', `(() => {
+    const ball=addBall(G.stage,G.root,0,-10,100,1,2,{delay:3});
+    ball.chill=1; ball.impact=.15; updateMechanics(G.stage,.5);
+    const waiting=ball.z===-10 && ball.delay===2.5 && ball.chill===.5 && ball.impact===0;
+    updateMechanics(G.stage,.6); updateMechanics(G.stage,2); updateMechanics(G.stage,.1);
+    return {pass:waiting && ball.chill===0 && ball.delay===0 && Math.abs(ball.z+9.8)<1e-6};
+  })()`);
   check('Plasma reaches the wider splash radius and respects cover', `(() => {
     for(const [x,z] of [[0,-5],[2,-6],[-2,-6]]) spawn(R,x,z,100,0);
     G.stage.gates.push({alive:true,def:{t:'barrier'},x:-1,z:-5.5,w:.6});
