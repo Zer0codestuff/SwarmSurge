@@ -65,6 +65,17 @@ window.__policies = (() => {
     // a rolling ball close to the cannon costs lives: shoot it down first
     const ball = (hz.balls || []).filter((b) => b.d < 34).sort((a, b) => a.d - b.d)[0];
     if (ball) { cur = ball.x; hold = 3; g.aim(cur); return; }
+    // defend: a pack of red units close to the cannon gets shot first (like any human would)
+    const near = g.reds ? g.reds(14) : [];
+    if (near.length >= 6) {
+      // aim at the heaviest nearby pack (bucketed by lane), never straight into a wall
+      const buckets = {};
+      for (const [x, d, hp] of near) { const k = Math.round(x / 2); const b = buckets[k] || (buckets[k] = { sx: 0, w: 0 }); const w = hp / (1 + d); b.sx += x * w; b.w += w; }
+      const top = Object.values(buckets).sort((a, b) => b.w - a.w)[0];
+      let x = top.sx / top.w;
+      for (const w of hz.walls || []) if (w.d1 < 14 && Math.abs(x - w.x) < 0.7) x = w.x + (x >= w.x ? 0.7 : -0.7);
+      cur = Math.max(-6.1, Math.min(6.1, x)); hold = 2; g.aim(cur); return;
+    }
     let best = -Infinity, bx = 0;
     const threats = g.threats ? g.threats() : [];
     const danger = (x) => threats.some((t) => Math.abs(x - t.x) < t.w / 2 + 0.9);
@@ -75,7 +86,11 @@ window.__policies = (() => {
       let score;
       const q = r.stop;
       if (!q) score = r.m * hp;
-      else if (q.t === 'upgrade' || q.t === 'hangar') score = 1e30 * r.pre;
+      else if (q.t === 'upgrade' || q.t === 'hangar') {
+        // worth it only if it fills reasonably fast; otherwise keep multiplying first
+        const fill = (q.need - q.prog) / (flux * r.pre);
+        score = fill < 10 ? 1e30 * r.pre : r.pre * 0.05;
+      }
       else if (q.t === 'tesla') score = 1e29 * r.pre;
       else if (q.t === 'heart') {
         const fill = (q.need - q.prog) / (flux * r.pre);

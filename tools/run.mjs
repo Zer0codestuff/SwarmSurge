@@ -19,7 +19,13 @@ while (true) {
   const s = await page.evaluate(() => window.__game.state);
   last = s;
   if (process.env.TRACE && s.phase === 'play') console.log(`t=${s.stageTime} S${s.stage} lives=${s.lives} army=${fmt(s.army)} red=${s.redUnits} blue=${s.blueUnits} tower=${fmt(s.towerHp)} boss=${fmt(s.bossHp)} bossZ=${s.bossZ} leaks=${await page.evaluate(() => window.__game.leaks())}`);
-  if (s.phase === 'won' || s.phase === 'lost' || s.time > +maxSec || Date.now() - t0 > 240000) {
+  // ONE=1: stop as soon as the starting stage is decided (for per-stage tuning)
+  const oneDone = process.env.ONE && s.log.length > 0;
+  if (oneDone || s.phase === 'won' || s.phase === 'lost' || s.time > +maxSec || Date.now() - t0 > 240000) {
+    if (process.env.JSON) {
+      const max = await page.evaluate(() => window.__game.dbg('G.stage.tower ? G.stage.tower.max : G.stage.boss ? G.stage.boss.max : null'));
+      console.log('JSON ' + JSON.stringify({ level: +level, phase: s.phase, stage: s.stage, st: s.stageTime, lives: s.lives, hp: s.towerHp ?? s.bossHp, max, log: s.log }));
+    }
     for (const e of s.log) console.log(`  L${level} ${policy} S${e.stage} ${e.result} ${e.t}s lives=${e.lives} army=${fmt(e.maxArmy)} combo=${fmt(e.combo)} guns=${e.guns} pow=${e.power} twin=${e.twin}`);
     console.log(`L${level} ${policy}: ${s.phase.toUpperCase()} stage=${s.stage} t=${s.time} st=${s.stageTime} lives=${s.lives} maxArmy=${fmt(s.maxArmy)} combo=${fmt(s.bestCombo)} guns=${s.guns} rate=${s.rate.toFixed(2)} pow=${s.power} twin=${s.twin} tower=${fmt(s.towerHp)} boss=${fmt(s.bossHp)} bossZ=${s.bossZ}`);
     break;
