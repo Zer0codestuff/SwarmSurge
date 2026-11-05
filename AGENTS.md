@@ -25,7 +25,7 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 - Preserve the existing visual identity and mechanics unless a change is requested.
 - Progress and mute settings use browser localStorage.
 - Campaign checks use a bot and do not replace human balance feedback. Sustained performance and physical mobile devices remain unvalidated.
-- User requests frequent logical commits. Keep the biome map and progressive unlocks; preserve existing localStorage progress.
+- User requests frequent logical commits followed immediately by merging to main through a PR with `gh pr merge --squash --delete-branch`. Do not ask for another confirmation. Keep the biome map and progressive unlocks; preserve existing localStorage progress.
 
 ## Do not
 - Do not introduce a build system, backend, or external asset dependency just to serve the game.
