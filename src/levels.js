@@ -18,20 +18,15 @@
 //   portal    – teleports units to `to: { x, d }`
 // Other stage parts: walls, saws, crushers, turrets, spawners, horde (sleeping red army), boss/tower.
 
-const ladder = (x, d0, from, to, step, w, extra = {}) => {
-  const out = [];
-  for (let v = from; v <= to; v++) out.push({ t: 'mul', v, x, d: +(d0 + (v - from) * step).toFixed(2), w, ...extra });
-  return out;
-};
-const stack = (t, v, x, d0, n, step, w, extra = {}) =>
-  Array.from({ length: n }, (_, k) => ({ t, v, x, d: +(d0 + k * step).toFixed(2), w, ...extra }));
+import { ladder, stack } from './levelkit.js';
+import { MORE_LEVELS } from './levels2.js';
 
 export const LEVELS = [
   // ------------------------------------------------------------------ 1
   {
     name: 'Sunny Speedway',
     theme: 'desert',
-    threat: 1,
+    threat: 0.7,
     feature: 'Sliding gates',
     blurb: 'Gates glide across the road. Chain x3 into the tiny gold x5 for a x15 combo!',
     enemy: 'Brutes: big yellow bruisers',
@@ -63,13 +58,13 @@ export const LEVELS = [
       },
       {
         tip: 'Crack the red barrier to open the x10 gate behind it!',
-        boss: { type: 'king', hp: 12000, speed: 0.45 },
-        waves: { every: 3.2, swarm: 9, ramp: 0.4, brute: { every: 3, hp: 16 } },
+        boss: { type: 'king', hp: 4000, speed: 0.4 },
+        waves: { every: 3.4, swarm: 7, ramp: 0.35, brute: { every: 3, hp: 10 } },
         gates: [
           { t: 'mul', v: 2, x: -4.6, d: 14, w: 3.6 },
           { t: 'upgrade', up: 'rapid', need: 30, x: 0, d: 11, w: 2.8 },
           { t: 'add', v: 2, x: 4.6, d: 14, w: 3.6 },
-          { t: 'barrier', hp: 60, x: 0, d: 17, w: 3.2 },
+          { t: 'barrier', hp: 40, x: 0, d: 17, w: 3.2 },
           { t: 'mul', v: 10, x: 0, d: 22, w: 3.2, mega: true },
           { t: 'mul', v: 3, x: 0, d: 27, w: 3.2 },
           { t: 'mul', v: 2, x: 0, d: 33, w: 3.0, slide: { amp: 4.6, speed: 0.8 } },
@@ -81,7 +76,7 @@ export const LEVELS = [
   {
     name: 'Mob Rush',
     theme: 'mob',
-    threat: 1.3,
+    threat: 0.9,
     feature: 'Multiplier ladders & the x100 gate',
     blurb: 'Smash the chain fence and climb a ladder from x5 to x22. Line up the +1 column with x100!',
     enemy: 'Mega brutes (500 / 600 / 1500) and a red sea',
@@ -154,7 +149,7 @@ export const LEVELS = [
   {
     name: 'Lava Gorge',
     theme: 'lava',
-    threat: 1.4,
+    threat: 1.0,
     feature: 'Saws, barriers & POWER x2',
     blurb: 'Spinning saws shred units. Grab POWER x2 early: every shot after it counts double!',
     enemy: 'Bombers: explode when they die',
@@ -176,8 +171,8 @@ export const LEVELS = [
       },
       {
         tip: 'Barriers hide huge gates. Break them with a multiplied stream!',
-        tower: 30000,
-        waves: { every: 3.0, swarm: 9, bomber: 3, ramp: 0.45, brute: { every: 3, hp: 20 } },
+        tower: 15000,
+        waves: { every: 3.2, swarm: 8, bomber: 2, ramp: 0.4, brute: { every: 3, hp: 20 } },
         walls: [{ x: -2.2, d1: 10, d2: 38 }, { x: 2.2, d1: 10, d2: 38 }],
         gates: [
           { t: 'barrier', hp: 70, x: -4.45, d: 13, w: 4.1 },
@@ -215,7 +210,7 @@ export const LEVELS = [
   {
     name: 'Frost Fortress',
     theme: 'frost',
-    threat: 1.6,
+    threat: 1.25,
     feature: 'Flip gates & ice vaults',
     blurb: 'Flip gates swap between great and terrible. Smash ice vaults to unlock mega gates!',
     enemy: 'Shielders and igloo spawners',
@@ -274,7 +269,7 @@ export const LEVELS = [
   {
     name: 'Jungle Stampede',
     theme: 'jungle',
-    threat: 1.7,
+    threat: 1.45,
     feature: 'Charge gates',
     blurb: 'Green charge gates start weak but grow +1 for every unit you feed them. Invest early!',
     enemy: 'Runners: fast orange sprinters',
@@ -326,7 +321,7 @@ export const LEVELS = [
   {
     name: 'Neon Nights',
     theme: 'neon',
-    threat: 1.9,
+    threat: 1.6,
     feature: 'Nuke gates & laser turrets',
     blurb: 'Fill a NUKE gate to wipe every enemy on screen. Laser turrets snipe your units!',
     enemy: 'Tanks: slow, armored, hit hard',
@@ -387,7 +382,7 @@ export const LEVELS = [
   {
     name: 'Candy Chaos',
     theme: 'candy',
-    threat: 2.1,
+    threat: 1.75,
     feature: 'Portals',
     blurb: 'Portals warp your units past walls into secret lanes full of multipliers!',
     enemy: 'Splitters: pop into 3 more when killed',
@@ -442,7 +437,7 @@ export const LEVELS = [
   {
     name: 'Moon Base',
     theme: 'moon',
-    threat: 2.3,
+    threat: 1.9,
     feature: 'Crushers & TWIN cannon',
     blurb: 'Steel crushers slam the best lanes. The TWIN upgrade adds a mirrored second cannon!',
     enemy: 'Tanks and runners together',
@@ -501,7 +496,7 @@ export const LEVELS = [
   {
     name: 'Sky Citadel',
     theme: 'sky',
-    threat: 2.6,
+    threat: 2.1,
     feature: 'Star gates: ALL GATES x2',
     blurb: 'Fill a rainbow STAR gate and EVERY gate on the stage doubles. x2 becomes x4, then x8, then x16...',
     enemy: 'Bombers, shielders and splitters',
@@ -554,7 +549,7 @@ export const LEVELS = [
   {
     name: 'Swarm Apocalypse',
     theme: 'void',
-    threat: 3,
+    threat: 2.4,
     feature: 'EVERYTHING at once',
     blurb: 'Every gate, every trap, every enemy. Build the most ridiculous army in history!',
     enemy: 'All enemy types + the Titan',
@@ -615,6 +610,7 @@ export const LEVELS = [
       },
     ],
   },
+  ...MORE_LEVELS,
 ];
 
 export const THEMES = {
@@ -628,4 +624,14 @@ export const THEMES = {
   moon: { sky: 0x05051a, fog: 0x1a1a3a, ground: 0x8a8a9a, road: 0x5a5a6a, rail: 0xaab0c0, tower: 0x5a6a8a, roof: 0x2a3050 },
   sky: { sky: 0x7fc8ff, fog: 0xdff2ff, ground: 0xffffff, road: 0xa9bad6, rail: 0xffe7a0, tower: 0xf0f0ff, roof: 0x3a6ad0 },
   void: { sky: 0x12002a, fog: 0x22053a, ground: 0x1a0830, road: 0x3a2a5a, rail: 0x9a3aff, tower: 0x2a0a3a, roof: 0xff3a8a },
+  factory: { sky: 0xd8c9a8, fog: 0xc9b89a, ground: 0x6a6258, road: 0x55565e, rail: 0xffb21a, tower: 0x8a3a1a, roof: 0x3a3a40 },
+  casino: { sky: 0x1a0612, fog: 0x2a0a1a, ground: 0x0e5a2e, road: 0x2a1a22, rail: 0xffd21a, tower: 0xb01030, roof: 0xffd21a },
+  coral: { sky: 0x7fe6ff, fog: 0xbff4ff, ground: 0xf7e0a8, road: 0x9fb8c0, rail: 0xff8a6a, tower: 0x2a8ab0, roof: 0x0a4a6a },
+  spooky: { sky: 0x2a1a3a, fog: 0x3a2a4a, ground: 0x2a3020, road: 0x4a4450, rail: 0x6a5a4a, tower: 0x3a2a4a, roof: 0xff7a1a },
+  arena: { sky: 0xffd8a0, fog: 0xf0c890, ground: 0xd8b07a, road: 0x9a8a7a, rail: 0xc0302a, tower: 0xb03030, roof: 0x5a1a1a },
+  crystal: { sky: 0x140a2a, fog: 0x2a1a4a, ground: 0x2a2440, road: 0x3a3456, rail: 0x6afff0, tower: 0x4a3a8a, roof: 0x6afff0 },
+  volcano: { sky: 0x3a1a10, fog: 0x5a2a18, ground: 0x2a1a14, road: 0x4a3a36, rail: 0xff6a1a, tower: 0x5a1a10, roof: 0xff3a0a },
+  tomb: { sky: 0xffc880, fog: 0xf0c080, ground: 0xe0b070, road: 0xb09060, rail: 0xd8a040, tower: 0xc89a50, roof: 0x2a5aa0 },
+  storm: { sky: 0x3a4a5a, fog: 0x5a6a7a, ground: 0x5a6a5a, road: 0x5a5e66, rail: 0xfff06a, tower: 0x3a4a6a, roof: 0xfff06a },
+  blackhole: { sky: 0x02010a, fog: 0x0a0520, ground: 0x100818, road: 0x1a1430, rail: 0xff9a3a, tower: 0x1a0a2a, roof: 0xff9a3a },
 };
