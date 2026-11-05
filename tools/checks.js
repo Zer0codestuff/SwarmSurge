@@ -202,6 +202,15 @@ window.runGameChecks = (g) => {
     pool.mesh.geometry.dispose(); pool.mesh.material.dispose();
     return {pass:bounded && expired && pool.mesh.count===0};
   })()`);
+  check('Splash rings reuse one bounded draw and clear on restart', `(() => {
+    const pool=new FX.Rings(new THREE.Scene(),8);
+    for(let k=0;k<1000;k++) pool.emit(k,0,2,0x80eaff,.2);
+    pool.update(.05); const bounded=pool.mesh.count===8 && pool.mesh.instanceMatrix.array.every(Number.isFinite);
+    pool.update(1); const expired=pool.mesh.count===0;
+    pool.mesh.geometry.dispose(); pool.mesh.material.dispose(); pool.mesh.dispose();
+    impactRings.emit(0,0,2,0xffffff,.2); impactRings.update(.01); startLevel(0);
+    return {pass:bounded && expired && impactRings.mesh.count===0};
+  })()`);
   check('Troop detail packing preserves units, weapons and motion', `(() => {
     camera.position.set(0,20,20); troopPixelScale=1000;
     const far=spawn(B,-2,-60,4,0), near=spawn(B,2,-3,16,0);

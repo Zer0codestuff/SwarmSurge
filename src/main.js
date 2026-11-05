@@ -51,6 +51,7 @@ const MAX_LIVES = 15;
 const rgb = (h) => { const c = new THREE.Color(h); return [c.r, c.g, c.b]; };
 const RED_RGB = RED_TYPES.map((t) => rgb(t.color));
 const TIER_RGB = RANKS.map(r => rgb(r.color));
+const WEAPON_RGB = WEAPON_SPECS.map(spec => spec ? rgb(spec.color) : null);
 const GIANT_RGB = rgb(0x2266ff);
 const RAINBOW = Array.from({ length: 32 }, (_, k) => { const c = new THREE.Color().setHSL(k / 32, 1, 0.6); return [c.r, c.g, c.b]; });
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -94,6 +95,7 @@ const halos = new FX.Halos(scene);
 const debris = new FX.Debris(scene);
 const ambient = new FX.Ambient(scene);
 const tracers = new FX.Tracers(scene);
+const impactRings = new FX.Rings(scene);
 let sceneReady = false;
 let labelBoundsDirty = true, labelTop = 110, labelBottom = innerHeight - 75;
 
@@ -653,7 +655,7 @@ function startLevel(idx, stageIdx = 0) {
   for (let i = 0; i < stageIdx; i++) if (G.stages[i].tower) { G.stages[i].tower.alive = false; G.stages[i].tower.model.group.visible = false; }
   B.n = R.n = 0;
   PT.life.fill(0);
-  sparks.clear(); debris.clear(); tracers.clear(); G.shatters = [];
+  sparks.clear(); debris.clear(); tracers.clear(); impactRings.clear(); G.shatters = [];
   G.explosions.length = 0;
   G.splits.length = 0;
   G.revives = [];
@@ -849,20 +851,26 @@ function updateArsenal(S, dt) {
     if (!ball && j < 0 && !target) { B.shot[i] = .12; continue; }
     B.shot[i] = spec.cooldown; budget--;
     B.flash[i] = Math.max(B.flash[i], .25);
+    const angle = Math.atan2(B.vx[i], B.vz[i]), scale = B.sc[i];
+    const sx = x + (.35 * Math.cos(angle) + .72 * Math.sin(angle)) * scale;
+    const sz = z + (-.35 * Math.sin(angle) + .72 * Math.cos(angle)) * scale, sy = .68 * scale;
+    const width = spec.burn ? .18 : spec.pierce ? .045 : spec.key === 'plasma' ? .14 : .08;
+    spark(sx, sy, sz, WEAPON_RGB[B.weapon[i]], 1, .4, spec.burn ? .5 : .3, .09, 0);
+    if (!TURBO) sound.play('weapon', B.weapon[i]);
     if (ball) {
       rangedHit(ball, damage); ball.impact = .15;
       if (spec.chill) ball.chill = spec.chill;
-      addBeam(x, .65, z, ball.x, ball.r, ball.z, color, .09);
+      addBeam(sx, sy, sz, ball.x, ball.r, ball.z, color, .09, width);
       if (ball.hp <= 0) ballDies(S, ball, false);
       continue;
     }
     if (j < 0) {
       rangedHit(target, damage * (S.breach || 1));
-      addBeam(x, .65, z, target.x ?? 0, 2, target.z, color, .08);
+      addBeam(sx, sy, sz, target.x ?? 0, 2, target.z, color, .08, width);
       continue;
     }
     const tx = R.x[j], tz = R.z[j], primary = j;
-    addBeam(x, .65, z, tx, .6, tz, color, .09);
+    addBeam(sx, sy, sz, tx, .6, tz, color, .09, width);
     hitArmedRed(j, damage, spec, B.hp[i]);
     if (spec.splash) {
       addRing(tx, tz, spec.splash, color, .2);
@@ -895,7 +903,7 @@ function updateArsenal(S, dt) {
       const count = (spec.targets || spec.pierce) - 1;
       for (const { k } of candidates.slice(0, count)) {
         hitArmedRed(k, damage * (spec.pierce ? .8 : .75), spec, B.hp[i]);
-        addBeam(x, .65, z, R.x[k], .6, R.z[k], color, spec.burn ? .16 : .09);
+        addBeam(sx, sy, sz, R.x[k], .6, R.z[k], color, spec.burn ? .16 : .09, width);
       }
     }
   }
@@ -1571,14 +1579,11 @@ function scheduleFlank(S, def = S.def.flanks) {
 // boss attacks + telegraph effects
 function addRing(x, z, r, color, life) {
   if (TURBO) return;
-  const m = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.05, z); m.scale.setScalar(r * 0.3);
-  G.root.add(m);
-  G.effects.push({ kind: 'ring', mesh: m, life, max: life, r });
+  impactRings.emit(x, z, r, color, life);
 }
-function addBeam(x1, y1, z1, x2, y2, z2, color, life = 0.14) {
+function addBeam(x1, y1, z1, x2, y2, z2, color, life = 0.14, width = .08) {
   if (TURBO) return;
-  tracers.emit(x1,y1,z1,x2,y2,z2,color,life);
+  tracers.emit(x1,y1,z1,x2,y2,z2,color,life,width);
 }
 function addTelegraph(shape, x, z, a, b, time, onHit, cannon = false) {
   let outer = null, inner = null;
@@ -1790,10 +1795,7 @@ function updateEffects(dt) {
     const e = E[k];
     e.life -= dt;
     const p = 1 - Math.max(0, e.life) / e.max;
-    if (e.kind === 'ring') {
-      e.mesh.scale.setScalar(e.r * (0.3 + p * 0.9));
-      e.mesh.material.opacity = 0.85 * (1 - p);
-    } else if (e.kind === 'tele') {
+    if (e.kind === 'tele') {
       if (e.inner) {
         if (e.shape === 'circle') e.inner.scale.set(e.a * p, e.a * p, 1);
         else { e.inner.scale.set(e.a, e.b * p, 1); e.inner.position.z = e.z + e.b / 2 - (e.b * p) / 2; }
@@ -2472,7 +2474,8 @@ function renderWorld(dt) {
       b.model.group.position.set(b.x, b.r, b.z);
       b.model.spin.scale.setScalar(b.r * (1 + b.flash * 0.05));
       b.model.inst.count = Math.max(12, Math.ceil(b.model.count * Math.max(0, b.hp / b.max)));
-      b.model.material.color.set(b.flash > 0.1 ? 0xffc7a0 : 0xe8222a);
+      b.model.material.color.set(b.flash > 0.1 ? 0xffc7a0 : b.chill > 0 ? 0x93e7ff : 0xe8222a);
+      b.model.warning.material.color.setHex(b.chill > 0 ? 0x80eaff : 0xff6644);
       b.model.warning.position.y = -b.r + 0.035;
       b.model.warning.scale.setScalar(b.r + 0.5);
       b.model.warning.material.opacity = b.delay > 0 ? 0.18 + Math.sin(G.t * 6) * 0.08 : 0.32;
@@ -2536,6 +2539,7 @@ function renderWorld(dt) {
   updatePopups(dt);
   sparks.update(dt);
   tracers.update(dt);
+  impactRings.update(dt);
   debris.update(dt);
   M.shineTexture().offset.x = (G.t * 0.45) % 1;
   for (let k = G.shatters.length - 1; k >= 0; k--) {

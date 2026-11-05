@@ -33,6 +33,68 @@ function glowMaterial(blending = THREE.AdditiveBlending) {
 }
 export const glowMaterials = [];
 
+// Reuse impact rings so dense splash weapons do not allocate scene objects per shot.
+export class Rings {
+  constructor(scene, capacity = 64) {
+    this.capacity = capacity; this.head = 0;
+    for (const key of ['life', 'duration', 'radius', 'x', 'z']) this[key] = new Float32Array(capacity);
+    this.colors = new Float32Array(capacity * 3); this.color = new THREE.Color();
+    const geometry = new THREE.RingGeometry(.82, 1, 32);
+    geometry.setAttribute('ringAlpha', new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.DynamicDrawUsage));
+    const material = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      vertexShader: `
+        attribute float ringAlpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          vColor = instanceColor; vAlpha = ringAlpha;
+          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          gl_FragColor = vec4(vColor, vAlpha * .85);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    this.mesh = new THREE.InstancedMesh(geometry, material, capacity);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage);
+    this.mesh.frustumCulled = false; this.mesh.count = 0; scene.add(this.mesh);
+  }
+  emit(x, z, radius, color, duration) {
+    if (!(radius > 0 && duration > 0)) return;
+    const i = this.head; this.head = (i + 1) % this.capacity;
+    this.x[i] = x; this.z[i] = z; this.radius[i] = radius;
+    this.life[i] = this.duration[i] = duration;
+    this.color.set(color).toArray(this.colors, i * 3);
+  }
+  update(dt) {
+    let count = 0;
+    const matrices = this.mesh.instanceMatrix.array, colors = this.mesh.instanceColor.array;
+    const alpha = this.mesh.geometry.attributes.ringAlpha.array;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.life[i] <= 0) continue;
+      this.life[i] = Math.max(0, this.life[i] - dt);
+      if (!this.life[i]) continue;
+      const fade = this.life[i] / this.duration[i], radius = this.radius[i] * (.3 + (1 - fade) * .9), o = count * 16;
+      matrices[o] = radius; matrices[o + 1] = matrices[o + 2] = matrices[o + 3] = 0;
+      matrices[o + 4] = matrices[o + 5] = matrices[o + 7] = matrices[o + 8] = matrices[o + 10] = matrices[o + 11] = 0;
+      matrices[o + 6] = -radius; matrices[o + 9] = 1;
+      matrices[o + 12] = this.x[i]; matrices[o + 13] = .05; matrices[o + 14] = this.z[i]; matrices[o + 15] = 1;
+      for (let k = 0; k < 3; k++) colors[count * 3 + k] = this.colors[i * 3 + k];
+      alpha[count] = fade; count++;
+    }
+    this.mesh.count = count;
+    this.mesh.instanceMatrix.needsUpdate = this.mesh.instanceColor.needsUpdate = true;
+    this.mesh.geometry.attributes.ringAlpha.needsUpdate = true;
+  }
+  clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; }
+}
+
 // One reusable draw call for blaster shots, lightning and air-strike trails.
 export class Tracers {
   constructor(scene, capacity = 128) {

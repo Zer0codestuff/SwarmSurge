@@ -53,11 +53,23 @@ export class Sound {
   play(name, p = 1) {
     if (this.muted || this.paused || !this.ctx) return;
     const now = performance.now();
-    const gap = { pop: 45, shoot: 90, gate: 70, hit: 150, boom: 120, warp: 90, zap: 80, crush: 150, combo: 120 }[name] || 0;
+    const gap = { pop: 45, shoot: 90, weapon: 110, gate: 70, hit: 150, boom: 120, warp: 90, zap: 80, crush: 150, combo: 120 }[name] || 0;
     if (now - (this.last[name] || 0) < gap) return;
     this.last[name] = now;
     switch (name) {
       case 'shoot': this.tone(180, 0.05, 'sine', 0.08, -60); break;
+      case 'weapon':
+        switch (p) {
+          case 1: this.tone(830,.035,'triangle',.03,-360); break;
+          case 2: this.tone(120,.07,'sawtooth',.04,60); this.burst(.04,.05,900); break;
+          case 3: this.tone(1200,.06,'sine',.025,-850); break;
+          case 4: this.burst(.055,.065,1800); this.tone(150,.035,'triangle',.025,-80); break;
+          case 5: this.tone(540,.1,'square',.025,1500); this.tone(170,.06,'sine',.02,-80); break;
+          case 6: this.burst(.06,.04,600); break;
+          case 7: this.tone(1350,.08,'triangle',.03,450); this.tone(2200,.06,'sine',.012,-500,.02); break;
+          case 8: this.tone(200,.11,'sine',.045,350); this.tone(600,.05,'triangle',.018,-400); break;
+        }
+        break;
       case 'heavy': this.tone(110,.09,'sine',.13,-45); break;
       case 'pop': this.tone(420 + Math.random() * 380, 0.06, 'triangle', 0.09, -200); break;
       case 'gate': this.tone(700 + Math.random() * 200, 0.08, 'square', 0.04, 500); break;

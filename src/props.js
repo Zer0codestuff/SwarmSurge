@@ -204,7 +204,7 @@ let ballUnit = null;
 export function buildSwarmBall(r) {
   if (!ballUnit) ballUnit = redUnitGeo('low').scale(1.25, 1.25, 1.25);
   const n = 144;
-  const material = new THREE.MeshToonMaterial({ color: 0xe8222a, emissive: 0x3a0505 });
+  const material = new THREE.MeshToonMaterial({ color: 0xe8222a, emissive: 0x3a0505, vertexColors: true });
   const inst = new THREE.InstancedMesh(ballUnit, material, n);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1);
   for (let i = 0; i < n; i++) {
