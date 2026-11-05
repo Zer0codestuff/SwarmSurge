@@ -284,12 +284,18 @@ const popups = Array.from({ length: 18 }, () => {
   return { el, inner, life: 0, x: 0, y: 0, z: 0, dy: 0, combo: false };
 });
 let popHead = 0;
+let popSerial = 0;
 function popup(text, cls, x, y, z, life = 1.3) {
   if (TURBO) return;
   const p = popups[popHead]; popHead = (popHead + 1) % popups.length;
   p.x = x; p.y = y; p.z = z; p.life = life;
   // stack combo popups that are still fresh so they don't overlap
   p.combo = cls.startsWith('combo');
+  p.serial = ++popSerial;
+  if (p.combo) {
+    const previous = popups.filter(q => q !== p && q.combo && q.life > 0).sort((a,b) => b.serial - a.serial);
+    for (const q of previous.slice(1)) { q.life = 0; q.el.style.display = 'none'; }
+  }
   p.dy = 0;
   if (p.combo) for (const q of popups) if (q !== p && q.combo && q.life > 0.6) p.dy = Math.min(p.dy, q.dy - 1);
   p.inner.textContent = text;
@@ -2218,9 +2224,9 @@ function renderWorld(dt) {
   G.shake = Math.max(0, G.shake - dt * 2.2);
   const sh = reducedMotion ? 0 : Math.min(0.22, G.shake * 0.22);
   // swoop in at the start of every stage, push toward the boss after a win
-  const intro = G.phase === 'intro' ? 1 - Math.min(1, G.phaseT / 1.2) : 0;
+  const intro = !reducedMotion && G.phase === 'intro' ? 1 - Math.min(1, G.phaseT / 1.2) : 0;
   const swoop = intro * intro * (3 - 2 * intro);
-  const win = G.phase === 'won' ? Math.min(1, G.phaseT / 2.2) : 0;
+  const win = !reducedMotion && G.phase === 'won' ? Math.min(1, G.phaseT / 2.2) : 0;
   const push = win * win * (3 - 2 * win) * 16;
   G.camLag = (G.camLag ?? G.cx) + (G.cx - (G.camLag ?? G.cx)) * Math.min(1, dt * 4);
   camera.position.set(G.camLag * 0.22 + rand(-sh, sh), 18 + t * 4 + swoop * 9 - push * 0.25 + rand(-sh, sh), G.camZ + 13.5 + t * 6.5 + swoop * 10 - push);
@@ -2431,8 +2437,6 @@ function renderWorld(dt) {
 }
 
 // ---------------------------------------------------------------- menus
-const TIERS = ['EASY', 'NORMAL', 'HARD', 'EXTREME'];
-const tier = (i) => (i < 3 ? 0 : i < 10 ? 1 : i < 15 ? 2 : 3);
 function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
 function showMenu() {
   G.phase = 'menu';
@@ -2548,6 +2552,8 @@ function frame(now) {
   last = now;
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { G.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
+  // The map is opaque, so rendering the battlefield behind it only spends GPU time.
+  if (G.phase === 'menu') { acc = 0; return; }
   if (G.paused) { if (!TURBO) { renderWorld(0); renderer.render(scene, camera); } return; }
   if (TURBO) {
     // headless balance testing: burn ~30ms of CPU per frame on simulation, render nothing
@@ -2565,9 +2571,6 @@ function frame(now) {
     while (acc >= STEP && n < 6 * SPEED) { step(STEP); acc -= STEP; n++; }
     if (n >= 6 * SPEED) acc = 0;
     renderWorld(dt * SPEED * slow);
-  } else {
-    G.t += dt;
-    renderWorld(dt);
   }
   renderer.render(scene, camera);
 }

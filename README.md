@@ -53,7 +53,7 @@ python3 tune.py 3 --full 16:3 17:3  # rescale tower/boss HP toward a target clea
 
 `smart` plans the best route through the gates, defends against packs near the cannon and skips slow upgrades; `naive` plays like a casual player who chases the biggest number on screen.
 
-Balance targets: `naive` wins levels 1–3; `smart` wins 4–15 comfortably; 16–20 are close fights where `smart` sometimes loses.
+The current seed-42 smart-policy run clears all 20 worlds. Bot timings guide pacing; human feedback is still needed for difficulty and long-session balance.
 
 ## Tech
 

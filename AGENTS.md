@@ -17,6 +17,7 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 - All 60 stages have equipment routes and revised pacing. Long fights expose armor gradually, increasing hit damage up to x4. Preserved the largest multiplier routes and extra crowd capacity on surge stages.
 - Added 13 troop colors, smaller troop scaling, 24-halo limit, weapon instances, procedural armory icons, textured roads, tank animation, and aircraft. Hidden future stage geometry during play.
 - Added a winding campaign map with 20 procedural biome dioramas, progressive unlocks, replayable worlds, stars and a continue button. Legacy late-world wins keep earlier worlds accessible. Victory saves immediately before the result animation.
+- Limited combo messages to two at once, respected reduced-motion camera preferences, removed the old card-grid styles and stopped battlefield rendering behind the opaque map.
 - Fixed restarting during grouped nuke effects. Fifteen focused gameplay and progression regressions cover the new mechanics. Final seed-42 campaign run completed all 20 levels. Desktop and 390 x 844 layouts were inspected with no document overflow.
 
 ## Constraints and next steps
