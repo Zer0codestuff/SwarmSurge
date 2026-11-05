@@ -202,6 +202,21 @@ window.runGameChecks = (g) => {
     pool.mesh.geometry.dispose(); pool.mesh.material.dispose();
     return {pass:bounded && expired && pool.mesh.count===0};
   })()`);
+  check('Troop detail packing preserves units, weapons and motion', `(() => {
+    camera.position.set(0,20,20); troopPixelScale=1000;
+    const far=spawn(B,-2,-60,4,0), near=spawn(B,2,-3,16,0);
+    B.weapon[far]=8; B.weapon[near]=1; B.phase[far]=.9; B.phase[near]=1.4;
+    B.vz[far]=B.vz[near]=-6; B.age[far]=B.age[near]=1; writeBlue();
+    const farMatrix=blueFarMesh.instanceMatrix.array, nearMatrix=blueMesh.instanceMatrix.array;
+    const motion=blueFarMesh.geometry.attributes.unitMotion.array;
+    return {pass:blueMesh.count===1 && blueFarMesh.count===1 && farMatrix[14]===-60 && nearMatrix[14]===-3 && weaponMeshes[8].instanceMatrix.array[14]===-60 && weaponMeshes[1].instanceMatrix.array[14]===-3 && Math.abs(motion[0]-.9)<1e-6 && motion[1]===1};
+  })()`);
+  check('Distant enemy overlays and sleeping motion stay aligned', `(() => {
+    camera.position.set(0,20,20); troopPixelScale=1000;
+    const far=spawn(R,-2,-60,4,5), near=spawn(R,2,-3,4,2);
+    R.st[far]=1; R.vz[near]=6; R.age[far]=R.age[near]=1; writeRed();
+    return {pass:redMesh.count===1 && redFarMesh.count===1 && overlays[5].instanceMatrix.array[14]===-60 && overlays[2].instanceMatrix.array[14]===-3 && redFarMesh.geometry.attributes.unitMotion.array[1]===0};
+  })()`);
   check('Pause clears held input and resume preserves the battle', `(() => {
     G.paused=false; keys.left=true; drag={id:1,x:0,aim:0};
     const i=spawn(B,0,-3,10,0); G.time=7; upgradeCannon('tank');

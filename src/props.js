@@ -202,7 +202,7 @@ export function buildBlackHole(r) {
 // rolling ball made of hundreds of red units (reference frame "999")
 let ballUnit = null;
 export function buildSwarmBall(r) {
-  if (!ballUnit) ballUnit = redUnitGeo().scale(1.25, 1.25, 1.25);
+  if (!ballUnit) ballUnit = redUnitGeo('low').scale(1.25, 1.25, 1.25);
   const n = 144;
   const material = new THREE.MeshToonMaterial({ color: 0xe8222a, emissive: 0x3a0505 });
   const inst = new THREE.InstancedMesh(ballUnit, material, n);

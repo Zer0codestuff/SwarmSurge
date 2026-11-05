@@ -69,7 +69,7 @@ function bevelBox(width, height, depth, bevel = 0.02) {
   return geometry;
 }
 
-function builder(animated = false) {
+function builder(animated = false, lowDetail = false) {
   const parts = [];
   function add(geometry, color, position = [0, 0, 0], rotation = [0, 0, 0], leg = 0) {
     geometry.rotateX(rotation[0]).rotateY(rotation[1]).rotateZ(rotation[2]);
@@ -97,12 +97,13 @@ function builder(animated = false) {
   }
   return {
     add,
-    box(size, position, color, bevel = 0.018, rotation, leg = 0) {
-      add(bevelBox(...size, bevel), color, position, rotation, leg);
+    box(size, position, color, bevel = 0.018, rotation, leg = 0, keepBevel = false) {
+      const geometry = lowDetail && bevel < 0.04 && !keepBevel ? new THREE.BoxGeometry(...size) : bevelBox(...size, bevel);
+      add(geometry, color, position, rotation, leg);
     },
     cylinder(front, rear, length, position, color, axis = 'z', segments = 8) {
       const rotation = axis === 'z' ? [Math.PI / 2, 0, 0] : axis === 'x' ? [0, 0, Math.PI / 2] : [0, 0, 0];
-      add(new THREE.CylinderGeometry(front, rear, length, segments), color, position, rotation);
+      add(new THREE.CylinderGeometry(front, rear, length, lowDetail ? 4 : segments), color, position, rotation);
     },
     sphere(radius, scale, position, color, width = 10, height = 6) {
       add(new THREE.SphereGeometry(radius, width, height).scale(...scale), color, position);
@@ -131,16 +132,19 @@ function builder(animated = false) {
   };
 }
 
-/** A single instanced humanoid, grounded at y=0 and facing +z. */
-export function troopGeometry(enemy = false) {
+/** A grounded humanoid facing +z. Low detail preserves the helmet and body outline. */
+export function troopGeometry(enemy = false, detail = 'high') {
   const p = enemy ? ENEMY : ALLY;
-  const b = builder(true);
+  const low = detail === 'low';
+  const b = builder(true, low);
   b.box([0.31, 0.09, 0.23], [0, 0.335, 0], p.dark, 0.025);
   b.box([0.36, 0.25, 0.25], [0, 0.49, 0], p.armor, 0.042);
   b.box([0.28, 0.17, 0.055], [0, 0.505, 0.137], p.blue, 0.025);
   b.box([0.16, 0.055, 0.014], [0, 0.53, 0.17], p.trim, 0.008);
-  b.box([0.044, 0.026, 0.018], [0.09, 0.47, 0.174], p.amber, 0.005);
-  b.box([0.09, 0.055, 0.035], [0, 0.34, 0.126], p.trim, 0.008);
+  if (!low) {
+    b.box([0.044, 0.026, 0.018], [0.09, 0.47, 0.174], p.amber, 0.005);
+    b.box([0.09, 0.055, 0.035], [0, 0.34, 0.126], p.trim, 0.008);
+  }
   b.cylinder(0.105, 0.11, 0.055, [0, 0.624, 0], p.dark, 'y');
 
   // The helmet has a separate brow, face gasket and inset visor.
@@ -152,13 +156,13 @@ export function troopGeometry(enemy = false) {
   for (const side of [-1, 1]) {
     b.cylinder(0.059, 0.059, 0.036, [side * 0.218, 0.805, 0.01], p.dark, 'x');
     b.cylinder(0.033, 0.033, 0.041, [side * 0.223, 0.805, 0.01], p.blue, 'x');
-    b.box([0.043, 0.045, 0.035], [side * 0.09, 0.72, 0.205], p.trim, 0.006);
+    if (!low) b.box([0.043, 0.045, 0.035], [side * 0.09, 0.72, 0.205], p.trim, 0.006);
   }
   b.box([0.065, 0.045, 0.18], [0, 0.982, -0.018], p.trim, 0.014);
   b.box([0.032, 0.014, 0.075], [0, 1.01, -0.018], p.light, 0.005);
   if (enemy) {
     for (const side of [-1, 1]) {
-      b.box([0.055, 0.12, 0.065], [side * 0.16, 0.967, -0.045], p.trim, 0.013, [0, 0, -side * 0.23]);
+      b.box([0.055, 0.12, 0.065], [side * 0.16, 0.967, -0.045], p.trim, 0.013, [0, 0, -side * 0.23], 0, true);
     }
   }
 
@@ -179,6 +183,8 @@ export function troopGeometry(enemy = false) {
   }
   const geometry = b.finish();
   geometry.name = enemy ? 'Raider infantry' : 'Surge infantry';
+  if (low) geometry.name += ' low';
+  geometry.userData.detail = low ? 'low' : 'high';
   return geometry;
 }
 
@@ -336,12 +342,17 @@ const STRIDE_SHADER = `
 uniform float uTroopTime;
 uniform float uTroopStride;
 attribute vec3 unitStride;
+#ifdef USE_INSTANCING
+  attribute vec2 unitMotion;
+#endif
 float unitStrideAngle() {
-  float phase = 0.0;
+  float phase = uTroopTime * 10.5;
+  float movement = 1.0;
   #ifdef USE_INSTANCING
-    phase = float(gl_InstanceID) * 2.39996323;
+    phase = unitMotion.x;
+    movement = unitMotion.y;
   #endif
-  return sin(uTroopTime * 10.5 + phase) * unitStride.x * 0.43 * uTroopStride;
+  return sin(phase) * unitStride.x * 0.43 * uTroopStride * movement;
 }
 vec2 unitStrideRotate(vec2 value, float angle) {
   float s = sin(angle), c = cos(angle);
@@ -369,7 +380,7 @@ function patchMotionMaterial(material, stride) {
         }`);
   };
   material.customProgramCacheKey = function() {
-    return `${previousKey.call(this)}|surge-infantry-stride-v1`;
+    return `${previousKey.call(this)}|surge-infantry-stride-v2`;
   };
   material.needsUpdate = true;
 }
