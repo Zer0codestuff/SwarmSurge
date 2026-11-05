@@ -37,13 +37,13 @@ const limit = mode === 'turbo' ? 120000 : 200000;
 while (Date.now() - start < limit) {
   await new Promise(r => setTimeout(r, mode === 'turbo' ? 500 : 3000));
   st = await page.evaluate(() => window.__game.state);
-  if (mode !== 'turbo' && Date.now() - lastShot > 15000) { await page.screenshot({ path: `/tmp/gametools/pt/L${level}_${botMode}_${i++}.png` }); lastShot = Date.now(); }
+  if (mode !== 'turbo' && Date.now() - lastShot > 15000) { await page.screenshot({ path: `/tmp/ss/gametools/pt/L${level}_${botMode}_${i++}.png` }); lastShot = Date.now(); }
   if (st.phase === 'won' || st.phase === 'lost' || st.phase === 'menu') break;
   if (st.phase === 'clear' || st.phase === 'move') { /* stage transition */ }
 }
 await new Promise(r => setTimeout(r, 3500));
 const res = await page.evaluate(() => ({ st: window.__game.state, shown: !document.getElementById('result').classList.contains('hidden') ? document.getElementById('rmsg').innerText : null, title: document.getElementById('rtitle')?.textContent }));
-await page.screenshot({ path: `/tmp/gametools/pt/L${level}_${botMode}_${mode}_end.png` });
+await page.screenshot({ path: `/tmp/ss/gametools/pt/L${level}_${botMode}_${mode}_end.png` });
 console.log(JSON.stringify({ level, botMode, mode, phase: res.st.phase, stage: res.st.stage, lives: res.st.lives, maxArmy: Math.round(res.st.maxArmy), combo: res.st.bestCombo, guns: res.st.guns, power: res.st.power, twin: res.st.twin, bossHp: res.st.bossHp, time: res.st.time, title: res.title, msg: res.shown && res.shown.replace(/\n+/g,' | ').slice(0,300), log: res.st.log.map(l=>`s${l.stage}:${l.result}@${l.t}s lives${l.lives} army${Math.round(l.maxArmy)}`) }));
 console.log(errs.slice(0,5).join('\n') || 'no console errors');
 await browser.close();

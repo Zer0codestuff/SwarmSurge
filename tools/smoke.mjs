@@ -8,12 +8,13 @@ page.on('console', m => { if (['error','warning'].includes(m.type())) logs.push(
 page.on('pageerror', e => logs.push('PAGEERROR: '+e.message));
 await page.goto('http://localhost:8000/index.html', { waitUntil: 'load' });
 await new Promise(r => setTimeout(r, 1500));
-await page.screenshot({ path: '/tmp/smoke_menu.png' });
-for (let L = 1; L <= 10; L++) for (let S = 1; S <= 3; S++) {
+await page.screenshot({ path: '/tmp/ss/smoke_menu.png' });
+const N = +(process.argv[2] || 10), L0 = +(process.argv[3] || 1);
+for (let L = L0; L <= N; L++) for (let S = 1; S <= 3; S++) {
   await page.evaluate((L, S) => window.__game.start(L, S), L, S);
   await new Promise(r => setTimeout(r, 700));
   const st = await page.evaluate(() => window.__game.state);
-  if (S === 1 || S === 3) await page.screenshot({ path: `/tmp/smoke_L${L}S${S}.png` });
+  if (S === 1 || S === 3) await page.screenshot({ path: `/tmp/ss/smoke_L${L}S${S}.png` });
   console.log(L, S, st.phase, 'gates', (await page.evaluate(() => window.__game.gates().length)), 'red', st.redUnits, 'fps', st.fps);
 }
 console.log(logs.slice(0, 30).join('\n') || 'no errors');
