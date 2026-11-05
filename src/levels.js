@@ -445,7 +445,7 @@ export const LEVELS = prepareCampaign([
     stages: [
       {
         tip: 'TWIN CANNON mirrors your aim: cover two lanes at once!',
-        tower: 120000,
+        tower: 42000,
         waves: { every: 3.0, swarm: 8, runner: 4, tank: { every: 3, hp: 40 }, ramp: 0.4 },
         walls: [{ x: 0, d1: 9, d2: 40 }],
         gates: [
