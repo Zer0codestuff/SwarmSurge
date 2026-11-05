@@ -31,9 +31,13 @@ node run.mjs 4 smart          # play level 4 with the "smart" policy
 ./batch.sh "1 2 3" "smart naive"  # several levels and policies in parallel
 node smoke.mjs 20             # load all 20 levels (60 stages) and report runtime errors
 node peek.mjs 13 3 smart l13s3  # screenshots of a stage while a bot plays it
+node probe.mjs 17 3 smart "0" "G.army" 20 1   # sample any engine expression every game second
+python3 tune.py 3 --full 16:3 17:3  # rescale tower/boss HP toward a target clear time
 ```
 
-`smart` plans the best route through the gates; `naive` plays like a casual player.
+`smart` plans the best route through the gates, defends against packs near the cannon and skips slow upgrades; `naive` plays like a casual player who chases the biggest number on screen.
+
+Balance targets: `naive` wins levels 1–3; `smart` wins 4–15 comfortably; 16–20 are close fights where `smart` sometimes loses.
 
 ## Tech
 

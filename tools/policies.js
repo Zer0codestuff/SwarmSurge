@@ -91,7 +91,7 @@ window.__policies = (() => {
         const fill = (q.need - q.prog) / (flux * r.pre);
         score = fill < 10 ? 1e30 * r.pre : r.pre * 0.05;
       }
-      else if (q.t === 'tesla') score = 1e29 * r.pre;
+      else if (q.t === 'tesla') score = (q.need - q.prog) / (flux * r.pre) < 12 ? 1e29 * r.pre : r.pre * 0.05;
       else if (q.t === 'heart') {
         const fill = (q.need - q.prog) / (flux * r.pre);
         score = st.lives <= 5 && fill < 6 ? 1e28 * r.pre : r.pre * 0.03;
@@ -127,7 +127,7 @@ window.__policies = (() => {
       let v = 1;
       for (const q of gates) if (Math.abs(x - q.x) < q.w / 2 - 0.3) v *= q.t === 'mul' ? q.v : q.t === 'add' ? q.v + 1 : q.t === 'div' ? 1 / q.v : q.t === 'charge' ? q.v : 1;
       const blocked = g.gates().some((q) => BLK.has(q.t) && Math.abs(x - q.x) < q.w / 2);
-      if (blocked) v *= 0.01;
+      if (blocked) v *= 0.3; // casual players still shoot at a big number behind a barrier
       if (threats.some((t) => Math.abs(x - t.x) < t.w / 2 + 0.9)) v *= 1e-6;
       if (v > best + 0.01) { best = v; bx = x; }
     }
