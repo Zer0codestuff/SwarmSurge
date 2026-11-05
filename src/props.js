@@ -166,21 +166,28 @@ export function buildPillar() {
   return { group: g, body, height: 10 };
 }
 
-// tornado: stacked spinning rings; shreds red units and flings blue ones
+// Open wind spirals leave the route visible through the moving funnel.
 export function buildTornado(r) {
   const g = new THREE.Group();
-  const rings = [];
-  for (let k = 0; k < 9; k++) {
-    const rr = r * (0.35 + k * 0.12);
-    const m = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.12 + k * 0.03, 6, 22),
-      new THREE.MeshBasicMaterial({ color: k % 2 ? 0xdfe8f0 : 0xaab8c8, transparent: true, opacity: 0.55, depthWrite: false }));
-    m.rotation.x = Math.PI / 2; m.position.y = 0.3 + k * 0.75;
-    g.add(m); rings.push(m);
+  const strands = [];
+  for (let k = 0; k < 3; k++) {
+    const points = [];
+    for (let j = 0; j <= 60; j++) {
+      const t = j / 60, angle = t * Math.PI * 5.2 + k * Math.PI * 2 / 3;
+      const radius = r * (.18 + t * .92);
+      points.push(new THREE.Vector3(Math.cos(angle) * radius, .2 + t * 5.4, Math.sin(angle) * radius));
+    }
+    const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 84, .045 + k * .009, 4, false);
+    const strand = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: k % 2 ? 0xe2f6ff : 0xb4d2e4, transparent: true, opacity: .34, depthWrite: false }));
+    g.add(strand); strands.push(strand);
   }
-  const core = new THREE.Mesh(new THREE.ConeGeometry(r * 1.2, 7, 16, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xcfd8e4, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
-  core.rotation.x = Math.PI; core.position.y = 3.6; g.add(core);
-  return { group: g, rings, core };
+  const core = new THREE.Mesh(new THREE.ConeGeometry(r * 1.1, 5.4, 16, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xcfd8e4, transparent: true, opacity: .035, side: THREE.DoubleSide, depthWrite: false }));
+  core.rotation.x = Math.PI; core.position.y = 2.9; g.add(core);
+  const footprint = new THREE.Mesh(new THREE.RingGeometry(r * .84, r, 40),
+    new THREE.MeshBasicMaterial({ color: 0xbce5ff, transparent: true, opacity: .18, depthWrite: false }));
+  footprint.rotation.x = -Math.PI / 2; footprint.position.y = .06; g.add(footprint);
+  return { group: g, strands, core, footprint };
 }
 
 // black hole: pulls everything in; feed it enough power and it goes SUPERNOVA

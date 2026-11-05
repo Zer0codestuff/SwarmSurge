@@ -2457,7 +2457,10 @@ function renderWorld(dt) {
     for (const bt of S.belts) bt.model.tex.offset.x -= dt * 0.9;
     for (const tn of S.tornados) {
       tn.model.group.position.x = tn.x;
-      tn.model.rings.forEach((r, k) => { r.rotation.z += dt * (6 + k); r.position.x = Math.sin(G.t * 3 + k * 0.6) * 0.25 * k * 0.3; });
+      tn.model.strands.forEach((strand, k) => {
+        strand.rotation.y += dt * (3.2 + k * .5);
+        strand.position.x = Math.sin(G.t * 3 + k * .6) * .07 * k;
+      });
       tn.model.core.rotation.y += dt * 4;
     }
     for (const h of S.holes) {
