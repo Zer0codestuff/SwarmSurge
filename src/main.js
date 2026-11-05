@@ -8,6 +8,7 @@ import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
 import { RANKS, rankOf, WEAPONS, CHASSIS, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
+import { createTutorials } from './tutorials.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -332,6 +333,7 @@ function banner(text, cls = '', dur = 1.6) {
   bannerTimer = dur;
 }
 function showTip(text) {
+  tipTimer = 0; hud.tip.className = 'stroke'; hud.tip.textContent = '';
   if (TURBO || !text) return;
   hud.tip.textContent = text;
   hud.tip.className = 'show stroke';
@@ -374,6 +376,7 @@ function loadProgress() {
   return { stars: [] };
 }
 let progress = loadProgress();
+const tutorials = createTutorials();
 function recordVictory() {
   const stars = G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1;
   if (stars <= (progress.stars[G.levelIdx] || 0)) return;
@@ -645,7 +648,6 @@ function startLevel(idx, stageIdx = 0) {
   $('result').classList.add('hidden');
   setHud('lvl', hud.level, `LEVEL ${idx + 1} · ${def.name.toUpperCase()}`);
   renderUps();
-  hud.hint.classList.toggle('hidden', !(idx === 0 && stageIdx === 0));
   canvas.focus({ preventScroll: true });
 }
 function setBarrels(n) {
@@ -674,7 +676,9 @@ function enterStage(i) {
   G.phaseT = 0;
   const isBoss = !!G.stage.boss;
   banner(isBoss ? 'BOSS FIGHT!' : `STAGE ${i + 1}`, isBoss ? 'boss' : '', 1.5);
-  showTip(G.stage.def.tip);
+  const tip = tutorials.stageTip({ stage:G.stage,levelIndex:G.levelIdx,stageIndex:i,progress,debug:TURBO || params.has('level') || params.has('stage') });
+  showTip(tip?.text);
+  hud.hint.classList.toggle('hidden',tip?.id!=='aim');
   if (isBoss) sound.play('warn');
   spawnHordes(G.stage);
   renderPips();
@@ -2024,11 +2028,6 @@ function step(dt) {
     S.time += dt;
     S.breach = Math.min(4, 1 + Math.max(0, S.time - S.def.targetTime) / 7);
     if (S.breach >= 2 && !S.breachShown) { S.breachShown = true; banner('ARMOR BREACHED!', 'gold'); }
-    // stuck? remind the player of the trick for this stage
-    if (S.time > 40 && !S.reminded) {
-      const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
-      if (T && T.hp > T.max * 0.6) { S.reminded = true; showTip('HINT: ' + (S.def.tip || 'chain more gates!')); }
-    }
     if (S.time > 80 && !S.enraged) { S.enraged = true; banner('ENEMY RAGE!', 'red', 1.8); sound.play('warn'); }
     S.waveT -= dt;
     if (S.waveT <= 0) { S.waveT = S.def.waves.every * (S.enraged ? 0.55 : 1); spawnWave(S); }
@@ -2660,8 +2659,7 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 
-// menu backdrop: show level 1 scenery behind the menu
-startLevel(0);
+// Build the battlefield only when a run starts. Opening the map must not consume onboarding.
 showMenu();
 const startParam = params.get('level');
 if (startParam) startLevel(clamp((+startParam || 1) - 1, 0, LEVELS.length - 1), clamp((+params.get('stage') || 1) - 1, 0, 2));
