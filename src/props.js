@@ -2,7 +2,8 @@
 // black holes, rolling swarm balls, the rival cannon and spider webs.
 import * as THREE from 'three';
 import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, buildGate, troopWeaponGeo } from './models.js';
-import { WEAPON_IDS } from './arsenal.js';
+import { WEAPON_IDS, CHASSIS_IDS } from './arsenal.js';
+import { createVehicleRig } from './vehicle-assets.js';
 
 function stripeTexture(a, b, n = 8, w = 128, h = 32) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -87,11 +88,10 @@ export function buildArmory(w, upgrade) {
   const model = buildGate(w, 0xffc54a);
   const icon = new THREE.Group(); icon.position.y = 2.8; model.group.add(icon);
   const metal = lam(0x28496b), gold = lam(0xffd571), light = lam(0xe1faff);
-  if (upgrade === 'tank') {
-    icon.add(mesh(new THREE.BoxGeometry(1.35, .35, 1), metal));
-    icon.add(mesh(new THREE.BoxGeometry(.7, .38, .65), gold, 0, .32, 0));
-    icon.add(mesh(new THREE.CylinderGeometry(.1, .1, .9, 8).rotateX(Math.PI / 2), light, 0, .32, -.65));
-    for (const x of [-.65, .65]) icon.add(mesh(new THREE.BoxGeometry(.32, .5, 1.3), metal, x, -.1, 0));
+  if (upgrade === 'tank' || CHASSIS_IDS[upgrade]) {
+    const rig = createVehicleRig(); rig.setForm(CHASSIS_IDS[upgrade] || 1);
+    rig.group.scale.setScalar(.58); rig.group.position.y = -.55;
+    rig.group.rotation.y = Math.PI / 5; icon.add(rig.group);
   } else if (upgrade === 'squad') {
     for (const side of [-1,1]) {
       icon.add(mesh(new THREE.BoxGeometry(.58,.18,.7),metal,side*.4,-.1,0));
