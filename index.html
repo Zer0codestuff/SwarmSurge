@@ -25,6 +25,7 @@
   .lbl.boss { font-size: 58px; letter-spacing: 1px; -webkit-text-stroke: 3px #1b0a33;
     text-shadow: 0 5px 0 #1b0a33, 0 0 18px rgba(255,120,40,.7); }
   .lbl.brute { font-size: 18px; background: #e8243a; border: 2px solid #fff; border-radius: 7px; padding: 0 7px; text-shadow: 0 2px 0 #6b0d1a; }
+  .lbl.ball { font-size: 24px; background: #b0101c; border: 3px solid #ffd21a; border-radius: 50px; padding: 0 12px; }
   .lbl.spawner { font-size: 20px; background: #e8243a; border: 2px solid #fff; border-radius: 8px; padding: 0 9px; }
   /* floating popups: the outer div is positioned every frame, the inner span animates */
   .pop { position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform; }
@@ -68,6 +69,9 @@
   #ups { display: flex; justify-content: center; gap: 6px; margin-bottom: 6px; min-height: 22px; }
   .up { text-shadow: none; background: #ffc21a; color: #3a2400; border: 2px solid #fff; border-radius: 10px; font-size: 13px; padding: 1px 8px; }
   .up.pw { background: #ff7a1a; color: #fff; } .up.tw { background: #ff4fd8; color: #fff; }
+  .up.sq { background: #22b8ff; color: #fff; }
+  .diff { font-size: 11px; vertical-align: middle; border: 2px solid #fff; border-radius: 8px; padding: 0 6px; text-shadow: none; letter-spacing: 1px; }
+  .diff.d0 { background: #3fd05a; } .diff.d1 { background: #22b8ff; } .diff.d2 { background: #ff8a1a; } .diff.d3 { background: #e8243a; animation: blink .7s infinite alternate; }
   #ups { flex-wrap: wrap; }
   #tip { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); width: min(460px, 88vw); text-align: center; font-size: clamp(15px, 4.2vw, 20px);
     line-height: 1.25; color: #fff8c0; opacity: 0; transition: opacity .4s; pointer-events: none; }
@@ -129,6 +133,16 @@
   .t-moon { background: linear-gradient(135deg, #3a3f5a, #0a0a2a); }
   .t-sky { background: linear-gradient(135deg, #6ac8ff, #2a6ad0); }
   .t-void { background: linear-gradient(135deg, #12002a, #9a3aff 60%, #ff3a8a); }
+  .t-factory { background: linear-gradient(135deg, #55565e, #8a3a1a 60%, #ffb21a); }
+  .t-casino { background: linear-gradient(135deg, #1a0612, #b01030 55%, #ffd21a); }
+  .t-coral { background: linear-gradient(135deg, #2ad0ff, #ff8a6a 65%, #f7e0a8); }
+  .t-spooky { background: linear-gradient(135deg, #2a1a3a, #5a3a6a 55%, #ff7a1a); }
+  .t-arena { background: linear-gradient(135deg, #5a1a1a, #c0302a 55%, #ffd8a0); }
+  .t-crystal { background: linear-gradient(135deg, #140a2a, #6a4aff 50%, #6afff0); }
+  .t-volcano { background: linear-gradient(135deg, #2a1a14, #ff3a0a 60%, #ffb040); }
+  .t-tomb { background: linear-gradient(135deg, #2a5aa0, #c89a50 55%, #ffd040); }
+  .t-storm { background: linear-gradient(135deg, #2a3440, #5a6a7a 55%, #fff06a); }
+  .t-blackhole { background: linear-gradient(135deg, #000000, #3a1a5a 55%, #ff9a3a); }
   .card:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.35); }
   .card:hover { filter: brightness(1.08); }
   .t-desert { background: linear-gradient(135deg, #f0a43a, #d0602a); }

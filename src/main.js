@@ -3,6 +3,9 @@ import { LEVELS, THEMES } from './levels.js';
 import * as M from './models.js';
 import { Sound } from './sound.js';
 import * as FX from './fx.js';
+import * as P from './props.js';
+import { buildBoss2 } from './bosses.js';
+import * as W from './worlds.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -28,15 +31,19 @@ const RED_TYPES = [
   { speed: 3.8, r: 0.36, hp: 3, dmg: 1, atk: 1.5, scale: 1.1, color: 0xdfe6ff, ghost: true },         // 9 ghost: phases through walls
   { speed: 2.6, r: 0.38, hp: 5, dmg: 1, atk: 1.5, scale: 1.15, color: 0xe8d6a0, revive: true },       // 10 mummy: gets back up once
   { speed: 3.0, r: 0.38, hp: 5, dmg: 1, atk: 1.5, scale: 1.15, color: 0xa89668 },                     // 11 risen mummy
-  { speed: 5.6, r: 0.3, hp: 2, dmg: 2, atk: 1.5, scale: 0.9, color: 0xff3a00, boom: true },           // 12 imp: explodes
+  { speed: 5.6, r: 0.3, hp: 2, dmg: 1, atk: 1.5, scale: 0.9, color: 0xff3a00, boom: true },           // 12 imp: explodes
 ];
 const WAVE_KINDS = { bomber: 2, shielder: 3, runner: 4, splitter: 6, drone: 7, crab: 8, ghost: 9, mummy: 10, imp: 12 };
 const GATE_COLORS = {
   mul: 0xa13cff, add: 0x22a6ff, div: 0xff2a3a, barrier: 0xe0202c, upgrade: 0xffc21a, mega: 0xff9a1a,
   charge: 0x18c87a, nuke: 0x3a3f4a, star: 0xff3fd0, gold: 0xffc21a, blue: 0x22a6ff,
+  heart: 0xff3a7a, redmul: 0xffd21a, redadd: 0xffd21a,
 };
 const BLOCKERS = new Set(['barrier', 'ice', 'fence', 'statue']);
-const ABSORBERS = new Set(['upgrade', 'nuke', 'star']);
+const ABSORBERS = new Set(['upgrade', 'nuke', 'star', 'heart', 'hangar', 'tesla']);
+const REDGATES = new Set(['redmul', 'redadd']); // enemy gates: multiply red units, blue units smash them
+const SQUAD_OFF = [-1.8, 1.8, -3.6, 3.6];
+const MAX_LIVES = 15;
 const rgb = (h) => { const c = new THREE.Color(h); return [c.r, c.g, c.b]; };
 const RED_RGB = RED_TYPES.map((t) => rgb(t.color));
 const TIER_RGB = [rgb(0x3aaeff), rgb(0x2f6bff), rgb(0x9a5aff), rgb(0xffc21a), rgb(0xff3fd0)];
@@ -129,7 +136,7 @@ function spawn(P, x, z, hp, kind, mask = 0, mask2 = 0) {
   const i = P.n++;
   P.x[i] = P.px[i] = x; P.z[i] = P.pz[i] = z;
   P.vx[i] = P.vz[i] = 0; P.hp[i] = hp; P.kind[i] = kind; P.mask[i] = mask; P.mask2[i] = mask2;
-  P.phase[i] = Math.random() * 6.28; P.flash[i] = 0; P.cm[i] = 1; P.sc[i] = 1; P.rad[i] = 0.3; P.st[i] = 0; P.wake[i] = 0; P.age[i] = 0; P.mx[i] = hp; P.stk[i] = 0; P.air[i] = 0;
+  P.phase[i] = Math.random() * 6.28; P.flash[i] = 0; P.cm[i] = 1; P.sc[i] = 1; P.rad[i] = 0.3; P.st[i] = 0; P.wake[i] = 0; P.age[i] = 0; P.mx[i] = hp; P.stk[i] = 0; P.air[i] = 0; P.adur[i] = 0;
   return i;
 }
 function compact(P) {
@@ -333,11 +340,15 @@ const G = {
   z0: 0, cannonZ: 0, camZ: 0, aim: 0, cx: 0, lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0,
   shake: 0, recoil: 0, kills: 0, time: 0, explosions: [], splits: [], revives: [], effects: [], army: 0, maxArmy: 0, bestCombo: 1, fps: 60,
   moveFrom: 0, moveTo: 0, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, armyPrev: 0, pumpT: 0,
+  squad: 0, rad: 0, zones: [], nextMile: 1000, armyAvg: 0,
 };
 const cannon = M.buildCannon();
 const twinCannon = M.buildCannon(0xff4fd8);
+const squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.group.scale.setScalar(0.85); c.group.visible = false; scene.add(c.group); return c; });
 scene.add(cannon.group, twinCannon.group);
 cannon.group.visible = twinCannon.group.visible = false;
+const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
+const buzz = (p) => { if (!TURBO && isTouch && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
 
 function loadProgress() {
   try { const p = JSON.parse(localStorage.getItem('swarm-progress')); if (p && Array.isArray(p.stars)) return p; } catch {}
@@ -351,7 +362,9 @@ function gateColor(def, cur) {
   if (def.color && def.t !== 'flip') return GATE_COLORS[def.color];
   return GATE_COLORS[cur.t] ?? GATE_COLORS.mul;
 }
-const UP_NAMES = { barrel: '+1 GUN', rapid: 'RAPID', power: 'POWER x2', twin: 'TWIN GUN' };
+const UP_NAMES = { barrel: '+1 GUN', rapid: 'RAPID', power: 'POWER x2', twin: 'TWIN GUN', squad: 'SQUAD +1' };
+const SLOT_FACES = ['x100', '÷3', 'x7', '÷2', 'x50', 'x3', '777'];
+const opText = (c, boost = 1) => (c.t === 'mul' ? 'x' + fmt(c.v * boost) : c.t === 'add' ? '+' + fmt(c.v * boost) : '÷' + c.v);
 function refreshGate(g) {
   const c = g.cur, L = g.model.label, t = g.def.t;
   g.dirty = false;
@@ -372,34 +385,49 @@ function refreshGate(g) {
     const prog = atMax ? 1 : (g.fed % c.per) / c.per;
     M.drawLabel(L, 'x' + fmt(g.val * g.boost), atMax ? 'MAX!' : `CHARGE ▲ x${fmt(c.max * g.boost)}`, prog, atMax ? '#fff35a' : '#bfffd8');
   } else if (t === 'portal') M.drawLabel(L, 'WARP', '', -1, '#ffd0ff');
+  else if (t === 'loop') M.drawLabel(L, 'LOOP', 'ALL GATES AGAIN', -1, '#b8ffd8');
+  else if (t === 'jump') M.drawLabel(L, 'JUMP!', '', -1, '#bffff0');
+  else if (t === 'slot') {
+    if (g.spin > 0) M.drawLabel(L, SLOT_FACES[(Math.random() * SLOT_FACES.length) | 0], 'SLOT', -1, '#fff4a0');
+    else M.drawLabel(L, opText(c, c.t === 'div' ? 1 : g.boost), 'SLOT', -1, c.t === 'div' ? '#ffd9d9' : '#ffffff');
+  } else if (t === 'heart') M.drawLabel(L, '+' + (g.def.v ?? 1) + ' ♥', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffd0e0');
+  else if (t === 'hangar') M.drawLabel(L, 'SQUAD +1', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
+  else if (t === 'tesla') M.drawLabel(L, g.active ? 'ZAP!' : 'TESLA', g.active ? 'ONLINE' : `${fmt(g.prog)}/${fmt(g.need)}`, g.active ? 1 : g.prog / g.need, '#bff6ff');
+  else if (REDGATES.has(t)) M.drawLabel(L, (t === 'redmul' ? 'x' : '+') + g.def.v, 'SMASH ' + fmtHp(g.hp), -1, '#c81020');
 }
 function buildGateModel(gd, cur) {
   if (gd.t === 'ice') return M.buildIceWall(gd.w);
   if (gd.t === 'fence') return M.buildFence(gd.w);
   if (gd.t === 'statue') return M.buildStatue(gd.w, gd.small);
   if (gd.t === 'portal') return M.buildPortal(gd.w);
+  if (gd.t === 'loop') return M.buildPortal(gd.w, 0x2aff8a, 0x10a060);
+  if (gd.t === 'jump') return P.buildJumpPad(gd.w);
+  if (gd.t === 'hangar') return P.buildHangar(gd.w);
+  if (gd.t === 'tesla') return P.buildTesla(gd.w);
   return M.buildGate(gd.w, gateColor(gd, cur), gd.mega);
 }
 function buildStage(sd, i, root, theme) {
   const z0 = -i * STAGE_GAP;
   const st = {
     def: sd, i, z0, gates: [], walls: [], saws: [], spawners: [], crushers: [], turrets: [], exits: [],
+    belts: [], pillars: [], tornados: [], holes: [], balls: [], metT: sd.meteors?.every ?? 0,
     tower: null, boss: null, fort: null, waveT: 2.0, waveN: 0, time: 0, enraged: false, comboNext: 10,
   };
   sd.gates?.forEach((gd, k) => {
-    const cur = gd.t === 'flip' ? gd.a : gd;
+    const cur = gd.t === 'flip' ? gd.a : gd.t === 'slot' ? gd.opts[0] : gd;
     const model = buildGateModel(gd, cur);
     const g = {
       def: gd, cur, bit: (1 << (k & 31)) >>> 0, hi: k >= 32, baseX: gd.x, x: gd.x, z: z0 - gd.d, w: gd.w, alive: true,
       hp: gd.hp || 0, prog: 0, need: gd.need || 0, val: gd.v || 1, fed: 0, flipT: 0, flipIdx: 0, flash: 0, model,
-      ph: Math.random() * 6.28, dying: 0, dirty: true, refT: 0, boost: 1,
+      ph: Math.random() * 6.28, dying: 0, dirty: true, refT: 0, boost: 1, on: true, spin: 0, active: false, zapT: 0,
     };
     model.group.position.set(g.x, 0, g.z);
     root.add(model.group);
     refreshGate(g);
     st.gates.push(g);
-    if (gd.t === 'portal') {
+    if (gd.t === 'portal' || gd.t === 'loop' || gd.t === 'jump') {
       const ex = M.buildPortalExit();
+      if (gd.t !== 'portal') ex.ring.material.color.set(gd.t === 'loop' ? 0x2aff8a : 0x3affd0);
       ex.group.position.set(gd.to.x, 0, z0 - gd.to.d);
       root.add(ex.group);
       st.exits.push(ex);
@@ -409,8 +437,33 @@ function buildStage(sd, i, root, theme) {
     const m = M.buildWall(wd.d2 - wd.d1);
     m.position.set(wd.x, 0, z0 - (wd.d1 + wd.d2) / 2);
     root.add(m);
-    st.walls.push({ x: wd.x, zTop: z0 - wd.d2, zBot: z0 - wd.d1 });
+    st.walls.push({ def: wd, x: wd.x, zTop: z0 - wd.d2, zBot: z0 - wd.d1, model: m, ph: wd.slide?.ph ?? 0 });
   });
+  sd.belts?.forEach((bd) => {
+    const m = P.buildBelt(bd.w, bd.d2 - bd.d1, bd.v);
+    m.group.position.set(bd.x, 0, z0 - (bd.d1 + bd.d2) / 2);
+    root.add(m.group);
+    st.belts.push({ x: bd.x, w: bd.w, v: bd.v, zTop: z0 - bd.d2, zBot: z0 - bd.d1, model: m });
+  });
+  sd.pillars?.forEach((pd) => {
+    const m = P.buildPillar();
+    m.group.position.set(pd.x, 0, z0 - pd.d);
+    root.add(m.group);
+    st.pillars.push({ def: pd, x: pd.x, z: z0 - pd.d, hp: pd.hp, max: pd.hp, alive: true, fall: 0, dir: pd.fall ?? (pd.x > 0 ? -1 : 1), model: m, label: makeLabel('tower'), flash: 0 });
+  });
+  sd.tornados?.forEach((td) => {
+    const m = P.buildTornado(td.r);
+    m.group.position.set(td.x, 0, z0 - td.d);
+    root.add(m.group);
+    st.tornados.push({ def: td, x: td.x, z: z0 - td.d, r: td.r, ph: Math.random() * 6.28, model: m });
+  });
+  sd.holes?.forEach((hd) => {
+    const m = P.buildBlackHole(hd.r);
+    m.group.position.set(hd.x, 0, z0 - hd.d);
+    root.add(m.group);
+    st.holes.push({ def: hd, x: hd.x, z: z0 - hd.d, r: hd.r, prog: 0, need: hd.need, alive: true, model: m, dying: 0 });
+  });
+  sd.balls?.forEach((bd) => addBall(st, root, bd.x, z0 - bd.d, bd.hp, bd.r ?? 2.4, bd.speed ?? 1.6, bd));
   sd.saws?.forEach((sw) => {
     const m = M.buildSaw(sw.r);
     m.group.position.set(sw.x, 0, z0 - sw.d);
@@ -430,14 +483,17 @@ function buildStage(sd, i, root, theme) {
     st.turrets.push({ def: td, x: td.x, z: z0 - td.d, hp: td.hp, max: td.hp, timer: td.every, model: m, alive: true, label: makeLabel('spawner'), flash: 0 });
   });
   sd.spawners?.forEach((sp) => {
-    const m = M.buildSpawner(sp.style);
+    const m = sp.style === 'rival' ? P.buildRival() : M.buildSpawner(sp.style);
     m.group.position.set(sp.x, 0, z0 - sp.d);
     root.add(m.group);
     st.spawners.push({ def: sp, x: sp.x, z: z0 - sp.d, hp: sp.hp, max: sp.hp, timer: sp.every * 0.5, model: m, alive: true, label: makeLabel('spawner'), flash: 0 });
   });
   if (sd.boss) {
-    const m = M.buildBoss(sd.boss.type);
-    const every = { king: 5.2, jelly: 4.6, skeleton: 4.6, titan: 3.3, golem: 3.8, moon: 3.4, dragon: 4.2, storm: 3.8, brute: 4.4, robot: 4.0 }[sd.boss.type];
+    const m = buildBoss2(sd.boss.type) ?? M.buildBoss(sd.boss.type);
+    const every = {
+      king: 5.2, jelly: 4.6, skeleton: 4.6, titan: 3.3, golem: 3.8, moon: 3.4, dragon: 4.2, storm: 3.8, brute: 4.4, robot: 4.0,
+      drill: 4.2, dice: 4.4, kraken: 4.0, pumpkin: 4.2, commander: 3.8, spider: 4.0, magma: 3.8, pharaoh: 4.0, thunder: 3.4, emperor: 3.2,
+    }[sd.boss.type];
     const b = {
       type: sd.boss.type, hp: sd.boss.hp, max: sd.boss.hp, speed: sd.boss.speed, push: sd.boss.push ?? 40, startZ: z0 - 60, x: 0, z: z0 - 60,
       model: m, alive: true, every: sd.boss.every ?? every, sweep: !!sd.boss.sweep, atkT: 4, atk: 0, atkN: 0, label: makeLabel('boss'), flash: 0, dead: 0,
@@ -475,7 +531,7 @@ function disposeLevel() {
   });
   G.root = null;
   for (const st of G.stages) {
-    for (const s of [...st.spawners, ...st.turrets]) s.label.el.remove();
+    for (const s of [...st.spawners, ...st.turrets, ...st.pillars, ...st.balls]) s.label.el.remove();
     if (st.tower) st.tower.label.el.remove();
     if (st.boss) st.boss.label.el.remove();
     if (st.fort) st.fort.label.el.remove();
@@ -494,6 +550,16 @@ const LIGHTS = {
   moon: [0xb0b8ff, 0x404058, 1.4, 0xffffff, 2.2],
   sky: [0xffffff, 0xa0c0e0, 1.8, 0xfff8e0, 2.2],
   void: [0xc08aff, 0x301040, 1.5, 0xff9af0, 1.8],
+  factory: [0xfff0d8, 0x6a5a4a, 1.6, 0xffe0b0, 2.2],
+  casino: [0xffd0e0, 0x402030, 1.5, 0xffe0a0, 1.9],
+  coral: [0xf0ffff, 0x6ab0c0, 1.75, 0xfff8e0, 2.3],
+  spooky: [0xb0a0ff, 0x302838, 1.45, 0xe0d0ff, 1.8],
+  arena: [0xffffff, 0xb08a5a, 1.75, 0xfff0d0, 2.3],
+  crystal: [0x9af0ff, 0x302850, 1.5, 0xd0b0ff, 1.9],
+  volcano: [0xffc0a0, 0x502018, 1.5, 0xffb080, 2.0],
+  tomb: [0xffffff, 0xb08a5a, 1.75, 0xfff0c8, 2.3],
+  storm: [0xd0e0ff, 0x404a50, 1.5, 0xe0e8ff, 1.9],
+  blackhole: [0xd0b0ff, 0x201030, 1.45, 0xffd0a0, 1.9],
 };
 function applyTheme(theme) {
   const T = THEMES[theme];
@@ -513,7 +579,9 @@ function startLevel(idx, stageIdx = 0) {
   G.root = new THREE.Group();
   scene.add(G.root);
   applyTheme(def.theme);
-  G.root.add(M.buildWorld(def.theme, def.stages.length * STAGE_GAP));
+  const world = M.buildWorld(def.theme, def.stages.length * STAGE_GAP);
+  W.decorate(def.theme, world, def.stages.length * STAGE_GAP);
+  G.root.add(world);
   G.stages = def.stages.map((sd, i) => buildStage(sd, i, G.root, def.theme));
   for (let i = 0; i < stageIdx; i++) if (G.stages[i].tower) { G.stages[i].tower.alive = false; G.stages[i].tower.model.group.visible = false; }
   B.n = R.n = 0;
@@ -526,10 +594,9 @@ function startLevel(idx, stageIdx = 0) {
   G.effects.length = 0;
   Object.assign(G, {
     log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
-    maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgTotal: 0, army: 0,
+    maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgTotal: 0, army: 0, squad: 0, nextMile: 1000, armyAvg: 0,
   });
-  cannon.setBarrels(1);
-  twinCannon.setBarrels(1);
+  setBarrels(1);
   cannon.group.visible = true;
   twinCannon.group.visible = false;
   enterStage(stageIdx);
@@ -540,8 +607,23 @@ function startLevel(idx, stageIdx = 0) {
   renderUps();
   hud.hint.classList.toggle('hidden', !(idx === 0 && stageIdx === 0));
 }
+function setBarrels(n) {
+  cannon.setBarrels(n); twinCannon.setBarrels(n);
+  for (const c of squadCannons) c.setBarrels(n);
+}
+function addBall(S, root, x, z, hp, r, speed, def = {}) {
+  const m = P.buildSwarmBall(r);
+  m.group.position.set(x, r, z);
+  root.add(m.group);
+  const b = { def, x, z, r0: r, r, hp, max: hp, speed, alive: true, model: m, label: makeLabel('ball'), delay: def.delay ?? 0, flash: 0 };
+  S.balls.push(b);
+  return b;
+}
 function enterStage(i) {
-  G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, lives: G.lives };
+  G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives };
+  G.rad = 0; G.armyAvg = 0;
+  for (const zn of G.zones) if (zn.mesh) { G.root.remove(zn.mesh); zn.mesh.geometry.dispose(); }
+  G.zones.length = 0;
   G.stageIdx = i;
   G.stage = G.stages[i];
   G.shown = false;
@@ -571,6 +653,7 @@ function renderUps() {
   if (G.rate > 1) html += `<span class="up">RAPID ×${G.rate.toFixed(1)}</span>`;
   if (G.power > 1) html += `<span class="up pw">POWER ×${G.power}</span>`;
   if (G.twin) html += `<span class="up tw">TWIN</span>`;
+  if (G.squad) html += `<span class="up sq">SQUAD ×${G.squad + 1}</span>`;
   hud.ups.innerHTML = html;
 }
 
@@ -596,6 +679,7 @@ function fireCannon(dt) {
     G.fireT += interval;
     fireFrom(G.cx);
     if (G.twin) fireFrom(twinX());
+    for (let k = 0; k < G.squad; k++) fireFrom(squadX(k));
     G.charge++;
     if (G.charge >= CHARGE_MAX) {
       G.charge = 0;
@@ -692,28 +776,34 @@ function applyGate(S, g, i) {
   comboCheck(S, i, g.x, g.z);
 }
 function upgradeCannon(up) {
-  if (up === 'barrel') { G.barrels = Math.min(6, G.barrels + 1); cannon.setBarrels(G.barrels); twinCannon.setBarrels(G.barrels); banner('+1 GUN!', 'gold'); }
+  if (up === 'barrel') { G.barrels = Math.min(6, G.barrels + 1); setBarrels(G.barrels); banner('+1 GUN!', 'gold'); }
+  else if (up === 'squad') { G.squad = Math.min(SQUAD_OFF.length, G.squad + 1); banner(`SQUAD x${G.squad + 1}!`, 'gold'); buzz(80); }
   else if (up === 'rapid') { G.rate = Math.min(3.2, G.rate * 1.45); banner('RAPID FIRE!', 'gold'); }
   else if (up === 'power') { G.power = Math.min(64, G.power * 2); banner(`POWER x${G.power}!`, 'gold'); }
   else if (up === 'twin') { G.twin = true; twinCannon.group.visible = true; banner('TWIN CANNON!', 'gold'); }
   renderUps();
 }
-// NUKE: wipes every enemy, wrecks turrets and spawners, blasts the fort/boss, stuns the boss and irradiates your army x3
-function detonateNuke(S, g) {
+// NUKE: wipes every enemy (and irradiates the field so new ones melt for a few seconds), flattens turrets, spawners,
+// enemy gates and swarm balls, blasts half the fort/boss, stuns the boss and pumps your army x5
+function detonateNuke(S, g, mult = 5, label = 'NUKE! ARMY x5') {
   whiteFlash();
+  buzz([120, 60, 220]);
   for (let i = 0; i < R.n; i++) if (R.hp[i] > 0) { burst(R.x[i], 0.6, R.z[i], PCOL.orange, 2, 6); R.hp[i] = 0; G.kills++; }
   G.explosions.length = 0; G.splits.length = 0; G.revives.length = 0;
-  for (const s of [...S.spawners, ...S.turrets]) if (s.alive) { s.hp -= s.max * 0.75; s.flash = 1; }
+  G.rad = 4;
+  for (const s of [...S.spawners, ...S.turrets]) if (s.alive) { s.hp = 0; s.flash = 1; }
+  for (const q of S.gates) if (q.alive && REDGATES.has(q.def.t)) { q.alive = false; q.dying = 1; burst(q.x, 1, q.z, PCOL.gold, 20, 6); }
+  for (const b of S.balls) if (b.alive) b.hp = 0;
   for (const e of G.effects) if (e.kind === 'tele') { e.life = Math.min(e.life, 0.01); e.onHit = () => {}; }
   const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
-  if (T) {
-    const d = T.max * (g.def.dmg ?? 0.35);
+  if (T && g) {
+    const d = T.max * (g.def.dmg ?? 0.5);
     T.hp -= d; T.flash = 1; G.dmgAcc += d; G.dmgTotal += d;
-    if (T === S.boss) { T.z = T.startZ; T.stun = 5; T.atkT = Math.max(T.atkT, 5.5); }
+    if (T === S.boss) { T.z = T.startZ; T.stun = 6; T.atkT = Math.max(T.atkT, 6.5); }
     burst(T.x ?? 0, 4, T.z, PCOL.orange, 60, 12, 1.6);
-    popup('-' + fmt(d) + '!', 'combo c3', T.x ?? 0, 7, T.z, 1.8);
+    popup('-' + fmt(d) + '!', 'combo c4', T.x ?? 0, 7, T.z, 1.8);
   }
-  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0) { B.hp[i] = Math.min(MAX_POWER, B.hp[i] * 3); B.cm[i] = Math.min(1e37, B.cm[i] * 3); B.flash[i] = 1; }
+  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0) { B.hp[i] = Math.min(MAX_POWER, B.hp[i] * mult); B.cm[i] = Math.min(1e37, B.cm[i] * mult); B.flash[i] = 1; }
   if (!TURBO) {
     addRing(0, G.z0 - 30, 40, 0x9aff5a, 0.9);
     addRing(0, G.z0 - 30, 25, 0xffffff, 0.6);
@@ -724,10 +814,9 @@ function detonateNuke(S, g) {
   for (let k = 0; k < 8; k++) burst(rand(-6, 6), 1, G.z0 - rand(10, 50), PCOL.green, 14, 9, 1.4);
   G.shake = 1.4; G.kick = 1;
   for (let k = 0; k < 6; k++) spark(rand(-6, 6), 1, G.z0 - rand(8, 55), PCOL.green, 20, 9, 1.4, 0.9);
-  banner('NUKE! ARMY x3', 'gold', 1.6);
+  banner(label, 'gold', 1.6);
   sound.play('nuke');
-  g.need = Math.round(g.need * 1.5);
-  g.prog = 0;
+  if (g) { g.need = Math.round(g.need * 1.3); g.prog = 0; }
 }
 function starPower(S, g) {
   for (const q of S.gates) {
@@ -760,21 +849,34 @@ function absorb(S, g, i) {
     if (B.hp[i] <= 0) burst(B.x[i], 0.8, B.z[i], t === 'star' ? PCOL.pink : t === 'nuke' ? PCOL.green : PCOL.gold, 2, 2.5);
     if (g.prog >= g.need) {
       burst(g.x, 1.5, g.z, t === 'star' ? PCOL.pink : t === 'nuke' ? PCOL.green : PCOL.gold, 40, 7);
-      if (t === 'upgrade') {
+      if (t === 'upgrade' || t === 'hangar') {
         g.alive = false; g.dying = 1;
-        upgradeCannon(g.cur.up);
+        upgradeCannon(t === 'hangar' ? 'squad' : g.cur.up);
         burst(G.cx, 1.5, G.z0, PCOL.gold, 30, 6);
         if (!TURBO) sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.gold, 60, 0.5, 1.2);
         G.cannonPulse = 1;
         sound.play('upgrade');
       } else if (t === 'nuke') detonateNuke(S, g);
-      else starPower(S, g);
+      else if (t === 'heart') {
+        const v = g.def.v ?? 1;
+        G.lives = Math.min(MAX_LIVES, G.lives + v);
+        banner(`+${v} ♥`, 'pink', 1.2);
+        popup(`+${v} ♥`, 'combo c3', G.cx, 2.5, G.cannonZ - 2, 1.2);
+        if (!TURBO) { sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.pink, 50, 0.5, 1.2); hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit'); }
+        sound.play('upgrade');
+        g.need = Math.round(g.need * 2.5); g.prog = 0;
+      } else if (t === 'tesla') {
+        g.active = true; g.zapT = 0.2;
+        banner('TESLA ONLINE!', 'gold', 1.2);
+        if (!TURBO) g.model.setColor(0x9af6ff);
+        sound.play('upgrade');
+      } else starPower(S, g);
     }
     return;
   }
   const d = Math.min(B.hp[i], g.hp);
   B.hp[i] -= d; g.hp -= d;
-  const col = t === 'ice' ? PCOL.ice : t === 'fence' ? PCOL.metal : t === 'statue' ? PCOL.sand : PCOL.red;
+  const col = t === 'ice' ? PCOL.ice : t === 'fence' ? PCOL.metal : t === 'statue' ? PCOL.sand : REDGATES.has(t) ? PCOL.gold : PCOL.red;
   if (B.hp[i] <= 0) burst(B.x[i], 0.8, B.z[i], col, 2, 2.5);
   if (g.hp <= 0) {
     g.alive = false; g.dying = 1;
@@ -785,6 +887,24 @@ function absorb(S, g, i) {
     G.shake = Math.max(G.shake, 0.4);
     popup('BROKEN!', 'combo c1', g.x, 2.5, g.z, 1.0);
   }
+}
+// trampoline: fly over walls, gates and traps, land in another lane
+function launch(i, tx, tz, dur) {
+  B.ax0[i] = B.x[i]; B.az0[i] = B.z[i]; B.ax1[i] = clamp(tx, -XLIM, XLIM); B.az1[i] = tz; B.air[i] = 0; B.adur[i] = dur;
+}
+function jump(S, g, i) {
+  const to = g.def.to, tz = S.z0 - to.d + rand(-0.6, 0.6);
+  launch(i, to.x + rand(-0.8, 0.8), tz, clamp(Math.hypot(to.x - B.x[i], tz - B.z[i]) / 12, 0.6, 1.4));
+  if (g.flash < 0.5) { spark(g.x, 0.6, g.z, PCOL.ice, 4, 4, 1, 0.4, 2); sound.play('warp'); }
+  g.flash = 1;
+}
+// loop: warp back to the start with every gate "unused" again, so the whole road multiplies twice
+function loop(S, g, i) {
+  if (B.stk[i] >= (g.def.max ?? 1)) return false;
+  B.stk[i]++;
+  B.mask[i] = 0; B.mask2[i] = 0;
+  teleport(S, g, i);
+  return true;
 }
 function teleport(S, g, i) {
   const to = g.def.to;
@@ -808,15 +928,33 @@ function damageTarget(t, i, col) {
   B.hp[i] = 0;
 }
 
+// damage a side target (pillar, swarm ball): the unit is spent, its power comes off the target
+function hitThing(t, i, col) {
+  t.hp -= B.hp[i]; t.flash = 1;
+  G.dmgTotal += B.hp[i];
+  burst(B.x[i], 1, B.z[i], col, B.kind[i] || B.hp[i] > 30 ? 6 : 2, 3);
+  B.hp[i] = 0;
+}
 function moveBlue(S, dt) {
   const boss = S.boss && S.boss.alive ? S.boss : null;
   const tower = S.tower && S.tower.alive ? S.tower : null;
   const k = Math.min(1, dt * 5);
   for (let i = 0; i < B.n; i++) {
     if (B.hp[i] <= 0) continue;
+    if (B.adur[i] > 0) {
+      // airborne: follow the arc, ignore everything until landing
+      B.air[i] += dt;
+      const p = Math.min(1, B.air[i] / B.adur[i]);
+      B.x[i] = B.px[i] = B.ax0[i] + (B.ax1[i] - B.ax0[i]) * p;
+      B.z[i] = B.pz[i] = B.az0[i] + (B.az1[i] - B.az0[i]) * p;
+      B.phase[i] += dt * 20;
+      if (p >= 1) { B.adur[i] = 0; B.vx[i] = 0; B.vz[i] = -BLUE_SPEED; if (i % 3 === 0) burst(B.x[i], 0.3, B.z[i], PCOL.ice, 2, 2.5); }
+      continue;
+    }
     const giant = B.kind[i] === 1;
-    const sp = giant ? GIANT_SPEED : BLUE_SPEED;
+    let sp = giant ? GIANT_SPEED : BLUE_SPEED;
     let x = B.x[i], z = B.z[i];
+    for (const zn of G.zones) if (Math.abs(x - zn.x) < zn.w / 2 && Math.abs(z - zn.z) < zn.d / 2) sp *= 0.3;
     let dx = 0, dz = -1;
     if (seek(cR, x, z, 9, -1)) {
       const tx = TX - x, tz = TZ - z, d = Math.hypot(tx, tz) || 1;
@@ -849,6 +987,7 @@ function moveBlue(S, dt) {
     B.px[i] = x; B.pz[i] = z;
     x += B.vx[i] * dt + clamp(pxs, -0.12, 0.12);
     z += B.vz[i] * dt + clamp(pzs, -0.08, 0.08);
+    for (const bt of S.belts) if (z > bt.zTop && z < bt.zBot && Math.abs(x - bt.x) < bt.w / 2) x += bt.v * dt;
     x = wallClamp(S, B.px[i], clamp(x, -XLIM, XLIM), z);
     B.x[i] = x; B.z[i] = z;
     B.phase[i] += dt * (giant ? 9 : 15);
@@ -857,18 +996,23 @@ function moveBlue(S, dt) {
     // gates
     const pz = B.pz[i];
     for (const g of S.gates) {
-      if (!g.alive || !(pz > g.z && z <= g.z) || Math.abs(x - g.x) > g.w / 2 + 0.05) continue;
+      if (!g.alive || !g.on || !(pz > g.z && z <= g.z) || Math.abs(x - g.x) > g.w / 2 + 0.05) continue;
       const t = g.def.t;
-      if (BLOCKERS.has(t) || ABSORBERS.has(t)) { absorb(S, g, i); if (B.hp[i] <= 0) break; continue; }
+      if (t === 'tesla' && g.active) continue;
+      if (BLOCKERS.has(t) || ABSORBERS.has(t) || REDGATES.has(t)) { absorb(S, g, i); if (B.hp[i] <= 0) break; continue; }
       if (t === 'portal') { teleport(S, g, i); break; }
+      if (t === 'loop') { if (loop(S, g, i)) break; continue; }
+      if (t === 'jump') { jump(S, g, i); break; }
       if (g.hi ? B.mask2[i] & g.bit : B.mask[i] & g.bit) continue;
       if (g.hi) B.mask2[i] |= g.bit; else B.mask[i] |= g.bit;
       applyGate(S, g, i);
       if (B.hp[i] <= 0) break;
     }
-    if (B.hp[i] <= 0) continue;
+    if (B.hp[i] <= 0 || B.adur[i] > 0) continue;
     x = B.x[i]; z = B.z[i];
     if (S.saws.length && sawHit(S, x, z)) { hurt(i, 4, 0.12); if (B.hp[i] <= 0) continue; }
+    for (const p of S.pillars) if (p.alive && Math.abs(x - p.x) < 1.05 && Math.abs(z - p.z) < 1.05) { hitThing(p, i, PCOL.sand); break; }
+    if (B.hp[i] <= 0) continue;
     // targets
     if (tower && z <= tower.z + 1.1) { damageTarget(tower, i, PCOL.red); continue; }
     for (const s of S.spawners) {
@@ -934,19 +1078,38 @@ function moveRed(S, dt) {
     R.px[i] = x; R.pz[i] = z;
     x += R.vx[i] * dt + clamp(pxs, -0.1, 0.1);
     z += R.vz[i] * dt + clamp(pzs, -0.06, 0.06);
+    if (!T.fly) for (const bt of S.belts) if (z > bt.zTop && z < bt.zBot && Math.abs(x - bt.x) < bt.w / 2) x += bt.v * dt;
     x = clamp(x, -XLIM, XLIM);
+    for (const g of S.gates) {
+      if (!g.alive || !g.on || !REDGATES.has(g.def.t) || !(R.pz[i] < g.z && z >= g.z) || Math.abs(x - g.x) > g.w / 2) continue;
+      const m = g.hi ? R.mask2 : R.mask;
+      if (m[i] & g.bit) continue;
+      m[i] |= g.bit;
+      redGate(g, i, x, z);
+    }
+    for (const p of S.pillars) {
+      if (!p.alive || Math.abs(z - p.z) > 1.0) continue;
+      const hw = 0.95 + R.rad[i];
+      if (Math.abs(x - p.x) < hw) x = p.x + (R.px[i] >= p.x ? hw : -hw);
+    }
     if (!T.fly && !T.ghost) {
       x = wallClamp(S, R.px[i], x, z);
       // blockers (fences, ice, barriers, statues) stop red units too: they walk around or wait behind
       let blocked = false;
       for (const g of S.gates) {
-        if (!g.alive || !BLOCKERS.has(g.def.t)) continue;
-        const hw = g.w / 2 + R.rad[i];
-        if (Math.abs(x - g.x) < hw && R.pz[i] <= g.z - 0.3 && z > g.z - 0.3) {
-          z = g.z - 0.3;
-          const dir = x >= g.x ? 1 : -1;
+        if (!g.alive || !g.on || !BLOCKERS.has(g.def.t)) continue;
+        const hw = g.w / 2 + R.rad[i], zf = g.z - 0.3, zb = g.z + 0.35 + R.rad[i];
+        if (Math.abs(x - g.x) >= hw || z <= zf || z >= zb) continue;
+        // solid box: from the front they get stopped, from the side they get pushed back out
+        const dir = x >= g.x ? 1 : -1;
+        if (R.pz[i] <= zf) {
+          z = zf;
           x = wallClamp(S, R.px[i], clamp(x + dir * T.speed * dt, -XLIM, XLIM), z);
           blocked = true;
+        } else {
+          const pdir = R.px[i] >= g.x ? 1 : -1;
+          x = g.x + pdir * hw;
+          if (Math.abs(x) > XLIM) { x = clamp(x, -XLIM, XLIM); z = zf; blocked = true; }
         }
       }
       if (blocked) { R.stk[i] += dt; if (R.stk[i] > 6) { R.hp[i] = 0; burst(x, 0.5, z, PCOL.red, 3, 3); continue; } }
@@ -961,18 +1124,14 @@ function moveRed(S, dt) {
       R.hp[i] = 0;
       burst(x, 0.8, z, PCOL.red, 12, 5);
       G.shake = 0.6;
-      if (!TURBO) {
-        hud.flash.classList.remove('on'); void hud.flash.offsetWidth; hud.flash.classList.add('on');
-        hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit');
-      }
-      sound.play('hit');
+      hurtFlash();
     }
   }
 }
 
 function combat() {
   for (let i = 0; i < B.n; i++) {
-    if (B.hp[i] <= 0) continue;
+    if (B.hp[i] <= 0 || B.adur[i] > 0) continue;
     const x = B.x[i], z = B.z[i], rb = B.rad[i];
     const cx = cellX(x), cz = cellZ(z);
     outer: for (let gz = cz - 1; gz <= cz + 1; gz++) {
@@ -1016,6 +1175,27 @@ function combat() {
   Sp.length = 0;
 }
 
+function setRedHp(i, hp) {
+  const T = RED_TYPES[R.kind[i]];
+  R.hp[i] = R.mx[i] = hp;
+  R.sc[i] = redScale(R.kind[i], hp);
+  R.rad[i] = T.r * (R.sc[i] / T.scale);
+}
+// enemy gate: the red unit's hp is multiplied, split over a few copies
+function redGate(g, i, x, z) {
+  const f = g.def.t === 'redmul' ? g.def.v : g.def.v + 1;
+  const total = R.hp[i] * f;
+  const n = Math.max(0, Math.min(Math.round(f) - 1, 3, R.N - R.n - 30));
+  const share = total / (n + 1);
+  setRedHp(i, share);
+  R.flash[i] = 1;
+  for (let k = 0; k < n; k++) {
+    const j = spawnRed(x + rand(-0.6, 0.6), z + rand(0, 0.8), R.kind[i], share);
+    if (j >= 0) { R.mask[j] = R.mask[i]; R.mask2[j] = R.mask2[i]; R.flash[j] = 1; R.pz[j] = R.z[j]; }
+  }
+  if (g.flash < 0.5) spark(g.x, 1.4, g.z, PCOL.red, 4, 3, 0.8, 0.35, -4);
+  g.flash = 1;
+}
 function redScale(kind, hp) {
   const T = RED_TYPES[kind];
   if (T.big) return T.scale * (1 + clamp(Math.log10(hp / T.hp) * 0.22, 0, 0.75));
@@ -1025,6 +1205,7 @@ function redScale(kind, hp) {
 function spawnRed(x, z, kind, hp) {
   const T = RED_TYPES[kind];
   hp = hp ?? T.hp;
+  if (G.rad > 0 && G.phase === 'play') { burst(x, 0.6, z, PCOL.green, 2, 3); return -1; }
   const i = spawn(R, clamp(x, -XLIM, XLIM), z, hp, kind);
   if (i >= 0) {
     R.vz[i] = T.speed;
@@ -1053,9 +1234,9 @@ function spawnHordes(S) {
 function threat(S) {
   return (LEVELS[G.levelIdx].threat ?? 1) * 2 ** (S.time / 25) * (S.enraged ? 2 : 1);
 }
-// boss minions are elite: their hp is a slice of the boss's max hp
+// boss minions are elite: each one carries a few % of your recent army (capped by a slice of the boss's hp)
 function summon(b, kind, n, frac = 0.0012, spread = 3) {
-  const hp = Math.max(RED_TYPES[kind].hp, b.max * frac);
+  const hp = Math.max(RED_TYPES[kind].hp * threat(G.stage), Math.min(b.max * frac, G.armyAvg * frac * 30));
   for (let k = 0; k < n; k++) {
     const i = spawnRed(b.x + rand(-spread, spread), b.z + 3 + rand(0, 1.5), kind, hp);
     if (i >= 0) { R.vz[i] *= 1.2; spark(R.x[i], 1, R.z[i], PCOL.red, 3, 3, 1, 0.4); }
@@ -1197,11 +1378,48 @@ function attackSweep(b) {
     if (Math.abs(G.cx - x) < 1.9) {
       G.lives -= 1;
       burst(G.cx, 1.2, G.cannonZ, PCOL.orange, 30, 7);
-      if (!TURBO) { hud.flash.classList.remove('on'); void hud.flash.offsetWidth; hud.flash.classList.add('on'); hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit'); }
-      sound.play('hit');
+      hurtFlash();
       popup('BURNED! -1 ❤', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 1.0);
     } else popup('DODGED!', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 0.9);
   }, true);
+}
+// spider web: a sticky band where your units crawl at 30% speed
+function attackWeb(b, x) {
+  const z1 = b.z + 3, len = 18;
+  addTelegraph('band', x, z1 + len / 2, 3.6, len, 1.0, () => {
+    let mesh = null;
+    if (!TURBO) {
+      mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.6, len), P.webMaterial());
+      mesh.material.map.repeat.set(1, len / 3.6);
+      mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, 0.06, z1 + len / 2);
+      G.root.add(mesh);
+    }
+    G.zones.push({ x, z: z1 + len / 2, w: 3.6, d: len, life: 5, mesh });
+    sound.play('warp');
+  });
+}
+// lightning: fast strikes on your biggest clusters
+function attackLightning(b, n) {
+  for (let k = 0; k < n; k++) {
+    const i = randomBlueAhead(b.z + 3, G.z0 - 4);
+    const tx = clamp(i >= 0 ? B.x[i] : rand(-5, 5), -6, 6), tz = i >= 0 ? B.z[i] : b.z + rand(8, 30);
+    addTelegraph('circle', tx, tz, 1.9, 0, 0.75 + k * 0.12, () => {
+      blueInCircle(tx, tz, 1.9);
+      addBeam(tx, 18, tz, tx, 0, tz, 0xfff06a, 0.18);
+      addBeam(tx + 0.3, 18, tz, tx - 0.2, 0, tz + 0.2, 0xffffff, 0.12);
+      burst(tx, 0.5, tz, PCOL.gold, 18, 7);
+      G.shake = Math.max(G.shake, 0.35); sound.play('zap');
+    });
+  }
+}
+function attackBall(S, b, frac, r = 2.2) {
+  const ball = addBall(S, G.root, clamp(b.x + rand(-2, 2), -4, 4), b.z + b.model.radius + r, b.max * frac, r, 2.2, { dmg: 2, home: 0.5 });
+  popup('INCOMING!', 'combo c2', ball.x, 4, ball.z, 1.0);
+  sound.play('warn');
+}
+function rerollSlots(S) {
+  for (const g of S.gates) if (g.alive && g.def.t === 'slot') g.flipT = g.def.period;
+  popup('RE-ROLL!', 'combo c2', 0, 3, G.z0 - 20, 1.0);
 }
 function bossAttack(S, b) {
   b.atkN++;
@@ -1218,6 +1436,25 @@ function bossAttack(S, b) {
     case 'storm': attackBreath(b, PCOL.ice); summon(b, 6, 3); break;
     case 'brute': attackShockwave(b); if (b.atkN % 2 === 0) summon(b, 1, 2, 0.004); break;
     case 'robot': attackBand(b, pickX(), 24, PCOL.pink, -1); attackBand(b, rand(-5, 5), 24, PCOL.pink, 5); break;
+    case 'drill': attackBand(b, pickX(), 22, PCOL.metal, 7); if (b.atkN % 3 === 0) attackBand(b, rand(-5, 5), 22, PCOL.metal, -1); break;
+    case 'dice': attackBoulders(b, 3, 0xffffff); summon(b, 12, 4); if (b.atkN % 3 === 0) rerollSlots(S); break;
+    case 'kraken': attackBand(b, pickX(), 20, PCOL.pink, 8); attackBand(b, rand(-5, 5), 20, PCOL.pink, -1); break;
+    case 'pumpkin': attackBoulders(b, 3, 0xff8a1a); summon(b, 9, 4); if (b.atkN % 3 === 0) attackBall(S, b, 0.01); break;
+    case 'commander': summon(b, 4, 8, 0.0008, 4.5); attackBand(b, pickX(), 22, PCOL.red, -1); break;
+    case 'spider': attackWeb(b, pickX()); summon(b, 4, 6, 0.0008); break;
+    case 'magma': attackBreath(b, PCOL.orange); for (let k = 0; k < 2; k++) meteorStrike(S, 2.2, b); break;
+    case 'pharaoh': attackBand(b, pickX(), 22, PCOL.sand, 10); summon(b, 10, 3); break;
+    case 'thunder': attackLightning(b, 5); if (b.atkN % 2 === 0) summon(b, 7, 4); break;
+    case 'emperor': {
+      const m = b.atkN % 6;
+      if (m === 0) attackBand(b, pickX(), 22, PCOL.purple, 6);
+      else if (m === 1) { attackBoulders(b, 3, 0x9a6aff); summon(b, 9, 3); }
+      else if (m === 2) attackBall(S, b, 0.006);
+      else if (m === 3) attackLightning(b, 6);
+      else if (m === 4) attackWeb(b, pickX());
+      else { attackBreath(b, PCOL.pink); summon(b, 12, 4); }
+      break;
+    }
     default: { // titan: cycles through everything
       const m = b.atkN % 4;
       if (m === 0) attackBand(b, pickX(), 22, PCOL.purple, 6);
@@ -1265,7 +1502,7 @@ function updateEffects(dt) {
       e.mesh.scale.setScalar(2 + p * 16);
       e.mesh.children.forEach((c) => { c.material.opacity = 0.9 * (1 - p); });
     } else if (e.kind === 'rock') {
-      e.mesh.position.set(e.fx + (e.tx - e.fx) * p, 7 + Math.sin(p * Math.PI) * 6 - p * 7, e.fz + (e.tz - e.fz) * p);
+      e.mesh.position.set(e.fx + (e.tx - e.fx) * p, e.high ? e.high * (1 - p) + 0.6 : 7 + Math.sin(p * Math.PI) * 6 - p * 7, e.fz + (e.tz - e.fz) * p);
       e.mesh.rotation.set(p * 8, p * 5, 0);
     }
     if (e.life <= 0) {
@@ -1348,6 +1585,203 @@ function updateObstacles(S, dt) {
   }
 }
 
+// ---------------------------------------------------------------- level 11-20 mechanics
+function nearestRed(x, z, range) {
+  let best = range * range, bi = -1;
+  for (let j = 0; j < R.n; j++) {
+    if (R.hp[j] <= 0) continue;
+    const d2 = (R.x[j] - x) ** 2 + (R.z[j] - z) ** 2;
+    if (d2 < best) { best = d2; bi = j; }
+  }
+  return bi;
+}
+function supernova(S, h) {
+  h.alive = false; h.dying = 1;
+  const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
+  if (T) { const d = T.max * (h.def.dmg ?? 0.3); T.hp -= d; T.flash = 1; G.dmgAcc += d; G.dmgTotal += d; popup('-' + fmt(d) + '!', 'combo c4', T.x ?? 0, 7, T.z, 1.8); }
+  detonateNuke(S, null, h.def.mult ?? 3, `SUPERNOVA! ARMY x${h.def.mult ?? 3}`);
+  if (!TURBO) { addRing(h.x, h.z, 30, 0xff9a3a, 1.0); addRing(h.x, h.z, 18, 0xffffff, 0.7); }
+}
+function crashPillar(S, p) {
+  const x0 = Math.min(p.x, p.x + p.dir * 11.5), x1 = Math.max(p.x, p.x + p.dir * 11.5);
+  let n = 0;
+  for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && R.x[j] > x0 && R.x[j] < x1 && Math.abs(R.z[j] - p.z) < 1.7) { killRed(j); n++; }
+  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && B.adur[i] <= 0 && B.x[i] > x0 && B.x[i] < x1 && Math.abs(B.z[i] - p.z) < 1.7) hurt(i, 10, 0.4);
+  const b = S.boss;
+  if (b && b.alive && Math.abs(b.z - p.z) < b.model.radius + 1.5) { const d = b.max * 0.12; b.hp -= d; b.flash = 1; G.dmgAcc += d; G.dmgTotal += d; }
+  G.shake = Math.max(G.shake, 1.0); G.kick = Math.max(G.kick || 0, 0.6);
+  for (let k = 0; k < 10; k++) burst(x0 + (x1 - x0) * (k / 9), 0.4, p.z, PCOL.dust, 8, 6);
+  if (!TURBO) debris.burst((x0 + x1) / 2, 0.5, p.z, [PCOL.sand, PCOL.dust, PCOL.white], 30, 11, 1.5, 9, 0.45);
+  popup(n > 5 ? `CRUSHED ${n}!` : 'TIMBER!', 'combo c3', (x0 + x1) / 2, 3, p.z, 1.3);
+  sound.play('crush'); sound.play('boom');
+  buzz(90);
+}
+function ballDies(S, b, crashed) {
+  b.alive = false; hideLabel(b.label);
+  b.model.group.visible = false;
+  for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && (R.x[j] - b.x) ** 2 + (R.z[j] - b.z) ** 2 < (b.r + 2) ** 2) killRed(j);
+  for (let k = 0; k < 6; k++) burst(b.x + rand(-b.r, b.r), b.r, b.z + rand(-b.r, b.r), PCOL.red, 20, 8, 1.3);
+  if (!TURBO) debris.burst(b.x, b.r, b.z, [PCOL.red, PCOL.red, PCOL.gold], 30, b.r * 2, 2, 9, 0.4);
+  G.shake = Math.max(G.shake, 0.8);
+  sound.play('boom');
+  if (crashed) {
+    G.lives -= b.def.dmg ?? 3;
+    hurtFlash();
+    popup(`-${b.def.dmg ?? 3} ♥`, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.0);
+  } else popup('SMASHED!', 'combo c3', b.x, 3, b.z, 1.2);
+}
+function hurtFlash() {
+  buzz(70);
+  if (TURBO) return;
+  hud.flash.classList.remove('on'); void hud.flash.offsetWidth; hud.flash.classList.add('on');
+  hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit');
+  sound.play('hit');
+}
+function meteorStrike(S, r, from) {
+  const i = randomBlueAhead(G.z0 - 48, G.z0 - 5);
+  const tx = clamp(i >= 0 && Math.random() < 0.7 ? B.x[i] : rand(-5.5, 5.5), -5.8, 5.8);
+  const tz = i >= 0 ? B.z[i] - rand(0, 2) : G.z0 - rand(10, 40);
+  let rock = null;
+  if (!TURBO) {
+    rock = new THREE.Mesh(M.boulderGeo(), M.lam(0x3a2020, { emissive: 0xff3a0a }));
+    rock.scale.setScalar(1.3);
+    G.root.add(rock);
+    G.effects.push({ kind: 'rock', mesh: rock, fx: from ? from.x : tx + 10, fz: from ? from.z : tz - 26, tx, tz, life: 1.3, max: 1.3, shared: true, high: 14 });
+  }
+  addTelegraph('circle', tx, tz, r, 0, 1.3, () => {
+    blueInCircle(tx, tz, r);
+    for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && (R.x[j] - tx) ** 2 + (R.z[j] - tz) ** 2 < r * r) killRed(j);
+    burst(tx, 0.5, tz, PCOL.orange, 30, 8);
+    spark(tx, 0.8, tz, PCOL.orange, 10, 6, 1.3, 0.5);
+    addRing(tx, tz, r + 0.6, 0xff8a1a, 0.4);
+    G.shake = Math.max(G.shake, 0.5); sound.play('boom');
+  });
+}
+function updateMechanics(S, dt) {
+  if (G.rad > 0) G.rad -= dt;
+  for (const g of S.gates) {
+    if (!g.alive) continue;
+    const d = g.def;
+    if (d.phase) {
+      const was = g.on;
+      g.on = ((G.t + (d.phase.off ?? 0)) % d.phase.period) < d.phase.on;
+      if (was !== g.on && !TURBO) spark(g.x, 1.2, g.z, PCOL.white, 6, 3, 0.9, 0.4, 0);
+    }
+    if (d.t === 'slot') {
+      g.flipT += dt;
+      if (g.spin > 0) { g.spin -= dt; g.dirty = true; if (g.spin <= 0) { g.flash = 1; if (!TURBO) g.model.setColor(gateColor(d, g.cur)); } }
+      if (g.flipT >= d.period) {
+        g.flipT = 0; g.spin = 0.35;
+        let k = (Math.random() * d.opts.length) | 0;
+        if (d.opts[k] === g.cur) k = (k + 1) % d.opts.length;
+        g.cur = d.opts[k];
+      }
+    }
+    if (d.t === 'tesla' && g.active && G.phase === 'play') {
+      g.zapT -= dt;
+      if (g.zapT <= 0) {
+        g.zapT = d.every ?? 0.35;
+        const cx = g.x + g.w / 2, cy = 4.1, cz = g.z;
+        let hit = 0;
+        for (let k = 0; k < (d.zaps ?? 3); k++) {
+          const j = nearestRed(cx, cz - 6, d.range ?? 14);
+          if (j < 0) break;
+          addBeam(cx, cy, cz, R.x[j], 0.6, R.z[j], 0x9af6ff, 0.12);
+          killRed(j); hit++;
+        }
+        if (!hit) {
+          const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
+          if (T) {
+            const dmg = T.max * (d.dmg ?? 0.004);
+            T.hp -= dmg; T.flash = 1; G.dmgAcc += dmg; G.dmgTotal += dmg;
+            addBeam(cx, cy, cz, T.x ?? 0, 3, T.z + 1, 0x9af6ff, 0.12);
+          }
+        }
+        if (hit || Math.random() < 0.5) sound.play('zap');
+        spark(cx, cy, cz, PCOL.ice, 3, 4, 0.9, 0.3, 0);
+      }
+    }
+  }
+  for (const w of S.walls) {
+    const sl = w.def.slide;
+    if (!sl) continue;
+    w.x = w.def.x + Math.sin(G.t * sl.speed + w.ph) * sl.amp;
+    w.model.position.x = w.x;
+  }
+  for (const s of S.spawners) {
+    if (s.def.slide) { s.x = s.def.x + Math.sin(G.t * s.def.slide.speed) * s.def.slide.amp; s.model.group.position.x = s.x; }
+  }
+  for (const tn of S.tornados) {
+    tn.x = tn.def.x + Math.sin(G.t * (tn.def.speed ?? 0.6) + tn.ph) * (tn.def.amp ?? 4);
+    if (G.phase !== 'play') continue;
+    const r2 = tn.r * tn.r;
+    for (let i = 0; i < B.n; i++) {
+      if (B.hp[i] <= 0 || B.adur[i] > 0) continue;
+      if ((B.x[i] - tn.x) ** 2 + (B.z[i] - tn.z) ** 2 < r2) launch(i, rand(-6, 6), B.z[i] - rand(4, 10), rand(0.6, 0.9));
+    }
+    for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && (R.x[j] - tn.x) ** 2 + (R.z[j] - tn.z) ** 2 < r2) killRed(j);
+  }
+  for (const h of S.holes) {
+    if (!h.alive || G.phase !== 'play') continue;
+    const pr = h.r * 3.2, cr = h.r + 0.25;
+    for (const [Pp, blue] of [[B, true], [R, false]]) {
+      for (let i = 0; i < Pp.n; i++) {
+        if (Pp.hp[i] <= 0 || (blue && Pp.adur[i] > 0) || (!blue && Pp.st[i])) continue;
+        const dx = h.x - Pp.x[i], dz = h.z - Pp.z[i], d = Math.hypot(dx, dz);
+        if (d > pr) continue;
+        if (d < cr) {
+          if (blue) { h.prog += Pp.hp[i]; Pp.hp[i] = 0; if (i % 3 === 0) burst(h.x, 0.8, h.z, PCOL.purple, 2, 3); }
+          else { Pp.hp[i] = 0; G.kills++; }
+          continue;
+        }
+        const f = (1 - d / pr) * 9 * dt;
+        Pp.x[i] += (dx / d) * f; Pp.z[i] += (dz / d) * f * 0.6;
+      }
+    }
+    if (h.prog >= h.need) supernova(S, h);
+  }
+  for (const b of S.balls) {
+    if (!b.alive) continue;
+    if (b.hp <= 0) { ballDies(S, b, false); continue; }
+    b.r = b.r0 * Math.max(0.4, Math.cbrt(b.hp / b.max));
+    if (G.phase !== 'play') continue;
+    if (b.delay > 0) { b.delay -= dt; continue; }
+    const sp = b.speed * (S.enraged ? 1.6 : 1);
+    b.z += sp * dt;
+    b.x = clamp(b.x + clamp(G.cx - b.x, -1, 1) * (b.def.home ?? 0.25) * dt, -XLIM + b.r * 0.6, XLIM - b.r * 0.6);
+    b.model.spin.rotation.x += (sp * dt) / b.r;
+    const rr = (b.r + 0.3) ** 2;
+    for (let i = 0; i < B.n; i++) {
+      if (B.hp[i] <= 0 || B.adur[i] > 0) continue;
+      if ((B.x[i] - b.x) ** 2 + (B.z[i] - b.z) ** 2 < rr) { hitThing(b, i, PCOL.red); if (b.hp <= 0) break; }
+    }
+    if (b.hp <= 0) { ballDies(S, b, false); continue; }
+    if (b.z > G.z0 - 1.5) ballDies(S, b, true);
+  }
+  for (const p of S.pillars) {
+    if (p.alive && p.hp <= 0) {
+      p.alive = false; p.fall = 0.001; hideLabel(p.label);
+      popup('TIMBER!', 'combo c2', p.x, 6, p.z, 1.0);
+      sound.play('crush');
+    }
+    if (p.fall > 0 && p.fall < 1) {
+      p.fall = Math.min(1, p.fall + dt / 0.75);
+      p.model.body.rotation.z = -p.dir * (Math.PI / 2) * p.fall * p.fall;
+      if (p.fall >= 1) crashPillar(S, p);
+    }
+  }
+  if (S.def.meteors && G.phase === 'play') {
+    S.metT -= dt;
+    if (S.metT <= 0) { S.metT = S.def.meteors.every * (S.enraged ? 0.6 : 1); for (let k = 0; k < (S.def.meteors.n ?? 1); k++) meteorStrike(S, S.def.meteors.r ?? 2.2); }
+  }
+  for (let k = G.zones.length - 1; k >= 0; k--) {
+    const zn = G.zones[k];
+    zn.life -= dt;
+    if (zn.mesh) zn.mesh.material.opacity = Math.min(0.85, zn.life);
+    if (zn.life <= 0) { if (zn.mesh) { G.root.remove(zn.mesh); zn.mesh.geometry.dispose(); zn.mesh.material.dispose(); } G.zones.splice(k, 1); }
+  }
+}
+
 function step(dt) {
   G.t += dt;
   G.phaseT += dt;
@@ -1356,6 +1790,7 @@ function step(dt) {
   if (G.phase === 'intro' && G.phaseT > 1.2) { G.phase = 'play'; G.phaseT = 0; G.fireT = 0; }
   if (G.phase === 'play') { G.time += dt; fireCannon(dt); }
   updateObstacles(S, dt);
+  updateMechanics(S, dt);
   if (G.phase === 'play') {
     S.time += dt;
     // stuck? remind the player of the trick for this stage
@@ -1372,8 +1807,12 @@ function step(dt) {
       if (s.timer <= 0) {
         s.timer = s.def.every;
         const hp = (s.def.unitHp ?? 3) * threat(S);
-        for (let k = 0; k < s.def.n; k++) spawnRed(s.x + rand(-1, 1), s.z + 1.6 + rand(0, 1), s.def.kind ?? 0, hp);
+        for (let k = 0; k < s.def.n; k++) {
+          const j = spawnRed(s.x + rand(-1, 1), s.z + 1.6 + rand(0, 1), s.def.kind ?? 0, hp);
+          if (j >= 0 && s.def.style === 'rival') R.vz[j] *= 1.5;
+        }
         spark(s.x, 1.5, s.z + 1.2, PCOL.red, 4, 3, 1, 0.4);
+        if (s.def.style === 'rival') { s.flash = 1; sound.play('shoot'); }
       }
       if (s.hp <= 0) {
         s.alive = false; burst(s.x, 1, s.z, s.def.style === 'dome' ? PCOL.gold : PCOL.ice, 40, 7); s.model.group.visible = false; hideLabel(s.label); sound.play('boom');
@@ -1410,7 +1849,17 @@ function step(dt) {
     B.sc[i] = s; B.rad[i] = 0.28 * s;
   }
   G.army = army;
+  G.armyAvg += (army - G.armyAvg) * Math.min(1, dt / 3);
   if (army > G.maxArmy) G.maxArmy = army;
+  if (army >= G.nextMile && G.phase === 'play') {
+    const m = G.nextMile;
+    G.nextMile = m * 1000;
+    popup(`ARMY ${fmt(m)}!!`, 'combo c4', G.cx, 3.5, G.z0 - 6, 1.6);
+    sound.play('star');
+    G.kick = Math.max(G.kick || 0, 0.6);
+    for (let k = 0; k < 6; k++) spark(G.cx + rand(-4, 4), 1.5, G.z0 - rand(3, 12), k % 2 ? PCOL.gold : PCOL.pink, 10, 7, 1.2, 0.8);
+    buzz(40);
+  }
   if (G.bot && ((G.t * 60) | 0) % 6 === 0) G.bot();
 
   if (G.phase === 'play') {
@@ -1526,7 +1975,8 @@ function writeMatrix(m, i, P, s, lean) {
   const pop = age < 0.2 ? 1 + 2.70158 * (age / 0.2 - 1) ** 3 + 1.70158 * (age / 0.2 - 1) ** 2 : 1; // easeOutBack
   const st = Math.sin(ph * 2) * 0.07 * (0.4 + run);
   const sy = s * pop * (1 + st), sxz = s * pop * (1 - st * 0.5);
-  const y = Math.abs(Math.sin(ph)) * 0.14 * s * (0.3 + run);
+  let y = Math.abs(Math.sin(ph)) * 0.14 * s * (0.3 + run);
+  if (P.adur[i] > 0) { const p = P.air[i] / P.adur[i]; y += Math.sin(Math.PI * Math.min(1, p)) * (2.5 + P.adur[i] * 4); }
   const o = i * 16;
   m[o] = c * sxz; m[o + 1] = 0; m[o + 2] = -si * sxz; m[o + 3] = 0;
   m[o + 4] = si * sp * sy; m[o + 5] = cp * sy; m[o + 6] = c * sp * sy; m[o + 7] = 0;
@@ -1597,6 +2047,15 @@ function renderWorld(dt) {
   cannon.barrels.children.forEach((b, k) => { b.position.z = -Math.max(0, G.recoil - k * 0.15) * 0.25; });
   cannon.glow.scale.setScalar(0.8 + (G.charge / CHARGE_MAX) * 0.9);
   cannon.glowMat.color.set(G.power >= 8 ? 0xff6af0 : G.power >= 2 ? 0xffd23a : 0xaef6ff);
+  squadCannons.forEach((c, k) => {
+    c.group.visible = k < G.squad && G.phase !== 'menu';
+    if (!c.group.visible) return;
+    c.group.position.set(squadX(k), 0, G.cannonZ + 1.1 + Math.abs(SQUAD_OFF[k]) * 0.12 + G.recoil * 0.1);
+    c.group.rotation.z = cannon.group.rotation.z;
+    c.glowMat.color.copy(cannon.glowMat.color);
+    for (const w of c.wheels) w.rotation.x -= roll;
+    c.barrels.children.forEach((b, j) => { b.position.z = -Math.max(0, G.recoil - j * 0.15) * 0.25; });
+  });
   if (G.twin) {
     twinCannon.group.position.set(twinX(), 0, G.cannonZ + G.recoil * 0.12);
     twinCannon.group.rotation.z = -cannon.group.rotation.z;
@@ -1617,14 +2076,49 @@ function renderWorld(dt) {
       grp.position.x = g.x;
       if (g.dirty && G.t - g.refT > 0.08) { g.refT = G.t; refreshGate(g); }
       const t = g.def.t;
-      if (!BLOCKERS.has(t)) grp.scale.set(1 + g.flash * 0.05, 1 + g.flash * 0.09, 1);
-      if (g.model.text) g.model.text.scale.setScalar(1 + g.flash * 0.14 + (g.def.mega ? Math.sin(G.t * 5) * 0.04 : 0));
-      if (t === 'portal') { g.model.swirl.rotation.z -= dt * 5; g.model.panelMat.opacity = 0.55 + g.flash * 0.35; }
+      if (g.def.phase) {
+        const P2 = g.def.phase, ph = (G.t + (P2.off ?? 0)) % P2.period, edge = g.on ? P2.on - ph : P2.period - ph;
+        const blink = edge < 0.5 && Math.sin(G.t * 40) > 0;
+        grp.visible = g.on ? edge >= 0.5 || blink : blink;
+      }
+      if (!BLOCKERS.has(t) && t !== 'jump') grp.scale.set(1 + g.flash * 0.05, 1 + g.flash * 0.09, 1);
+      if (g.model.text) g.model.text.scale.setScalar(1 + g.flash * 0.14 + (g.def.mega ? Math.sin(G.t * 5) * 0.04 : 0) + (g.spin > 0 ? 0.08 : 0));
+      if (t === 'portal' || t === 'loop') { g.model.swirl.rotation.z -= dt * (t === 'loop' ? -7 : 5); g.model.panelMat.opacity = 0.55 + g.flash * 0.35; }
+      else if (t === 'jump') { grp.scale.set(1, 1 - g.flash * 0.35, 1); }
+      else if (t === 'hangar') { g.model.plane.position.y = 2.2 + Math.sin(G.t * 2 + g.ph) * 0.15; g.model.plane.rotation.z = Math.sin(G.t * 1.3 + g.ph) * 0.1; }
+      else if (t === 'tesla') { g.model.orb.scale.setScalar(g.active ? 1 + Math.sin(G.t * 30) * 0.15 + (g.zapT < 0.1 ? 0.4 : 0) : 0.7 + g.prog / g.need * 0.4); g.model.panelMat.opacity = (g.active ? 0.2 : 0.45) + g.flash * 0.3; }
       else if (t !== 'statue') g.model.panelMat.opacity = (t === 'ice' ? 0.82 : t === 'fence' ? 0.9 : 0.55) + g.flash * 0.35;
-      if (BLOCKERS.has(t)) grp.position.x = g.x + Math.sin(G.t * 60) * g.flash * 0.08;
+      if (BLOCKERS.has(t) || REDGATES.has(t)) grp.position.x = g.x + Math.sin(G.t * 60) * g.flash * 0.08;
       if (t === 'star') g.model.setColor(new THREE.Color().setHSL((G.t * 0.4) % 1, 1, 0.6));
     }
     for (const ex of S.exits) ex.ring.rotation.z += dt * 2;
+    for (const bt of S.belts) bt.model.tex.offset.x -= dt * 0.9;
+    for (const tn of S.tornados) {
+      tn.model.group.position.x = tn.x;
+      tn.model.rings.forEach((r, k) => { r.rotation.z += dt * (6 + k); r.position.x = Math.sin(G.t * 3 + k * 0.6) * 0.25 * k * 0.3; });
+      tn.model.core.rotation.y += dt * 4;
+    }
+    for (const h of S.holes) {
+      const m = h.model;
+      if (!h.alive) { h.dying = Math.max(0, h.dying - dt * 2); m.group.scale.setScalar(Math.max(0.001, h.dying)); if (h.dying <= 0) m.group.visible = false; continue; }
+      m.disk.rotation.z += dt * 2.5;
+      m.halo.lookAt(camera.position);
+      m.group.scale.setScalar(1 + (h.prog / h.need) * 0.35 + Math.sin(G.t * 4) * 0.03);
+      if (h.shown !== h.prog) { h.shown = h.prog; M.drawLabel(m.label, 'SUPERNOVA', `${fmt(h.prog)}/${fmt(h.need)}`, h.prog / h.need, '#ffb070'); }
+    }
+    for (const b of S.balls) {
+      if (!b.alive) continue;
+      b.flash = Math.max(0, b.flash - dt * 5);
+      b.model.group.position.set(b.x, b.r, b.z);
+      b.model.spin.scale.setScalar(b.r * (1 + b.flash * 0.05));
+      if (cur) placeLabel(b.label, b.x, b.r * 2 + 0.8, b.z, fmtHp(b.hp)); else hideLabel(b.label);
+    }
+    for (const p of S.pillars) {
+      if (!p.alive) continue;
+      p.flash = Math.max(0, p.flash - dt * 5);
+      p.model.group.position.x = p.x + Math.sin(G.t * 60) * p.flash * 0.06;
+      if (cur) placeLabel(p.label, p.x, 10.8, p.z, fmtHp(p.hp)); else hideLabel(p.label);
+    }
     for (const s of S.saws) {
       s.model.group.position.x = s.x;
       s.model.blade.rotation.z -= dt * 14;
@@ -1710,6 +2204,8 @@ function renderWorld(dt) {
 }
 
 // ---------------------------------------------------------------- menus
+const TIERS = ['EASY', 'NORMAL', 'HARD', 'EXTREME'];
+const tier = (i) => (i < 3 ? 0 : i < 10 ? 1 : i < 15 ? 2 : 3);
 function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
 function showMenu() {
   G.phase = 'menu';
@@ -1720,7 +2216,7 @@ function showMenu() {
     <button class="card t-${L.theme}" data-level="${i}" style="animation-delay:${(i * 0.045).toFixed(3)}s">
       <div class="num">${i + 1}</div>
       <div class="info">
-        <div class="name">${L.name}</div>
+        <div class="name">${L.name} <span class="diff d${tier(i)}">${TIERS[tier(i)]}</span></div>
         <div class="feat">★ ${L.feature}</div>
         <div class="blurb">${L.blurb}</div>
         <div class="enemy">⚠ ${L.enemy}</div>
@@ -1735,7 +2231,7 @@ function showMenu() {
     if (S.tower) hideLabel(S.tower.label);
     if (S.boss) hideLabel(S.boss.label);
     if (S.fort) hideLabel(S.fort.label);
-    for (const s of [...S.spawners, ...S.turrets]) hideLabel(s.label);
+    for (const s of [...S.spawners, ...S.turrets, ...S.pillars, ...S.balls]) hideLabel(s.label);
   }
 }
 function showResult(win) {
@@ -1755,7 +2251,7 @@ function showResult(win) {
   const stats = `<div class="stats"><span>MAX ARMY<b data-v="${G.maxArmy}">0</b></span><span>BEST COMBO<b data-v="${G.bestCombo}" data-p="x">x1</b></span><span>CRUSHED<b data-v="${G.kills}">0</b></span></div>`;
   $('rmsg').innerHTML = win
     ? stats + `Hearts left: ${G.lives}/${BASE_LIVES}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
-      (last ? '<br><b class="champ">ALL 10 LEVELS CLEARED! You are the Swarm Master!</b>' : '')
+      (last ? `<br><b class="champ">ALL ${LEVELS.length} LEVELS CLEARED! You are the Swarm Master!</b>` : '')
     : stats + `${G.loseMsg}<br><small>${tip}</small>`;
   $('rretry').classList.toggle('hidden', win);
   $('rrestart').textContent = win ? 'REPLAY' : 'RESTART LEVEL';
@@ -1782,8 +2278,8 @@ $('rnext').addEventListener('click', () => startLevel(G.levelIdx + 1));
 $('rretry').addEventListener('click', () => {
   const snap = G.snap;
   startLevel(G.levelIdx, snap.stage);
-  Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, lives: Math.max(snap.lives, 5) });
-  cannon.setBarrels(G.barrels); twinCannon.setBarrels(G.barrels);
+  Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, lives: Math.max(snap.lives, 5) });
+  setBarrels(G.barrels);
   twinCannon.group.visible = G.twin;
   renderUps();
   G.snap = { ...snap, lives: G.lives };
@@ -1874,9 +2370,10 @@ window.__game = {
   },
   gates() {
     return G.stage.gates.filter((g) => g.alive).map((g) => ({
-      t: g.def.t === 'flip' ? g.cur.t : g.def.t, flip: g.def.t === 'flip', boost: g.boost, v: (g.def.t === 'charge' ? g.val : g.cur.v) * (g.cur.t === 'div' ? 1 : g.boost), max: g.def.max,
+      t: g.def.t === 'flip' || g.def.t === 'slot' ? g.cur.t : g.def.t, flip: g.def.t === 'flip', slot: g.def.t === 'slot', opts: g.def.opts,
+      boost: g.boost, v: (g.def.t === 'charge' ? g.val : g.cur.v) * (g.cur.t === 'div' ? 1 : g.boost), max: g.def.max,
       x: +g.x.toFixed(2), d: +(G.z0 - g.z).toFixed(1), w: g.w, hp: g.hp, need: g.need, prog: g.prog, up: g.cur.up, to: g.def.to,
-      slide: !!g.def.slide, fa: g.def.a, fb: g.def.b, passes: g.passes || 0,
+      slide: !!g.def.slide, fa: g.def.a, fb: g.def.b, passes: g.passes || 0, on: g.on, active: g.active, phase: g.def.phase, loopMax: g.def.max,
     }));
   },
   hazards() {
@@ -1884,6 +2381,13 @@ window.__game = {
     return {
       walls: S.def.walls || [], saws: S.saws.map((s) => ({ x: s.x, d: G.z0 - s.z, r: s.r })), crushers: S.crushers.map((c) => ({ x: c.x, d: G.z0 - c.z, w: c.w })),
       turrets: S.turrets.filter((t) => t.alive).map((t) => ({ x: t.x, d: G.z0 - t.z, hp: t.hp })),
+      balls: S.balls.filter((b) => b.alive).map((b) => ({ x: b.x, d: G.z0 - b.z, r: b.r, hp: b.hp })),
+      holes: S.holes.filter((h) => h.alive).map((h) => ({ x: h.x, d: G.z0 - h.z, r: h.r, need: h.need, prog: h.prog })),
+      tornados: S.tornados.map((t) => ({ x: t.x, d: G.z0 - t.z, r: t.r })),
+      belts: S.belts.map((b) => ({ x: b.x, w: b.w, v: b.v, d1: G.z0 - b.zBot, d2: G.z0 - b.zTop })),
+      pillars: S.pillars.filter((p) => p.alive).map((p) => ({ x: p.x, d: G.z0 - p.z, hp: p.hp })),
+      zones: G.zones.map((z) => ({ x: z.x, d: G.z0 - z.z, w: z.w, len: z.d })),
+      spawners: S.spawners.filter((t) => t.alive).map((t) => ({ x: t.x, d: G.z0 - t.z, hp: t.hp })),
     };
   },
   aim(x) { G.aim = clamp(x, -XLIM + 0.2, XLIM - 0.2); },
@@ -1892,5 +2396,16 @@ window.__game = {
   start(level, stage = 1) { startLevel(level - 1, stage - 1); },
   setBot(fn) { G.bot = fn; },
   units() { const out = []; for (let i = 0; i < B.n; i += 25) out.push([+B.x[i].toFixed(1), +(G.z0 - B.z[i]).toFixed(1), +B.hp[i].toPrecision(2), +B.vx[i].toFixed(1), +B.vz[i].toFixed(1)]); return { n: B.n, z0: G.z0, towerZ: G.stage.tower?.z, alive: G.stage.tower?.alive, out }; },
-  snapshot() { return { flux: G.barrels * G.rate * G.power / BASE_INTERVAL * (G.twin ? 2 : 1) }; },
+  snapshot() { return { flux: G.barrels * G.rate * G.power / BASE_INTERVAL * ((G.twin ? 2 : 1) + G.squad) }; },
+  leaks() {
+    let n = 0;
+    for (const g of G.stage.gates) {
+      if (!g.alive || !BLOCKERS.has(g.def.t)) continue;
+      for (let i = 0; i < R.n; i++) {
+        if (R.hp[i] <= 0 || RED_TYPES[R.kind[i]].fly || RED_TYPES[R.kind[i]].ghost) continue;
+        if (Math.abs(R.x[i] - g.x) < g.w / 2 - 0.05 && R.z[i] > g.z - 0.25 && R.z[i] < g.z + 0.3) n++;
+      }
+    }
+    return n;
+  },
 };
