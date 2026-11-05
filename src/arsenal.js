@@ -32,7 +32,17 @@ export const WEAPON_SPECS = [
 ];
 export const WEAPONS = ['Unarmed', ...WEAPON_SPECS.slice(1).map(spec => spec.name)];
 export const WEAPON_IDS = Object.fromEntries(WEAPON_SPECS.slice(1).map((spec, i) => [spec.key, i + 1]));
-export const CHASSIS = ['Cannon', 'Bulldog tank', 'Siege crawler'];
+export const CHASSIS_SPECS = [
+  null,
+  { key: 'bulldog', name: 'Bulldog tank', power: 2, guns: 1, armor: 3 },
+  { key: 'siege', name: 'Siege crawler', power: 2, guns: 2, armor: 4 },
+  { key: 'spider', name: 'Spider mech', power: 2, guns: 1, armor: 3, weapon: 4, rate: 2 },
+  { key: 'hover', name: 'Hover fortress', power: 2, guns: 1, armor: 4, weapon: 7, rate: 2 },
+  { key: 'railfort', name: 'Rail fortress', power: 3, guns: 1, armor: 5, weapon: 5 },
+  { key: 'titan', name: 'Titan walker', power: 3, guns: 2, armor: 6, weapon: 8, rate: 2, aircraft: 1 },
+];
+export const CHASSIS = ['Cannon', ...CHASSIS_SPECS.slice(1).map(spec => spec.name)];
+export const CHASSIS_IDS = Object.fromEntries(CHASSIS_SPECS.slice(1).map((spec, i) => [spec.key, i + 1]));
 
 // Test relative motion, so a rolling ball and a fast troop cannot tunnel through each other.
 export function sweptCircle(ax0, az0, ax1, az1, bx0, bz0, bx1, bz1, radius) {

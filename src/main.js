@@ -6,7 +6,7 @@ import * as FX from './fx.js';
 import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
-import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, sweptCircle } from './arsenal.js';
+import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { installTroopMotion, updateTroopMotion } from './unit-assets.js';
@@ -406,7 +406,7 @@ function gateColor(def, cur) {
   if (def.color && def.t !== 'flip') return GATE_COLORS[def.color];
   return GATE_COLORS[cur.t] ?? GATE_COLORS.mul;
 }
-const UP_NAMES = { barrel: '+2 GUNS', rapid: 'RAPID x2', power: 'POWER x3', twin: 'TWIN GUN', squad: 'ESCORT +1', tank: 'TANK', air: 'AIR WING', ...Object.fromEntries(WEAPON_SPECS.slice(1).map(spec => [spec.key, spec.name.toUpperCase()])) };
+const UP_NAMES = { barrel: '+2 GUNS', rapid: 'RAPID x2', power: 'POWER x3', twin: 'TWIN GUN', squad: 'ESCORT +1', tank: 'EVOLVE TANK', air: 'AIR WING', ...Object.fromEntries([...WEAPON_SPECS.slice(1), ...CHASSIS_SPECS.slice(1)].map(spec => [spec.key, spec.name.toUpperCase()])) };
 const SLOT_FACES = ['x100', '÷3', 'x7', '÷2', 'x50', 'x3', '777'];
 const opText = (c, boost = 1) => (c.t === 'mul' ? 'x' + fmt(c.v * boost) : c.t === 'add' ? '+' + fmt(c.v * boost) : '÷' + c.v);
 function refreshGate(g) {
@@ -573,7 +573,8 @@ function disposeLevel() {
   scene.remove(G.root);
   const geometries = new Set(), materials = new Set(), textures = new Set();
   G.root.traverse((o) => {
-    if (o.geometry) geometries.add(o.geometry);
+    if (o.isInstancedMesh) o.dispose();
+    if (o.geometry && !o.geometry.userData.shared) geometries.add(o.geometry);
     for (const material of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
       if (material.map && material.map !== M.shineTexture()) textures.add(material.map);
       if (!material.userData.shared) materials.add(material);
@@ -1000,23 +1001,33 @@ function applyGate(S, g, i) {
   }
   comboCheck(S, i, g.x, g.z);
 }
+function unlockWeapon(weapon) {
+  G.weapon = weapon; G.weaponMask |= 1 << weapon;
+  for (let i = 0; i < B.n; i++) B.weapon[i] = nextTroopWeapon();
+}
 function upgradeCannon(up) {
   if (up === 'barrel') { G.barrels = Math.min(6, G.barrels + 2); setBarrels(G.barrels); banner('+2 GUNS!', 'gold'); }
   else if (up === 'squad') { G.squad = Math.min(SQUAD_OFF.length, G.squad + 1); G.shield = Math.min(6, G.shield + 2); banner('ESCORT ONLINE!', 'gold'); buzz(80); }
   else if (up === 'rapid') { G.rate = Math.min(8, G.rate * 2); banner(`RAPID x${G.rate}!`, 'gold'); }
   else if (up === 'power') { G.power = Math.min(243, G.power * 3); banner(`POWER x${G.power}!`, 'gold'); }
   else if (up === 'twin') { G.twin = true; twinCannon.group.visible = true; G.shield = Math.min(6, G.shield + 1); banner('TWIN CANNON!', 'gold'); }
-  else if (up === 'tank') {
-    G.chassis = Math.min(2, G.chassis + 1); G.power = Math.min(243, G.power * 2);
-    G.barrels = Math.min(6, G.barrels + 1); G.shield = Math.min(6, G.shield + 3);
+  else if (up === 'tank' || CHASSIS_IDS[up]) {
+    G.chassis = Math.min(CHASSIS.length - 1, Math.max(G.chassis, up === 'tank' ? G.chassis + 1 : CHASSIS_IDS[up]));
+    const spec = CHASSIS_SPECS[G.chassis];
+    G.power = Math.min(243, G.power * spec.power);
+    G.barrels = Math.min(6, G.barrels + spec.guns); G.shield = Math.min(6, G.shield + spec.armor);
+    G.rate = Math.max(G.rate, spec.rate || 1);
+    if (spec.weapon) unlockWeapon(spec.weapon);
+    if (spec.aircraft) { G.aircraft = Math.min(3, G.aircraft + spec.aircraft); G.airT = .2; }
     setBarrels(G.barrels); cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
+    addRing(G.cx, G.cannonZ, 3.5, 0x8beaff, .5);
+    burst(G.cx, .6, G.cannonZ, PCOL.gold, 16, 3);
     banner(CHASSIS[G.chassis].toUpperCase() + '!', 'gold');
   } else if (up === 'air') { G.aircraft = Math.min(3, G.aircraft + 1); G.airT = 0.2; banner('AIR WING INBOUND!', 'gold'); }
   else {
     const weapon = WEAPON_IDS[up];
     if (!weapon) return;
-    G.weapon = weapon; G.weaponMask |= 1 << weapon;
-    for (let i = 0; i < B.n; i++) B.weapon[i] = nextTroopWeapon();
+    unlockWeapon(weapon);
     banner(WEAPONS[G.weapon].toUpperCase() + ' ONLINE!', 'gold');
   }
   G.cannonPulse = 1; renderUps();
@@ -2344,6 +2355,8 @@ function renderWorld(dt) {
   cannon.shield.material.opacity = 0.06 + G.cannonPulse * 0.25;
   cannon.group.scale.setScalar((G.chassis ? 1.12 : 1) + G.cannonPulse * 0.25 + G.recoil * 0.03);
   const roll = dt * (G.phase === 'move' ? 14 : 0) + Math.abs(vel) * dt * 1.5;
+  const drive = Math.abs(vel) + (G.phase === 'move' ? 10 : 0);
+  cannon.animateVehicle(G.t, dt, G.recoil, drive, G.charge / CHARGE_MAX);
   for (const w of cannon.wheels) w.rotation.x -= roll;
   for (const w of twinCannon.wheels) w.rotation.x -= roll;
   if (Math.abs(vel) > 6 && Math.random() < 0.5) spark(G.cx, 0.2, G.cannonZ + 0.8, PCOL.dust, 1, 1.5, 0.9, 0.4, 1);
@@ -2360,6 +2373,7 @@ function renderWorld(dt) {
     c.barrels.children.forEach((b, j) => { b.position.z = -Math.max(0, G.recoil - j * 0.15) * 0.25; });
   });
   if (G.twin) {
+    twinCannon.animateVehicle(G.t, dt, G.recoil, drive, G.charge / CHARGE_MAX);
     twinCannon.group.position.set(twinX(), 0, G.cannonZ + G.recoil * 0.12);
     twinCannon.group.rotation.z = -cannon.group.rotation.z;
     twinCannon.group.scale.copy(cannon.group.scale);

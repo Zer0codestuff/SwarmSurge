@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
 import { troopGeometry, weaponGeometry } from './unit-assets.js';
+import { createVehicleRig } from './vehicle-assets.js';
 
 // ---------- helpers ----------
 const matCache = new Map();
@@ -56,7 +57,9 @@ export function blueUnitGeo() {
 
 // Separate instanced overlays keep weapons visible without adding a draw call per troop.
 export function troopWeaponGeo(kind) {
-  return weaponGeometry(kind);
+  const geometry = weaponGeometry(kind);
+  geometry.userData.shared = false;
+  return geometry;
 }
 export function redUnitGeo() {
   return troopGeometry(true);
@@ -147,54 +150,44 @@ export function textPlane(L, w, h, depthTest = true) {
 // ---------- cannon ----------
 export function buildCannon(tint = 0x2f8bff) {
   const g = new THREE.Group();
+  const base = new THREE.Group(); base.name = 'base-cannon'; g.add(base);
   const dark = lam(0x2b2f3a), blue = lam(tint), deep = lam(new THREE.Color(tint).multiplyScalar(0.62).getHex()), black = lam(0x15161a), red = lam(0xe8333a);
-  g.add(mesh(new THREE.BoxGeometry(1.5, 0.38, 1.7), dark, 0, 0.42, 0));
-  g.add(mesh(new THREE.BoxGeometry(1.56, 0.12, 1.76), red, 0, 0.6, 0));
+  base.add(mesh(new THREE.BoxGeometry(1.5, 0.38, 1.7), dark, 0, 0.42, 0));
+  base.add(mesh(new THREE.BoxGeometry(1.56, 0.12, 1.76), red, 0, 0.6, 0));
   const wheelGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.3, 12); wheelGeo.rotateZ(Math.PI / 2);
   const hubGeo = new THREE.BoxGeometry(0.32, 0.5, 0.12);
   const wheels = [];
   for (const x of [-0.82, 0.82]) for (const z of [-0.55, 0.55]) {
     const w = mesh(wheelGeo, black, x, 0.33, z);
     w.add(mesh(hubGeo, red, 0, 0, 0, false));
-    g.add(w); wheels.push(w);
+    base.add(w); wheels.push(w);
   }
   const body = mesh(new THREE.SphereGeometry(0.66, 20, 14), blue, 0, 1.1, 0.1);
   body.scale.set(1, 0.9, 1.05);
-  g.add(body);
+  base.add(body);
   const barrels = new THREE.Group(); barrels.position.set(0, 1.1, -0.2); g.add(barrels);
   const barrelGeo = new THREE.CylinderGeometry(0.19, 0.25, 1.1, 14); barrelGeo.rotateX(Math.PI / 2); barrelGeo.translate(0, 0, -0.55);
   const ringGeo = new THREE.TorusGeometry(0.21, 0.06, 8, 16); ringGeo.translate(0, 0, -1.1);
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2),
     new THREE.MeshLambertMaterial({ color: 0xbff3ff, transparent: true, opacity: 0.55, emissive: 0x3aa0c0 }));
-  dome.position.set(0, 1.55, 0.2); g.add(dome);
+  dome.position.set(0, 1.55, 0.2); base.add(dome);
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xaef6ff });
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), glowMat);
   glow.position.set(0, 1.6, 0.2); g.add(glow);
-  const armor = new THREE.Group(); armor.visible = false; g.add(armor);
-  const tracks = [];
-  for (const side of [-1, 1]) {
-    const track = new THREE.Group(); track.position.set(side * 0.9, 0.4, 0); armor.add(track);
-    track.add(mesh(new THREE.BoxGeometry(0.48, 0.6, 2.3), dark));
-    for (let k = 0; k < 5; k++) {
-      const wheel = mesh(wheelGeo, deep, side * 0.12, 0, (k - 2) * 0.44); track.add(wheel); tracks.push(wheel);
-    }
-    armor.add(mesh(new THREE.BoxGeometry(0.6, 0.16, 2.45), blue, side * 0.92, 0.77, 0));
-  }
-  armor.add(mesh(new THREE.BoxGeometry(1.6, 0.38, 1.85), deep, 0, 0.84, 0.1));
-  const siege = new THREE.Group(); siege.visible = false; armor.add(siege);
-  for (const side of [-1, 1]) {
-    siege.add(mesh(new THREE.BoxGeometry(0.38, 0.44, 1.3), lam(0xffca53), side * 1.02, 1.15, 0.2));
-    for (let k = 0; k < 3; k++) siege.add(mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.65, 6).rotateX(Math.PI / 2), dark, side * 1.02, 1.25, (k - 1) * 0.27));
-  }
-  const antenna = mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.95, 5), dark, 0.5, 1.9, 0.55); armor.add(antenna);
-  armor.add(mesh(new THREE.SphereGeometry(0.08, 6, 4), glowMat, 0.5, 2.4, 0.55, false));
+  const rig = createVehicleRig(tint); g.add(rig.group);
   const shield = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2),
     new THREE.MeshPhongMaterial({ color: 0x75ebff, emissive: 0x124762, transparent: true, opacity: 0.1, depthWrite: false, shininess: 90 }));
   shield.visible = false; g.add(shield);
   function setChassis(tier) {
-    armor.visible = tier > 0; siege.visible = tier > 1;
-    wheels.forEach(w => { w.visible = !tier; });
-    body.scale.set(tier ? 1.2 : 1, tier ? 0.72 : 0.9, tier ? 1.2 : 1.05);
+    rig.setForm(tier);
+    base.visible = rig.formId === 0;
+    body.visible = dome.visible = base.visible;
+    wheels.forEach(w => { w.visible = base.visible; });
+    barrels.position.copy(rig.barrelAnchor);
+    glow.position.copy(rig.glowAnchor);
+  }
+  function animateVehicle(time, dt, recoil, speed, charge) {
+    rig.animate(time, dt, recoil, speed, charge);
   }
   function setBarrels(n) {
     barrels.clear();
@@ -207,7 +200,7 @@ export function buildCannon(tint = 0x2f8bff) {
     }
   }
   setBarrels(1);
-  return { group: g, setBarrels, setChassis, barrels, glow, glowMat, bodyMat: blue, wheels: [...wheels, ...tracks], shield };
+  return { group: g, setBarrels, setChassis, animateVehicle, rig, barrels, glow, glowMat, bodyMat: blue, wheels, shield };
 }
 
 // ---------- gates ----------

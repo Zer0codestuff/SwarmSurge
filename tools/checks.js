@@ -135,6 +135,28 @@ window.runGameChecks = (g) => {
     upgradeCannon('tank'); addBall(G.stage,G.root,0,-1.4,20,1,0,{dmg:3});
     step(STEP); return {pass:G.lives===10 && G.shield===0,lives:G.lives,shield:G.shield};
   })()`);
+  check('All six transformations preserve common guns and reach their rig', `(() => {
+    const forms=[];
+    for(let k=1;k<=6;k++) {
+      upgradeCannon('tank');
+      forms.push(G.chassis===k && cannon.rig.formId===k && twinCannon.rig.formId===k && cannon.barrels.children.length===G.barrels && cannon.barrels.position.equals(cannon.rig.barrelAnchor));
+      cannon.animateVehicle(G.t,.016,.5,4,.8);
+    }
+    return {pass:forms.every(Boolean) && G.shield===6 && G.power===144 && G.aircraft===1 && G.weapon===8,forms};
+  })()`);
+  check('Specialist transformations unlock their equipment and never downgrade', `(() => {
+    upgradeCannon('spider'); const spider=G.chassis===3 && G.weapon===4 && G.rate===2;
+    upgradeCannon('hover'); const hover=G.chassis===4 && (G.weaponMask & (1<<7));
+    upgradeCannon('railfort'); const rail=G.chassis===5 && (G.weaponMask & (1<<5));
+    upgradeCannon('titan'); upgradeCannon('siege');
+    return {pass:!!(spider && hover && rail && G.chassis===6 && G.weaponMask & (1<<8))};
+  })()`);
+  check('Titan and its mixed arsenal survive retry and reset for a new world', `(() => {
+    upgradeCannon('frost'); upgradeCannon('titan'); enterStage(1); $('rretry').click();
+    const retry=G.chassis===6 && cannon.rig.formId===6 && G.aircraft===1 && G.weaponMask===(1<<7|1<<8);
+    startLevel(0);
+    return {pass:retry && G.chassis===0 && cannon.rig.formId===0 && G.weaponMask===0 && cannon.group.getObjectByName('base-cannon').visible};
+  })()`);
   check('Equipment survives stage retry', `(() => {
     upgradeCannon('tank'); upgradeCannon('arc'); upgradeCannon('air'); upgradeCannon('rapid');
     enterStage(1); G.power=1; G.weapon=0; G.aircraft=0; G.chassis=0;
