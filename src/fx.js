@@ -33,6 +33,53 @@ function glowMaterial(blending = THREE.AdditiveBlending) {
 }
 export const glowMaterials = [];
 
+// One reusable draw call for blaster shots, lightning and air-strike trails.
+export class Tracers {
+  constructor(scene, capacity = 128) {
+    this.capacity = capacity; this.head = 0;
+    this.life = new Float32Array(capacity); this.duration = new Float32Array(capacity);
+    this.base = new Float32Array(capacity * 16); this.colors = new Float32Array(capacity * 3);
+    this.matrix = new THREE.Matrix4(); this.rotation = new THREE.Quaternion();
+    this.direction = new THREE.Vector3(); this.position = new THREE.Vector3();
+    this.scale = new THREE.Vector3(); this.axis = new THREE.Vector3(0, 0, 1); this.color = new THREE.Color();
+    this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .82, depthWrite: false }), capacity);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage);
+    this.mesh.frustumCulled = false; this.mesh.count = 0;
+    scene.add(this.mesh);
+  }
+  emit(x1, y1, z1, x2, y2, z2, color, duration = .14, width = .08) {
+    this.direction.set(x2-x1,y2-y1,z2-z1);
+    const length = this.direction.length();
+    if (length < .001 || duration <= 0) return;
+    const i = this.head; this.head = (this.head + 1) % this.capacity;
+    this.rotation.setFromUnitVectors(this.axis, this.direction.divideScalar(length));
+    this.position.set((x1+x2)/2,(y1+y2)/2,(z1+z2)/2); this.scale.set(width,width,length);
+    this.matrix.compose(this.position,this.rotation,this.scale).toArray(this.base,i*16);
+    this.color.set(color).toArray(this.colors,i*3);
+    this.duration[i] = this.life[i] = duration;
+  }
+  update(dt) {
+    let count = 0;
+    const matrices = this.mesh.instanceMatrix.array, colors = this.mesh.instanceColor.array;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.life[i] <= 0) continue;
+      this.life[i] = Math.max(0, this.life[i] - dt);
+      if (!this.life[i]) continue;
+      const fade = Math.sqrt(this.life[i] / this.duration[i]);
+      const src = i*16, dst = count*16;
+      for (let k = 0; k < 16; k++) matrices[dst+k] = this.base[src+k];
+      for (let axis = 0; axis < 3; axis++) { matrices[dst+axis] *= fade; matrices[dst+4+axis] *= fade; }
+      for (let k = 0; k < 3; k++) colors[count*3+k] = this.colors[i*3+k];
+      count++;
+    }
+    this.mesh.count = count;
+    this.mesh.instanceMatrix.needsUpdate = this.mesh.instanceColor.needsUpdate = true;
+  }
+  clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; }
+}
+
 // pool of physics sparks
 export class Sparks {
   constructor(scene, N = 1400) {

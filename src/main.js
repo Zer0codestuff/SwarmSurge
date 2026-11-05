@@ -91,6 +91,7 @@ const sparks = new FX.Sparks(scene);
 const halos = new FX.Halos(scene);
 const debris = new FX.Debris(scene);
 const ambient = new FX.Ambient(scene);
+const tracers = new FX.Tracers(scene);
 
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
@@ -617,7 +618,7 @@ function startLevel(idx, stageIdx = 0) {
   for (let i = 0; i < stageIdx; i++) if (G.stages[i].tower) { G.stages[i].tower.alive = false; G.stages[i].tower.model.group.visible = false; }
   B.n = R.n = 0;
   PT.life.fill(0);
-  sparks.clear(); debris.clear(); G.shatters = [];
+  sparks.clear(); debris.clear(); tracers.clear(); G.shatters = [];
   G.explosions.length = 0;
   G.splits.length = 0;
   G.revives = [];
@@ -1472,12 +1473,7 @@ function addRing(x, z, r, color, life) {
 }
 function addBeam(x1, y1, z1, x2, y2, z2, color, life = 0.14) {
   if (TURBO) return;
-  const len = Math.hypot(x2 - x1, y2 - y1, z2 - z1);
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, len), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 }));
-  m.position.set((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2);
-  m.lookAt(x2, y2, z2);
-  G.root.add(m);
-  G.effects.push({ kind: 'beam', mesh: m, life, max: life });
+  tracers.emit(x1,y1,z1,x2,y2,z2,color,life);
 }
 function addTelegraph(shape, x, z, a, b, time, onHit, cannon = false) {
   let outer = null, inner = null;
@@ -1692,8 +1688,6 @@ function updateEffects(dt) {
     if (e.kind === 'ring') {
       e.mesh.scale.setScalar(e.r * (0.3 + p * 0.9));
       e.mesh.material.opacity = 0.85 * (1 - p);
-    } else if (e.kind === 'beam') {
-      e.mesh.material.opacity = 0.95 * (1 - p);
     } else if (e.kind === 'tele') {
       if (e.inner) {
         if (e.shape === 'circle') e.inner.scale.set(e.a * p, e.a * p, 1);
@@ -2409,6 +2403,7 @@ function renderWorld(dt) {
   updateParticles(dt);
   updatePopups(dt);
   sparks.update(dt);
+  tracers.update(dt);
   debris.update(dt);
   M.shineTexture().offset.x = (G.t * 0.45) % 1;
   for (let k = G.shatters.length - 1; k >= 0; k--) {
