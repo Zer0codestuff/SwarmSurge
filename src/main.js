@@ -6,7 +6,7 @@ import * as FX from './fx.js';
 import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
-import { RANKS, rankOf, WEAPONS, CHASSIS, sweptCircle } from './arsenal.js';
+import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { installTroopMotion, updateTroopMotion } from './unit-assets.js';
@@ -137,22 +137,31 @@ partMesh.count = MAX_PART;
 // ---------------------------------------------------------------- unit pools (struct of arrays)
 function makePool(N) {
   const P = { n: 0, N };
-  for (const k of ['x', 'z', 'px', 'pz', 'vx', 'vz', 'hp', 'phase', 'flash', 'cm', 'sc', 'rad', 'wake', 'age', 'mx', 'stk', 'air', 'adur', 'ax0', 'az0', 'ax1', 'az1', 'shot']) P[k] = new Float32Array(N);
+  for (const k of ['x', 'z', 'px', 'pz', 'vx', 'vz', 'hp', 'phase', 'flash', 'cm', 'sc', 'rad', 'wake', 'age', 'mx', 'stk', 'air', 'adur', 'ax0', 'az0', 'ax1', 'az1', 'shot', 'burn', 'burnDamage', 'chill']) P[k] = new Float32Array(N);
   P.mask = new Uint32Array(N);
   P.mask2 = new Uint32Array(N);
   P.kind = new Uint8Array(N);
   P.st = new Uint8Array(N);
   P.weapon = new Uint8Array(N);
-  P.arrs = [P.x, P.z, P.px, P.pz, P.vx, P.vz, P.hp, P.phase, P.flash, P.cm, P.sc, P.rad, P.wake, P.age, P.mx, P.stk, P.air, P.adur, P.ax0, P.az0, P.ax1, P.az1, P.mask, P.mask2, P.kind, P.st, P.shot, P.weapon];
+  P.arrs = [P.x, P.z, P.px, P.pz, P.vx, P.vz, P.hp, P.phase, P.flash, P.cm, P.sc, P.rad, P.wake, P.age, P.mx, P.stk, P.air, P.adur, P.ax0, P.az0, P.ax1, P.az1, P.mask, P.mask2, P.kind, P.st, P.shot, P.weapon, P.burn, P.burnDamage, P.chill];
   return P;
 }
 const B = makePool(MAX_BLUE), R = makePool(MAX_RED);
+function nextTroopWeapon() {
+  if (!G.weaponMask) return G.weapon;
+  for (let k = 0; k < WEAPONS.length - 1; k++) {
+    const id = 1 + (G.equipCursor++ % (WEAPONS.length - 1));
+    if (G.weaponMask & (1 << id)) return id;
+  }
+  return G.weapon;
+}
 function spawn(P, x, z, hp, kind, mask = 0, mask2 = 0) {
   if (P.n >= P.N) return -1;
   const i = P.n++;
   P.x[i] = P.px[i] = x; P.z[i] = P.pz[i] = z;
   P.vx[i] = P.vz[i] = 0; P.hp[i] = hp; P.kind[i] = kind; P.mask[i] = mask; P.mask2[i] = mask2;
-  P.phase[i] = Math.random() * 6.28; P.flash[i] = 0; P.cm[i] = 1; P.sc[i] = 1; P.rad[i] = 0.3; P.st[i] = 0; P.wake[i] = 0; P.age[i] = 0; P.mx[i] = hp; P.stk[i] = 0; P.air[i] = 0; P.adur[i] = 0; P.shot[i] = Math.random() * 0.9; P.weapon[i] = P === B ? G.weapon : 0;
+  P.phase[i] = Math.random() * 6.28; P.flash[i] = 0; P.cm[i] = 1; P.sc[i] = 1; P.rad[i] = 0.3; P.st[i] = 0; P.wake[i] = 0; P.age[i] = 0; P.mx[i] = hp; P.stk[i] = 0; P.air[i] = 0; P.adur[i] = 0; P.shot[i] = Math.random() * 0.9; P.weapon[i] = P === B ? nextTroopWeapon() : 0;
+  P.burn[i] = P.burnDamage[i] = P.chill[i] = 0;
   return i;
 }
 function compact(P) {
@@ -364,7 +373,7 @@ const G = {
   shake: 0, recoil: 0, kills: 0, time: 0, explosions: [], splits: [], revives: [], effects: [], army: 0, maxArmy: 0, bestCombo: 1, fps: 60,
   moveFrom: 0, moveTo: 0, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, armyPrev: 0, pumpT: 0,
   squad: 0, rad: 0, zones: [], nextMile: 1000, armyAvg: 0,
-  chassis: 0, weapon: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
+  chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
 };
 const cannon = M.buildCannon();
 const twinCannon = M.buildCannon(0xff4fd8);
@@ -372,7 +381,8 @@ const squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.
 const airWing = P.buildSupportPlane();
 airWing.group.visible = false;
 scene.add(cannon.group, twinCannon.group, airWing.group);
-const weaponMeshes = [null, ...[1, 2, 3].map(k => instanced(M.troopWeaponGeo(k), unitMat, MAX_BLUE, false))];
+const weaponMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1), unitMat, MAX_BLUE, false))];
+const weaponCounts = new Uint16Array(WEAPONS.length);
 cannon.group.visible = twinCannon.group.visible = false;
 const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
 const buzz = (p) => { if (!TURBO && isTouch && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
@@ -396,7 +406,7 @@ function gateColor(def, cur) {
   if (def.color && def.t !== 'flip') return GATE_COLORS[def.color];
   return GATE_COLORS[cur.t] ?? GATE_COLORS.mul;
 }
-const UP_NAMES = { barrel: '+2 GUNS', rapid: 'RAPID x2', power: 'POWER x3', twin: 'TWIN GUN', squad: 'ESCORT +1', tank: 'TANK', rifle: 'BLASTERS', rockets: 'ROCKETS', arc: 'ARC RIFLES', air: 'AIR WING' };
+const UP_NAMES = { barrel: '+2 GUNS', rapid: 'RAPID x2', power: 'POWER x3', twin: 'TWIN GUN', squad: 'ESCORT +1', tank: 'TANK', air: 'AIR WING', ...Object.fromEntries(WEAPON_SPECS.slice(1).map(spec => [spec.key, spec.name.toUpperCase()])) };
 const SLOT_FACES = ['x100', '÷3', 'x7', '÷2', 'x50', 'x3', '777'];
 const opText = (c, boost = 1) => (c.t === 'mul' ? 'x' + fmt(c.v * boost) : c.t === 'add' ? '+' + fmt(c.v * boost) : '÷' + c.v);
 function refreshGate(g) {
@@ -642,7 +652,7 @@ function startLevel(idx, stageIdx = 0) {
     paused: false, resumePhase: null, weaponCursor: 0, t: 0,
     log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgTotal: 0, army: 0, squad: 0, nextMile: 1000, armyAvg: 0,
-    chassis: 0, weapon: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
+    chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
   });
   setBarrels(1);
   cannon.setChassis(0); twinCannon.setChassis(0);
@@ -669,7 +679,7 @@ function addBall(S, root, x, z, hp, r, speed, def = {}) {
   return b;
 }
 function enterStage(i) {
-  G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives, chassis: G.chassis, weapon: G.weapon, aircraft: G.aircraft, shield: G.shield };
+  G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives, chassis: G.chassis, weapon: G.weapon, weaponMask: G.weaponMask, aircraft: G.aircraft, shield: G.shield };
   G.rad = 0; G.armyAvg = 0; G.overdrive = 0; G.airPass = 0; G.airT = 2;
   for (const zn of G.zones) if (zn.mesh) { G.root.remove(zn.mesh); zn.mesh.geometry.dispose(); }
   G.zones.length = 0;
@@ -707,7 +717,10 @@ function renderUps() {
   if (G.twin) html += `<span class="up tw">TWIN</span>`;
   if (G.squad) html += `<span class="up sq">ESCORT ×${G.squad}</span>`;
   if (G.chassis) html += `<span class="up pw">${CHASSIS[G.chassis]}</span>`;
-  if (G.weapon) html += `<span class="up tw">${WEAPONS[G.weapon]}</span>`;
+  if (G.weapon) {
+    const count = WEAPON_SPECS.slice(1).filter((_, i) => G.weaponMask & (1 << (i + 1))).length;
+    html += `<span class="up tw">${count > 1 ? 'ARSENAL ×' + count : WEAPONS[G.weapon]}</span>`;
+  }
   if (G.aircraft) html += `<span class="up sq">Air wing ${G.aircraft > 1 ? 'x' + G.aircraft : ''}</span>`;
   hud.ups.innerHTML = html;
 }
@@ -795,6 +808,16 @@ function nearestVisibleRed(S, x, z, range, excluded = null, forwardOnly = true) 
   }
   return index;
 }
+function hitArmedRed(j, damage, spec, troopPower) {
+  if (R.hp[j] <= 0) return;
+  R.hp[j] -= damage; R.flash[j] = 1; R.st[j] = 0;
+  if (R.hp[j] <= 0) { killRed(j); return; }
+  if (spec.burn) {
+    R.burn[j] = spec.burn;
+    R.burnDamage[j] = Math.max(R.burnDamage[j], troopPower * .09);
+  }
+  if (spec.chill) R.chill[j] = spec.chill;
+}
 function updateArsenal(S, dt) {
   let budget = 5, searches = 0;
   for (let i = 0; i < B.n; i++) B.shot[i] -= dt;
@@ -802,52 +825,65 @@ function updateArsenal(S, dt) {
   for (let offset = 0; offset < B.n && budget > 0; offset++) {
     const i = (cursor + offset) % B.n;
     G.weaponCursor = i + 1;
-    if (B.hp[i] <= 0 || !B.weapon[i] || B.adur[i] > 0) continue;
-    if (B.shot[i] > 0) continue;
+    if (B.hp[i] <= 0 || !B.weapon[i] || B.adur[i] > 0 || B.shot[i] > 0) continue;
     if (searches++ >= 48) break;
-    const x = B.x[i], z = B.z[i], weapon = B.weapon[i];
-    const range = weapon === 2 ? 10 : 8;
-    const damage = B.hp[i] * (weapon === 2 ? 0.85 : weapon === 3 ? 0.5 : 0.3);
-    const color = weapon === 3 ? 0x8affed : weapon === 2 ? 0xffb454 : 0xc2f2ff;
-    // Balls get priority and absorb ranged fire while stationary as well as rolling.
+    const x = B.x[i], z = B.z[i], spec = WEAPON_SPECS[B.weapon[i]];
+    if (!spec) continue;
+    const { range, color } = spec, damage = B.hp[i] * spec.damage;
+    // Balls intercept direct fire, including shots fired before they start rolling.
     const ball = S.balls.find(b => b.alive && b.hp > 0 && b.z < z && Math.hypot(b.x - x, b.z - z) < range + b.r && !shotBlocked(S, x, z, b.x, b.z));
     let j = ball ? -1 : nearestVisibleRed(S, x, z, range);
     const target = !ball && j < 0 ? [S.tower, S.boss, ...S.spawners, ...S.turrets].find(t => t?.alive && t.hp > 0 && t.z < z && Math.hypot((t.x ?? 0) - x, t.z - z) < range + 2 && !shotBlocked(S, x, z, t.x ?? 0, t.z)) : null;
     if (!ball && j < 0 && !target) { B.shot[i] = .12; continue; }
-    B.shot[i] = weapon === 2 ? 1.25 : weapon === 3 ? .8 : .95;
-    budget--;
+    B.shot[i] = spec.cooldown; budget--;
     B.flash[i] = Math.max(B.flash[i], .25);
     if (ball) {
-      rangedHit(ball, damage); ball.impact = 0.15;
-      addBeam(x, 0.65, z, ball.x, ball.r, ball.z, color, 0.09);
+      rangedHit(ball, damage); ball.impact = .15;
+      if (spec.chill) ball.chill = spec.chill;
+      addBeam(x, .65, z, ball.x, ball.r, ball.z, color, .09);
       if (ball.hp <= 0) ballDies(S, ball, false);
-    } else if (j >= 0) {
-      const tx = R.x[j], tz = R.z[j];
-      addBeam(x, 0.65, z, tx, 0.6, tz, color, 0.09);
-      R.hp[j] -= damage; R.flash[j] = 1;
-      if (R.hp[j] <= 0) killRed(j);
-      if (weapon === 2) {
-        addRing(tx, tz, 1.6, color, 0.2);
-        for (let k = 0; k < R.n; k++) if (k !== j && R.hp[k] > 0 && (R.x[k] - tx) ** 2 + (R.z[k] - tz) ** 2 < 2.56 && !shotBlocked(S, tx, tz + 0.01, R.x[k], R.z[k])) {
-          R.hp[k] -= damage * 0.65; R.flash[k] = 1; if (R.hp[k] <= 0) killRed(k);
-        }
-      } else if (weapon === 3) {
-        const visited = new Set([j]);
-        let fromX = tx, fromZ = tz;
-        for (let chain = 0; chain < 2; chain++) {
-          j = nearestVisibleRed(S, fromX, fromZ, 3.5, visited, false);
-          if (j < 0) break;
-          visited.add(j);
-          addBeam(fromX, 0.7, fromZ, R.x[j], 0.7, R.z[j], color, 0.12);
-          R.hp[j] -= damage * 0.7; R.flash[j] = 1;
-          fromX = R.x[j]; fromZ = R.z[j];
-          if (R.hp[j] <= 0) killRed(j);
-        }
+      continue;
+    }
+    if (j < 0) {
+      rangedHit(target, damage * (S.breach || 1));
+      addBeam(x, .65, z, target.x ?? 0, 2, target.z, color, .08);
+      continue;
+    }
+    const tx = R.x[j], tz = R.z[j], primary = j;
+    addBeam(x, .65, z, tx, .6, tz, color, .09);
+    hitArmedRed(j, damage, spec, B.hp[i]);
+    if (spec.splash) {
+      addRing(tx, tz, spec.splash, color, .2);
+      for (let k = 0; k < R.n; k++) if (k !== primary && R.hp[k] > 0 && (R.x[k] - tx) ** 2 + (R.z[k] - tz) ** 2 < spec.splash ** 2 && !shotBlocked(S, tx, tz + .01, R.x[k], R.z[k])) {
+        hitArmedRed(k, damage * .65, spec, B.hp[i]);
       }
-    } else {
-      if (target) {
-        rangedHit(target, damage * (S.breach || 1));
-        addBeam(x, 0.65, z, target.x ?? 0, 2, target.z, color, 0.08);
+    } else if (spec.chain) {
+      const visited = new Set([j]);
+      let fromX = tx, fromZ = tz;
+      for (let chain = 0; chain < spec.chain; chain++) {
+        j = nearestVisibleRed(S, fromX, fromZ, 3.5, visited, false);
+        if (j < 0) break;
+        visited.add(j);
+        addBeam(fromX, .7, fromZ, R.x[j], .7, R.z[j], color, .12);
+        hitArmedRed(j, damage * .7, spec, B.hp[i]);
+        fromX = R.x[j]; fromZ = R.z[j];
+      }
+    } else if (spec.cone || spec.pierce) {
+      const distance = Math.hypot(tx - x, tz - z), dx = (tx - x) / distance, dz = (tz - z) / distance;
+      const candidates = [];
+      for (let k = 0; k < R.n; k++) {
+        if (k === primary || R.hp[k] <= 0) continue;
+        const rx = R.x[k] - x, rz = R.z[k] - z;
+        const along = rx * dx + rz * dz, side = Math.abs(rx * dz - rz * dx);
+        const d = Math.hypot(rx, rz);
+        const inside = spec.pierce ? along > distance && along < range && side < .55 : along > 0 && d < range && along / d > spec.cone;
+        if (inside && !shotBlocked(S, x, z, R.x[k], R.z[k])) candidates.push({ k, distance: d });
+      }
+      candidates.sort((a, b) => a.distance - b.distance);
+      const count = (spec.targets || spec.pierce) - 1;
+      for (const { k } of candidates.slice(0, count)) {
+        hitArmedRed(k, damage * (spec.pierce ? .8 : .75), spec, B.hp[i]);
+        addBeam(x, .65, z, R.x[k], .6, R.z[k], color, spec.burn ? .16 : .09);
       }
     }
   }
@@ -977,10 +1013,10 @@ function upgradeCannon(up) {
     banner(CHASSIS[G.chassis].toUpperCase() + '!', 'gold');
   } else if (up === 'air') { G.aircraft = Math.min(3, G.aircraft + 1); G.airT = 0.2; banner('AIR WING INBOUND!', 'gold'); }
   else {
-    const weapon = { rifle: 1, rockets: 2, arc: 3 }[up];
+    const weapon = WEAPON_IDS[up];
     if (!weapon) return;
-    G.weapon = Math.max(G.weapon, weapon);
-    for (let i = 0; i < B.n; i++) B.weapon[i] = G.weapon;
+    G.weapon = weapon; G.weaponMask |= 1 << weapon;
+    for (let i = 0; i < B.n; i++) B.weapon[i] = nextTroopWeapon();
     banner(WEAPONS[G.weapon].toUpperCase() + ' ONLINE!', 'gold');
   }
   G.cannonPulse = 1; renderUps();
@@ -1265,6 +1301,14 @@ function moveRed(S, dt) {
   const k = Math.min(1, dt * 4);
   for (let i = 0; i < R.n; i++) {
     if (R.hp[i] <= 0) continue;
+    if (R.burn[i] > 0) {
+      R.hp[i] -= R.burnDamage[i] * Math.min(dt, R.burn[i]);
+      R.burn[i] = Math.max(0, R.burn[i] - dt);
+      if (R.burn[i] === 0) R.burnDamage[i] = 0;
+      if (R.hp[i] <= 0) { killRed(i); continue; }
+    }
+    const slow = R.chill[i] > 0 ? .42 : 1;
+    R.chill[i] = Math.max(0, R.chill[i] - dt);
     const T = RED_TYPES[R.kind[i]];
     let x = R.x[i], z = R.z[i];
     R.age[i] += dt;
@@ -1281,8 +1325,8 @@ function moveRed(S, dt) {
       dx = tx / d; dz = Math.max(tz / d, 0.35);
     }
     const n = Math.hypot(dx, dz);
-    R.vx[i] += (dx / n * T.speed - R.vx[i]) * k;
-    R.vz[i] += (dz / n * T.speed - R.vz[i]) * k;
+    R.vx[i] += (dx / n * T.speed * slow - R.vx[i]) * k;
+    R.vz[i] += (dz / n * T.speed * slow - R.vz[i]) * k;
     let pxs = 0, pzs = 0;
     const cx = cellX(x), cz = cellZ(z), ri = R.rad[i];
     for (let gz = cz - 1; gz <= cz + 1; gz++) {
@@ -1988,7 +2032,8 @@ function updateMechanics(S, dt) {
     b.r = b.r0 * Math.max(0.4, Math.cbrt(b.hp / b.max));
     if (G.phase !== 'play') continue;
     if (b.delay > 0) { b.delay -= dt; continue; }
-    const sp = b.speed * (S.enraged ? 1.6 : 1) * (b.impact > 0 ? 0.45 : 1);
+    const sp = b.speed * (S.enraged ? 1.6 : 1) * (b.impact > 0 ? 0.45 : 1) * (b.chill > 0 ? .55 : 1);
+    b.chill = Math.max(0, (b.chill || 0) - dt);
     b.impact = Math.max(0, b.impact - dt);
     b.z += sp * dt;
     b.x = clamp(b.x + clamp(G.cx - b.x, -1, 1) * (b.def.home ?? 0.25) * dt, -XLIM + b.r * 0.6, XLIM - b.r * 0.6);
@@ -2192,7 +2237,7 @@ function lose(msg) {
 // ---------------------------------------------------------------- rendering
 function writeBlue() {
   const m = blueMesh.instanceMatrix.array, c = blueMesh.instanceColor.array;
-  const counts = [0, 0, 0, 0];
+  const counts = weaponCounts; counts.fill(0);
   const rb = ((G.t * 5) | 0) % 32;
   let haloCount = 0, topRank = 0;
   for (let i = 0; i < B.n; i++) {
@@ -2212,7 +2257,7 @@ function writeBlue() {
     c[i * 3] = col[0] + (1 - col[0]) * f; c[i * 3 + 1] = col[1] + (1 - col[1]) * f; c[i * 3 + 2] = col[2] + (1 - col[2]) * f;
   }
   G.rank = topRank;
-  for (let k = 1; k <= 3; k++) { weaponMeshes[k].count = counts[k]; weaponMeshes[k].instanceMatrix.needsUpdate = true; }
+  for (let k = 1; k < weaponMeshes.length; k++) { weaponMeshes[k].count = counts[k]; weaponMeshes[k].instanceMatrix.needsUpdate = true; }
   blueMesh.count = B.n;
   blueMesh.instanceMatrix.needsUpdate = true;
   blueMesh.instanceColor.needsUpdate = true;
@@ -2243,7 +2288,7 @@ function writeRed() {
   for (const k in ovCount) ovCount[k] = 0;
   let labels = 0;
   for (let i = 0; i < R.n; i++) {
-    const kind = R.kind[i], col = RED_RGB[kind];
+    const kind = R.kind[i], col = R.chill[i] > 0 ? TIER_RGB[1] : R.burn[i] > 0 ? TIER_RGB[6] : RED_RGB[kind];
     if (R.st[i]) { R.vx[i] = 0; R.vz[i] = 0.01; }
     writeMatrix(m, i, R, R.sc[i], R.st[i] ? 0 : 0.8);
     const f = Math.max(0, R.flash[i]) * 0.75;
@@ -2559,7 +2604,7 @@ $('rnext').addEventListener('click', () => startLevel(G.levelIdx + 1));
 $('rretry').addEventListener('click', () => {
   const snap = G.snap;
   startLevel(G.levelIdx, snap.stage);
-  Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, aircraft: snap.aircraft, shield: snap.shield, lives: Math.max(snap.lives, 5) });
+  Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, weaponMask: snap.weaponMask, aircraft: snap.aircraft, shield: snap.shield, lives: Math.max(snap.lives, 5) });
   setBarrels(G.barrels);
   cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
   twinCannon.group.visible = G.twin;

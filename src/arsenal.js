@@ -19,7 +19,19 @@ export function rankOf(power) {
   while (rank + 1 < RANKS.length && power >= RANKS[rank + 1].min) rank++;
   return rank;
 }
-export const WEAPONS = ['Unarmed', 'Blasters', 'Rockets', 'Arc rifles'];
+export const WEAPON_SPECS = [
+  null,
+  { key: 'rifle', name: 'Blasters', range: 8, damage: .3, cooldown: .95, color: 0xc2f2ff },
+  { key: 'rockets', name: 'Rockets', range: 10, damage: .85, cooldown: 1.25, color: 0xffb454, splash: 1.6 },
+  { key: 'arc', name: 'Arc rifles', range: 8, damage: .5, cooldown: .8, color: 0x8affed, chain: 2 },
+  { key: 'scatter', name: 'Scatterguns', range: 5.8, damage: .42, cooldown: .72, color: 0xffe0a3, cone: .82, targets: 3 },
+  { key: 'rail', name: 'Railguns', range: 15, damage: 1.1, cooldown: 1.65, color: 0xb4b0ff, pierce: 3 },
+  { key: 'flame', name: 'Flamethrowers', range: 4.5, damage: .13, cooldown: .3, color: 0xff8b42, cone: .7, targets: 6, burn: 2 },
+  { key: 'frost', name: 'Frost projectors', range: 9, damage: .35, cooldown: .7, color: 0x80eaff, chill: 1.8, splash: 1.3 },
+  { key: 'plasma', name: 'Plasma casters', range: 11, damage: .8, cooldown: 1.1, color: 0xff8dec, splash: 2.4 },
+];
+export const WEAPONS = ['Unarmed', ...WEAPON_SPECS.slice(1).map(spec => spec.name)];
+export const WEAPON_IDS = Object.fromEntries(WEAPON_SPECS.slice(1).map((spec, i) => [spec.key, i + 1]));
 export const CHASSIS = ['Cannon', 'Bulldog tank', 'Siege crawler'];
 
 // Test relative motion, so a rolling ball and a fast troop cannot tunnel through each other.
