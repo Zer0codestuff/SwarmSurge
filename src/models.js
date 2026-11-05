@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
+import { troopGeometry, weaponGeometry } from './unit-assets.js';
 
 // ---------- helpers ----------
 const matCache = new Map();
@@ -50,51 +51,20 @@ export function merge(parts) {
 
 // ---------- units (instanced; instance color multiplies the baked vertex colors) ----------
 export function blueUnitGeo() {
-  const parts = [];
-  const body = new THREE.CapsuleGeometry(0.27, 0.3, 4, 10); body.translate(0, 0.46, 0); parts.push(paint(body, 0xffffff));
-  for (let k = -1; k <= 1; k++) {
-    const s = new THREE.ConeGeometry(0.1, 0.34, 6);
-    s.rotateZ(-k * 0.6); s.translate(k * 0.14, 0.86 - Math.abs(k) * 0.05, -0.03);
-    parts.push(paint(s, 0xe8f6ff));
-  }
-  for (const sx of [-1, 1]) {
-    const e = new THREE.SphereGeometry(0.065, 8, 6); e.translate(sx * 0.1, 0.6, 0.235); parts.push(paint(e, 0x081028));
-  }
-  for (const sx of [-1, 1]) {
-    const f = new THREE.SphereGeometry(0.1, 6, 4); f.scale(1, 0.6, 1.3); f.translate(sx * 0.13, 0.06, 0.03); parts.push(paint(f, 0xcfe2ff));
-    const arm = new THREE.CapsuleGeometry(0.075, 0.17, 3, 6); arm.rotateZ(sx * 0.3); arm.translate(sx * 0.28, 0.4, 0.04); parts.push(paint(arm, 0xddeaff));
-  }
-  const visor = new THREE.BoxGeometry(0.38, 0.09, 0.06); visor.translate(0, 0.69, 0.23); parts.push(paint(visor, 0xffffff));
-  const pack = new THREE.BoxGeometry(0.26, 0.28, 0.14); pack.translate(0, 0.43, -0.25); parts.push(paint(pack, 0x546782));
-  return merge(parts);
+  return troopGeometry();
 }
 
 // Separate instanced overlays keep weapons visible without adding a draw call per troop.
 export function troopWeaponGeo(kind) {
-  const parts = [];
-  const body = new THREE.BoxGeometry(kind === 2 ? 0.19 : 0.12, 0.15, kind === 2 ? 0.6 : 0.44);
-  body.translate(0.29, 0.44, 0.27); parts.push(paint(body, 0x233c58));
-  const muzzle = new THREE.CylinderGeometry(0.065, 0.065, 0.14, 6); muzzle.rotateX(Math.PI / 2); muzzle.translate(0.29, 0.45, 0.58);
-  parts.push(paint(muzzle, kind === 3 ? 0x77fff0 : kind === 2 ? 0xffad45 : 0xd8f7ff));
-  if (kind === 2) {
-    const tip = new THREE.ConeGeometry(0.1, 0.2, 6); tip.rotateX(Math.PI / 2); tip.translate(0.29, 0.45, 0.68); parts.push(paint(tip, 0xff704b));
-  }
-  return merge(parts).scale(1.2, 1.2, 1.2);
+  return weaponGeometry(kind);
 }
 export function redUnitGeo() {
-  const parts = [];
-  const body = new THREE.CapsuleGeometry(0.28, 0.28, 4, 10); body.translate(0, 0.45, 0); parts.push(paint(body, 0xffffff));
-  for (const sx of [-1, 1]) {
-    const h = new THREE.ConeGeometry(0.08, 0.26, 6); h.rotateZ(-sx * 0.55); h.translate(sx * 0.17, 0.82, 0); parts.push(paint(h, 0xffe9b0));
-    const e = new THREE.SphereGeometry(0.065, 8, 6); e.translate(sx * 0.1, 0.58, 0.24); parts.push(paint(e, 0x1a0505));
-    const f = new THREE.SphereGeometry(0.1, 6, 4); f.scale(1, 0.6, 1.3); f.translate(sx * 0.13, 0.06, 0.03); parts.push(paint(f, 0xb08080));
-  }
-  return merge(parts);
+  return troopGeometry(true);
 }
 export function bombGeo() {
-  const b = new THREE.SphereGeometry(0.2, 10, 8); b.translate(0, 1.0, 0); paint(b, 0x222222);
-  const f = new THREE.CylinderGeometry(0.03, 0.03, 0.18, 5); f.translate(0, 1.26, 0); paint(f, 0xffaa22);
-  const s = new THREE.SphereGeometry(0.06, 6, 4); s.translate(0, 1.37, 0); paint(s, 0xffee55);
+  const b = new THREE.SphereGeometry(0.2, 10, 8); b.translate(0, 1.18, 0); paint(b, 0x222222);
+  const f = new THREE.CylinderGeometry(0.03, 0.03, 0.18, 5); f.translate(0, 1.44, 0); paint(f, 0xffaa22);
+  const s = new THREE.SphereGeometry(0.06, 6, 4); s.translate(0, 1.55, 0); paint(s, 0xffee55);
   return merge([b, f, s]);
 }
 export function shieldGeo() {
@@ -105,9 +75,9 @@ export function shieldGeo() {
 }
 // tank helmet / splitter spikes ride on top of the red body like the bomb does
 export function helmetGeo() {
-  const h = new THREE.SphereGeometry(0.33, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2); h.translate(0, 0.62, 0); paint(h, 0x4a4f5a);
-  const v = new THREE.BoxGeometry(0.5, 0.08, 0.12); v.translate(0, 0.62, 0.27); paint(v, 0x22252c);
-  const s = new THREE.ConeGeometry(0.07, 0.25, 6); s.translate(0, 1.0, 0); paint(s, 0x9aa0aa);
+  const h = new THREE.SphereGeometry(0.33, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2); h.translate(0, 0.84, 0); paint(h, 0x4a4f5a);
+  const v = new THREE.BoxGeometry(0.5, 0.08, 0.12); v.translate(0, 0.84, 0.27); paint(v, 0x22252c);
+  const s = new THREE.ConeGeometry(0.07, 0.25, 6); s.translate(0, 1.22, 0); paint(s, 0x9aa0aa);
   return merge([h, v, s]);
 }
 export function spikesGeo() {
@@ -116,7 +86,7 @@ export function spikesGeo() {
     const a = (k / 5) * Math.PI * 2;
     const c = new THREE.ConeGeometry(0.08, 0.3, 5);
     c.rotateZ(Math.cos(a) * 0.9); c.rotateX(Math.sin(a) * 0.9);
-    c.translate(Math.cos(a) * 0.18, 0.78, Math.sin(a) * 0.18);
+    c.translate(Math.cos(a) * 0.18, 1.0, Math.sin(a) * 0.18);
     parts.push(paint(c, 0xffe0ff));
   }
   return merge(parts);

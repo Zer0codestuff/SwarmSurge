@@ -9,6 +9,7 @@ import * as W from './worlds.js';
 import { RANKS, rankOf, WEAPONS, CHASSIS, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
+import { installTroopMotion, updateTroopMotion } from './unit-assets.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -119,6 +120,11 @@ function instanced(geo, mat, n, shadow = true) {
 const unitMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const blueMesh = instanced(M.blueUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x0c3060, gradientMap: M.toonGradient() }), MAX_BLUE);
 const redMesh = instanced(M.redUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x400808, gradientMap: M.toonGradient() }), MAX_RED);
+for (const mesh of [blueMesh,redMesh]) {
+  installTroopMotion(mesh.material);
+  mesh.customDepthMaterial = mesh.material.userData.troopMotion.depthMaterial;
+  mesh.customDistanceMaterial = mesh.material.userData.troopMotion.distanceMaterial;
+}
 const overlays = {
   2: instanced(M.bombGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
   3: instanced(M.shieldGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
@@ -2253,6 +2259,7 @@ function writeRed() {
   for (let k = labels; k < bruteLabels.length; k++) hideLabel(bruteLabels[k]);
 }
 function renderWorld(dt) {
+  updateTroopMotion(G.t);
   labelLayer.style.visibility = G.phase === 'menu' || G.shown ? 'hidden' : 'visible';
   // camera framing adapts to portrait (phones) and landscape (desktop)
   const aspect = innerWidth / innerHeight;
