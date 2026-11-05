@@ -1,0 +1,5 @@
+tools/node_modules/
+tools/out/
+*.png
+# third-party reference frames used for design, kept local only
+reference/
