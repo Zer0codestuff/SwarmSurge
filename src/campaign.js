@@ -8,13 +8,13 @@ const ROUTES = [
   ['rifle', 'air', 'tank', 0.65],
   ['rifle', 'rockets', 'arc', 0.65],
   ['tank', 'air', 'arc', 0.65],
-  ['air', 'rifle', 'rockets', 0.6],
+  ['squad', 'rifle', 'rockets', 0.6],
   ['tank', 'rockets', 'arc', 0.8],
   ['rifle', 'tank', 'air', 0.8],
   ['tank', 'rifle', 'rockets', 0.65],
-  ['air', 'tank', 'arc', 0.45],
+  ['squad', 'tank', 'arc', 0.45],
   ['rifle', 'air', 'rockets', 0.65],
-  ['arc', 'tank', 'air', 0.6],
+  ['arc', 'tank', 'squad', 0.6],
   ['tank', 'rockets', 'tank', 0.65],
   ['rifle', 'tank', 'arc', 0.5],
   ['rockets', 'air', 'tank', 0.7],
@@ -29,6 +29,7 @@ const LESSONS = {
   tank: 'Build a tank. Extra barrels, double shot power and reinforced armor.',
   air: 'Call the air wing. It makes repeated bombing runs for this level.',
   rapid: 'Rapid doubles your firing rate. Stack it to reach x8.',
+  squad: 'Deploy an escort cannon. It mirrors your guns and adds two armor points.',
 };
 const FLANK_TYPES = { jungle:4, neon:7, candy:6, moon:5, sky:7, void:9, factory:8, casino:2, coral:4, spooky:9, arena:3, crystal:6, volcano:12, tomb:10, storm:7, blackhole:9 };
 

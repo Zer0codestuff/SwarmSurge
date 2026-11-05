@@ -73,6 +73,16 @@ window.runGameChecks = (g) => {
     const power=Array.from(B.hp.slice(0,B.n)).reduce((a,b)=>a+b,0);
     return {pass:B.n===1000 && power===1003,power};
   })()`);
+  check('Charged giants preserve their power in a full pool', `(() => {
+    for(let k=0;k<B.N;k++) spawn(B,0,-2,1,0);
+    G.power=2; G.charge=CHARGE_MAX-1; G.fireT=0; fireCannon(STEP);
+    const power=Array.from(B.hp.slice(0,B.n)).reduce((a,b)=>a+b,0);
+    return {pass:power===1032 && G.charge===0 && B.kind.some(k=>k===1),power};
+  })()`);
+  check('Escort cannons mirror the volley and reinforce armor', `(() => {
+    upgradeCannon('barrel'); upgradeCannon('squad'); G.fireT=0; fireCannon(STEP);
+    return {pass:G.squad===1 && G.shield===2 && B.n===6,units:B.n};
+  })()`);
   check('Rapid doubles the rate and caps at x8', `(() => {
     upgradeCannon('rapid'); const first=G.rate; upgradeCannon('rapid');
     upgradeCannon('rapid'); upgradeCannon('rapid');
