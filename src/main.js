@@ -771,7 +771,8 @@ function applyGate(S, g, i) {
   const lo = g.x - g.w / 2 + 0.25, hi = g.x + g.w / 2 - 0.25;
   for (let k = 0; k < n; k++) {
     const j = spawn(B, clamp(B.x[i] + rand(-0.6, 0.6), lo, hi), B.z[i] - Math.random() * 0.8, share, B.kind[i], B.mask[i], B.mask2[i]);
-    B.vx[j] = B.vx[i] + rand(-1.5, 1.5); B.vz[j] = B.vz[i]; B.flash[j] = 1; B.cm[j] = cm;
+    // copies inherit the loop counter too, or they could loop forever
+    B.vx[j] = B.vx[i] + rand(-1.5, 1.5); B.vz[j] = B.vz[i]; B.flash[j] = 1; B.cm[j] = cm; B.stk[j] = B.stk[i];
   }
   comboCheck(S, i, g.x, g.z);
 }
@@ -796,7 +797,8 @@ function detonateNuke(S, g, mult = 5, label = 'NUKE! ARMY x5') {
   for (const b of S.balls) if (b.alive) b.hp = 0;
   for (const e of G.effects) if (e.kind === 'tele') { e.life = Math.min(e.life, 0.01); e.onHit = () => {}; }
   const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
-  if (T && g) {
+  // only the first blast of each nuke hits the fort/boss (refills still pump the army and clear the field)
+  if (T && g && !g.blasts) {
     const d = T.max * (g.def.dmg ?? 0.5);
     T.hp -= d; T.flash = 1; G.dmgAcc += d; G.dmgTotal += d;
     if (T === S.boss) { T.z = T.startZ; T.stun = 6; T.atkT = Math.max(T.atkT, 6.5); }
@@ -816,12 +818,17 @@ function detonateNuke(S, g, mult = 5, label = 'NUKE! ARMY x5') {
   for (let k = 0; k < 6; k++) spark(rand(-6, 6), 1, G.z0 - rand(8, 55), PCOL.green, 20, 9, 1.4, 0.9);
   banner(label, 'gold', 1.6);
   sound.play('nuke');
-  if (g) { g.need = Math.round(g.need * 1.3); g.prog = 0; }
+  // a nuke recharges for 6 s and burns out after 3 blasts, so the x5 can't chain into infinity
+  if (g) {
+    g.need = Math.round(g.need * 6); g.prog = 0; g.blasts = (g.blasts || 0) + 1; g.coolUntil = S.time + 6;
+    if (g.blasts >= 3) { g.alive = false; g.dying = 1; }
+  }
 }
 function starPower(S, g) {
   for (const q of S.gates) {
     const t = q.def.t;
-    if (!q.alive || !(t === 'mul' || t === 'add' || t === 'charge' || t === 'flip')) continue;
+    // each gate tops out at x8 (three stars), so stars stay explosive without running off to infinity
+    if (!q.alive || !(t === 'mul' || t === 'add' || t === 'charge' || t === 'flip') || q.boost >= 8) continue;
     q.boost *= 2; q.dirty = true; q.flash = 1;
     burst(q.x, 2, q.z, PCOL.pink, 10, 5);
     spark(q.x, 1.5, q.z, PCOL.pink, 14, 6, 1.1, 0.7);
@@ -837,6 +844,9 @@ function starPower(S, g) {
   sound.play('star');
   g.need = Math.round(g.need * 3);
   g.prog = 0;
+  // a star burns out after three uses
+  g.uses = (g.uses || 0) + 1;
+  if (g.uses >= 3) { g.alive = false; g.dying = 1; burst(g.x, 1.5, g.z, PCOL.pink, 40, 7); }
 }
 // blockers soak up power and break; absorbers fill up and trigger an effect
 function absorb(S, g, i) {
@@ -844,6 +854,7 @@ function absorb(S, g, i) {
   g.flash = 1;
   g.dirty = true;
   if (ABSORBERS.has(t)) {
+    if (t === 'nuke' && g.coolUntil > S.time) return; // recharging: units walk straight through
     const d = Math.min(B.hp[i], g.need - g.prog);
     B.hp[i] -= d; g.prog += d;
     if (B.hp[i] <= 0) burst(B.x[i], 0.8, B.z[i], t === 'star' ? PCOL.pink : t === 'nuke' ? PCOL.green : PCOL.gold, 2, 2.5);
@@ -1232,7 +1243,9 @@ function spawnHordes(S) {
 }
 // enemies get stronger the longer a stage lasts (x2 every 25 s), scaled by the level's threat
 function threat(S) {
-  return (LEVELS[G.levelIdx].threat ?? 1) * 2 ** (S.time / 25) * (S.enraged ? 2 : 1);
+  // red units start soft and harden over the first ~16 s of a stage, then keep doubling every 25 s
+  const soft = Math.min(1, 0.35 + S.time / 25);
+  return (LEVELS[G.levelIdx].threat ?? 1) * soft * 2 ** (S.time / 25) * (S.enraged ? 2 : 1);
 }
 // boss minions are elite: each one carries a few % of your recent army (capped by a slice of the boss's hp)
 function summon(b, kind, n, frac = 0.0012, spread = 3) {
@@ -1804,10 +1817,12 @@ function step(dt) {
     for (const s of S.spawners) {
       if (!s.alive) continue;
       s.timer -= dt;
-      if (s.timer <= 0) {
+      // spawners wake up after a few seconds and ramp up, like the waves, so you can get your stream going
+      if (s.timer <= 0 && S.time > 4) {
         s.timer = s.def.every;
         const hp = (s.def.unitHp ?? 3) * threat(S);
-        for (let k = 0; k < s.def.n; k++) {
+        const n = Math.max(1, Math.round(s.def.n * Math.min(1, 0.35 + S.time / 35)));
+        for (let k = 0; k < n; k++) {
           const j = spawnRed(s.x + rand(-1, 1), s.z + 1.6 + rand(0, 1), s.def.kind ?? 0, hp);
           if (j >= 0 && s.def.style === 'rival') R.vz[j] *= 1.5;
         }
@@ -2087,6 +2102,7 @@ function renderWorld(dt) {
       else if (t === 'jump') { grp.scale.set(1, 1 - g.flash * 0.35, 1); }
       else if (t === 'hangar') { g.model.plane.position.y = 2.2 + Math.sin(G.t * 2 + g.ph) * 0.15; g.model.plane.rotation.z = Math.sin(G.t * 1.3 + g.ph) * 0.1; }
       else if (t === 'tesla') { g.model.orb.scale.setScalar(g.active ? 1 + Math.sin(G.t * 30) * 0.15 + (g.zapT < 0.1 ? 0.4 : 0) : 0.7 + g.prog / g.need * 0.4); g.model.panelMat.opacity = (g.active ? 0.2 : 0.45) + g.flash * 0.3; }
+      else if (t === 'nuke' && g.coolUntil > S.time) g.model.panelMat.opacity = 0.12 + Math.abs(Math.sin(G.t * 4)) * 0.2;
       else if (t !== 'statue') g.model.panelMat.opacity = (t === 'ice' ? 0.82 : t === 'fence' ? 0.9 : 0.55) + g.flash * 0.35;
       if (BLOCKERS.has(t) || REDGATES.has(t)) grp.position.x = g.x + Math.sin(G.t * 60) * g.flash * 0.08;
       if (t === 'star') g.model.setColor(new THREE.Color().setHSL((G.t * 0.4) % 1, 1, 0.6));
@@ -2395,6 +2411,10 @@ window.__game = {
   threats() { return G.effects.filter((e) => e.kind === 'tele' && e.cannon).map((e) => ({ x: e.x, w: e.a, t: e.life })); },
   start(level, stage = 1) { startLevel(level - 1, stage - 1); },
   setBot(fn) { G.bot = fn; },
+  // red units closer than maxD to the cannon: [x, d, hp]
+  reds(maxD = 16) { const out = []; for (let i = 0; i < R.n; i++) { const d = G.z0 - R.z[i]; if (R.hp[i] > 0 && d < maxD) out.push([R.x[i], d, R.hp[i]]); } return out; },
+  // debug only: evaluate an expression inside the engine module (tools/peek, tools/probe)
+  dbg(src) { return eval(src); },
   units() { const out = []; for (let i = 0; i < B.n; i += 25) out.push([+B.x[i].toFixed(1), +(G.z0 - B.z[i]).toFixed(1), +B.hp[i].toPrecision(2), +B.vx[i].toFixed(1), +B.vz[i].toFixed(1)]); return { n: B.n, z0: G.z0, towerZ: G.stage.tower?.z, alive: G.stage.tower?.alive, out }; },
   snapshot() { return { flux: G.barrels * G.rate * G.power / BASE_INTERVAL * ((G.twin ? 2 : 1) + G.squad) }; },
   leaks() {
