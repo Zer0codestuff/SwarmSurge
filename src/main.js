@@ -2072,10 +2072,11 @@ function updateMechanics(S, dt) {
     if (b.hp <= 0) { ballDies(S, b, false); continue; }
     b.r = b.r0 * Math.max(0.4, Math.cbrt(b.hp / b.max));
     if (G.phase !== 'play') continue;
-    if (b.delay > 0) { b.delay -= dt; continue; }
-    const sp = b.speed * (S.enraged ? 1.6 : 1) * (b.impact > 0 ? 0.45 : 1) * (b.chill > 0 ? .55 : 1);
+    const impact = b.impact > 0 ? .45 : 1, chill = b.chill > 0 ? .55 : 1;
     b.chill = Math.max(0, (b.chill || 0) - dt);
     b.impact = Math.max(0, b.impact - dt);
+    if (b.delay > 0) { b.delay = Math.max(0, b.delay - dt); continue; }
+    const sp = b.speed * (S.enraged ? 1.6 : 1) * impact * chill;
     b.z += sp * dt;
     b.x = clamp(b.x + clamp(G.cx - b.x, -1, 1) * (b.def.home ?? 0.25) * dt, -XLIM + b.r * 0.6, XLIM - b.r * 0.6);
     b.model.spin.rotation.x += (sp * dt) / b.r;
