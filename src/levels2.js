@@ -47,7 +47,7 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Both belts push into the middle: the narrow ladder catches EVERYTHING.',
-        tower: 6000000,
+        tower: 85000,
         waves: { every: 3.0, swarm: 9, drone: 2, ramp: 0.45 },
         walls: [{ x: -2.2, d1: 8, d2: 16 }, { x: 2.2, d1: 8, d2: 16 }],
         belts: [{ x: -4.3, w: 4.3, v: 4, d1: 19, d2: 27 }, { x: 4.3, w: 4.3, v: -4, d1: 19, d2: 27 }],
@@ -63,7 +63,7 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'DRILL MECH! It bores trenches through your army. Squad up and melt it!',
-        boss: { type: 'drill', hp: 400000000, speed: 0.5 },
+        boss: { type: 'drill', hp: 3.6e6, speed: 0.5 },
         waves: { every: 3.0, swarm: 10, drone: 3, ramp: 0.45 },
         belts: [{ x: 0, w: 12.9, v: 3.2, d1: 20, d2: 26 }],
         gates: [
@@ -104,8 +104,8 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Feed the STAR: it doubles every face of every slot!',
-        tower: 30000000,
-        waves: { every: 3.0, swarm: 9, imp: 3, ramp: 0.45 },
+        tower: 37000,
+        waves: { every: 3.0, swarm: 9, imp: 2, ramp: 0.45 },
         walls: [{ x: 0, d1: 8, d2: 40 }],
         gates: [
           { t: 'upgrade', up: 'rapid', need: 80, x: -3.3, d: 10, w: 5.6 },
@@ -115,14 +115,14 @@ export const MORE_LEVELS = [
           ...stack('slot', 0, 3.3, 12, 5, 5, 5.6).map((g, k) => ({ ...g, opts: [M(2 + k), M(3 + k), D(2)], period: 1.0 + k * 0.15 })),
         ],
         spawners: [
-          { x: -4.6, d: 48, hp: 6000, every: 2.4, n: 3, kind: 12, style: 'dome' },
-          { x: 4.6, d: 48, hp: 6000, every: 2.4, n: 3, kind: 12, style: 'dome' },
+          { x: -4.6, d: 48, hp: 3000, every: 3.0, n: 2, kind: 12, unitHp: 2, style: 'dome' },
+          { x: 4.6, d: 48, hp: 3000, every: 3.0, n: 2, kind: 12, unitHp: 2, style: 'dome' },
         ],
       },
       {
         tip: 'THE HIGH ROLLER rerolls your slots and throws dice. Beat the house!',
-        boss: { type: 'dice', hp: 3000000000, speed: 0.5 },
-        waves: { every: 3.0, swarm: 10, imp: 4, ramp: 0.45 },
+        boss: { type: 'dice', hp: 2e6, speed: 0.5 },
+        waves: { every: 3.0, swarm: 10, imp: 3, ramp: 0.45 },
         gates: [
           { t: 'upgrade', up: 'twin', need: 80, x: -3.3, d: 9, w: 5.6 },
           { t: 'upgrade', up: 'power', need: 100, x: 3.3, d: 9, w: 5.6 },
@@ -146,7 +146,7 @@ export const MORE_LEVELS = [
     stages: [
       {
         tip: 'JUMP PAD! Your army flies over the wall into the gold lane.',
-        tower: 60000,
+        tower: 100000,
         waves: { every: 3.0, swarm: 8, crab: 1, ramp: 0.4 },
         walls: [{ x: 2.2, d1: 8, d2: 46 }],
         gates: [
@@ -161,7 +161,7 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Two pads, two secret lanes. And the balls keep rolling...',
-        tower: 40000000,
+        tower: 680000,
         waves: { every: 3.0, swarm: 9, crab: 2, ramp: 0.45 },
         walls: [{ x: -2.2, d1: 8, d2: 44 }, { x: 2.2, d1: 8, d2: 44 }],
         gates: [
@@ -184,7 +184,7 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'THE KRAKEN! Tentacles slam the road. Jump past them and go wild!',
-        boss: { type: 'kraken', hp: 8000000000, speed: 0.5 },
+        boss: { type: 'kraken', hp: 2.5e7, speed: 0.5 },
         waves: { every: 3.0, swarm: 10, crab: 3, ramp: 0.45 },
         walls: [{ x: 0, d1: 8, d2: 22 }],
         gates: [
@@ -223,7 +223,7 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Pumpkin balls roll in! Smash them before they reach your cannon.',
-        tower: 150000000,
+        tower: 5000,
         waves: { every: 3.0, swarm: 10, ghost: 3, ramp: 0.45 },
         walls: [{ x: -2.2, d1: 8, d2: 40 }, { x: 2.2, d1: 8, d2: 40 }],
         gates: [
@@ -236,14 +236,14 @@ export const MORE_LEVELS = [
           { t: 'mul', v: 5, x: 4.45, d: 28, w: 4.1, phase: { on: 2.0, period: 3, off: 2 } },
         ],
         balls: [
-          { x: 0, d: 50, hp: 100000, r: 2.2, speed: 1.6, delay: 12, dmg: 2 },
-          { x: 0, d: 50, hp: 400000, r: 2.6, speed: 1.6, delay: 36, dmg: 3 },
+          { x: 0, d: 50, hp: 1500, r: 2.2, speed: 1.6, delay: 12, dmg: 2 },
+          { x: 0, d: 50, hp: 5000, r: 2.6, speed: 1.6, delay: 36, dmg: 3 },
         ],
       },
       {
         tip: 'THE PUMPKIN KING! Ghost ladders, giant x50... and balls of doom!',
-        boss: { type: 'pumpkin', hp: 40000000000, speed: 0.5 },
-        waves: { every: 3.0, swarm: 11, ghost: 4, ramp: 0.45 },
+        boss: { type: 'pumpkin', hp: 770000, speed: 0.5 },
+        waves: { every: 3.0, swarm: 10, ghost: 3, ramp: 0.45 },
         gates: [
           { t: 'upgrade', up: 'twin', need: 100, x: -3.3, d: 9, w: 5.6 },
           { t: 'upgrade', up: 'power', need: 120, x: 3.3, d: 9, w: 5.6 },
@@ -278,35 +278,35 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Hit the rival hard: the hangar gives you your own squad!',
-        tower: 300000000,
-        waves: { every: 3.2, swarm: 8, shielder: 2, ramp: 0.45 },
+        tower: 670000,
+        waves: { every: 3.4, swarm: 7, shielder: 1, ramp: 0.4 },
         walls: [{ x: 0, d1: 8, d2: 36 }],
         gates: [
-          { t: 'hangar', need: 200, x: -3.3, d: 10, w: 5.6 },
+          { t: 'hangar', need: 120, x: -3.3, d: 10, w: 5.6 },
           { t: 'mul', v: 4, x: -3.3, d: 18, w: 5.6 },
-          { t: 'redadd', v: 4, hp: 3000, x: -3.3, d: 27, w: 5.6 },
-          { t: 'upgrade', up: 'barrel', need: 120, x: 3.3, d: 10, w: 5.6 },
+          { t: 'redadd', v: 2, hp: 500, x: -3.3, d: 27, w: 5.6 },
+          { t: 'upgrade', up: 'barrel', need: 100, x: 4.75, d: 10, w: 2.7 },
           ...ladder(3.3, 16, 2, 7, 3.3, 5.6),
-          { t: 'redmul', v: 2, hp: 5000, x: 0, d: 41, w: 12.9 },
+          { t: 'redmul', v: 2, hp: 600, x: 3.3, d: 41, w: 5.6 },
         ],
         spawners: [
-          { x: -3.3, d: 48, hp: 300000, every: 1.3, n: 2, kind: 4, unitHp: 6, style: 'rival', slide: { amp: 2.5, speed: 0.9 } },
-          { x: 3.3, d: 48, hp: 300000, every: 1.3, n: 2, kind: 4, unitHp: 6, style: 'rival', slide: { amp: 2.5, speed: 1.1 } },
+          { x: -3.3, d: 48, hp: 8000, every: 2.6, n: 1, kind: 4, unitHp: 2, style: 'rival', slide: { amp: 2.5, speed: 0.9 } },
+          { x: 3.3, d: 48, hp: 8000, every: 2.6, n: 1, kind: 4, unitHp: 2, style: 'rival', slide: { amp: 2.5, speed: 1.1 } },
         ],
       },
       {
         tip: 'THE COMMANDER and his rivals. Squad, twin, ladder: all-in!',
-        boss: { type: 'commander', hp: 200000000000, speed: 0.5 },
-        waves: { every: 3.0, swarm: 10, shielder: 3, runner: 3, ramp: 0.45 },
+        boss: { type: 'commander', hp: 5e6, speed: 0.5 },
+        waves: { every: 3.2, swarm: 9, shielder: 1, runner: 1, ramp: 0.4 },
         gates: [
           { t: 'hangar', need: 300, x: -4.45, d: 9, w: 4.1 },
-          { t: 'upgrade', up: 'twin', need: 150, x: 0, d: 9, w: 3.9 },
+          { t: 'upgrade', up: 'twin', need: 60, x: 0, d: 9, w: 3.9 },
           { t: 'hangar', need: 900, x: 4.45, d: 9, w: 4.1 },
-          { t: 'redmul', v: 3, hp: 8000, x: -3.3, d: 16, w: 5.6 },
-          { t: 'redmul', v: 3, hp: 8000, x: 3.3, d: 16, w: 5.6 },
+          { t: 'redmul', v: 2, hp: 1200, x: -4.2, d: 16, w: 3.8 },
+          { t: 'redmul', v: 2, hp: 1200, x: 4.2, d: 16, w: 3.8 },
           ...ladder(0, 21, 2, 9, 2.2, 12.9),
         ],
-        spawners: [{ x: 0, d: 42, hp: 2000000, every: 1.6, n: 3, kind: 4, unitHp: 10, style: 'rival', slide: { amp: 5, speed: 0.6 } }],
+        spawners: [{ x: 0, d: 42, hp: 30000, every: 3.2, n: 2, kind: 4, unitHp: 2, style: 'rival', slide: { amp: 5, speed: 0.6 } }],
       },
     ],
   },
@@ -314,14 +314,14 @@ export const MORE_LEVELS = [
   {
     name: 'Crystal Caverns',
     theme: 'crystal',
-    threat: 2.5,
+    threat: 3.12,
     feature: 'Tesla coils, heart gates, toppling pillars',
     blurb: 'Charge a tesla coil and it fries everything forever. Topple crystal pillars onto the horde!',
     enemy: 'Shielders + splitters, and a web-spitting spider',
     stages: [
       {
         tip: 'Charge the TESLA COIL: it zaps red units for the whole stage!',
-        tower: 150000,
+        tower: 42000,
         waves: { every: 3.0, swarm: 9, shielder: 1, splitter: 1, ramp: 0.45 },
         gates: [
           { t: 'tesla', need: 40, every: 0.3, zaps: 3, range: 16, x: -3.3, d: 10, w: 5.6 },
@@ -335,34 +335,34 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Pillars fall across the road. Time them for the biggest crowd!',
-        tower: 2000000000,
-        waves: { every: 2.6, swarm: 13, shielder: 3, splitter: 2, ramp: 0.5 },
+        tower: 100000,
+        waves: { every: 3.0, swarm: 10, shielder: 2, splitter: 1, ramp: 0.45 },
         walls: [{ x: -2.2, d1: 8, d2: 38 }, { x: 2.2, d1: 8, d2: 38 }],
         gates: [
           { t: 'upgrade', up: 'barrel', need: 80, x: -4.45, d: 10, w: 4.1 },
-          { t: 'tesla', need: 500, every: 0.25, zaps: 4, range: 18, x: 0, d: 10, w: 3.9 },
+          { t: 'mul', v: 3, x: 0, d: 10, w: 3.9 },
           { t: 'upgrade', up: 'rapid', need: 150, x: 4.45, d: 10, w: 4.1 },
           ...ladder(-4.45, 17, 2, 6, 3.5, 4.1),
-          { t: 'mul', v: 3, x: 0, d: 18, w: 3.9 },
+          { t: 'tesla', need: 300, every: 0.25, zaps: 4, range: 18, x: 0, d: 18, w: 3.9 },
           { t: 'star', need: 3000, x: 0, d: 26, w: 3.9 },
           ...ladder(4.45, 17, 3, 7, 3.5, 4.1),
         ],
-        pillars: [{ x: -5.6, d: 42, hp: 20000 }, { x: 5.6, d: 46, hp: 20000 }, { x: -5.6, d: 52, hp: 40000 }],
-        spawners: [{ x: 0, d: 50, hp: 400000, every: 2.0, n: 4, kind: 3, style: 'dome' }],
+        pillars: [{ x: -5.6, d: 42, hp: 2000 }, { x: 5.6, d: 46, hp: 2000 }, { x: -5.6, d: 52, hp: 4000 }],
+        spawners: [{ x: 0, d: 50, hp: 8000, every: 2.6, n: 2, kind: 3, unitHp: 2, style: 'dome' }],
       },
       {
         tip: 'CRYSTAL SPIDER! Webs slow your army to a crawl. Burn through!',
-        boss: { type: 'spider', hp: 1000000000000, speed: 0.55 },
-        waves: { every: 2.6, swarm: 13, shielder: 3, splitter: 3, ramp: 0.5 },
+        boss: { type: 'spider', hp: 1.5e18, speed: 0.55 },
+        waves: { every: 2.8, swarm: 11, shielder: 2, splitter: 2, ramp: 0.45 },
         gates: [
           { t: 'tesla', need: 400, every: 0.2, zaps: 5, range: 18, x: -4.45, d: 9, w: 4.1 },
-          { t: 'upgrade', up: 'power', need: 150, x: 0, d: 9, w: 3.9 },
+          { t: 'upgrade', up: 'power', need: 120, x: 0, d: 9, w: 2.2 },
           { t: 'heart', need: 800, v: 3, x: 4.45, d: 9, w: 4.1 },
           ...ladder(0, 15, 2, 10, 2, 12.9),
           { t: 'star', need: 8000, x: -4.45, d: 35, w: 4.1 },
           { t: 'star', need: 8000, x: 4.45, d: 35, w: 4.1 },
         ],
-        pillars: [{ x: -5.6, d: 52, hp: 1e8 }, { x: 5.6, d: 52, hp: 1e8 }],
+        pillars: [{ x: -5.6, d: 52, hp: 20000 }, { x: 5.6, d: 52, hp: 20000 }],
       },
     ],
   },
@@ -370,14 +370,14 @@ export const MORE_LEVELS = [
   {
     name: 'Volcano Rush',
     theme: 'volcano',
-    threat: 2.6,
+    threat: 3.25,
     feature: 'LOOP gates + meteor rain',
     blurb: 'Loop gates send your army back to the start to multiply all over again. x100 becomes x10,000!',
     enemy: 'Imps + bombers, and fire from the sky',
     stages: [
       {
         tip: 'LOOP GATE! Your units run the whole road AGAIN. Squared numbers!',
-        tower: 2e9,
+        tower: 1500000,
         waves: { every: 3.0, swarm: 9, imp: 1, bomber: 1, ramp: 0.45 },
         meteors: { every: 3.5, r: 2.0 },
         walls: [{ x: 0, d1: 8, d2: 40 }],
@@ -391,8 +391,8 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Loop TWICE through the ladder. The meteors hit them too!',
-        tower: 5e11,
-        waves: { every: 2.6, swarm: 13, imp: 3, bomber: 2, ramp: 0.5 },
+        tower: 7e10,
+        waves: { every: 2.8, swarm: 11, imp: 2, bomber: 1, ramp: 0.45 },
         meteors: { every: 2.8, r: 2.2 },
         walls: [{ x: -2.2, d1: 8, d2: 42 }, { x: 2.2, d1: 8, d2: 42 }],
         gates: [
@@ -404,12 +404,12 @@ export const MORE_LEVELS = [
           { t: 'hangar', need: 400, x: 4.45, d: 10, w: 4.1 },
           { t: 'mul', v: 6, x: 4.45, d: 24, w: 4.1 },
         ],
-        spawners: [{ x: 0, d: 50, hp: 1e7, every: 2.0, n: 4, kind: 12, style: 'dome' }],
+        spawners: [{ x: 0, d: 50, hp: 200000, every: 2.6, n: 3, kind: 12, unitHp: 2, style: 'dome' }],
       },
       {
         tip: 'MAGMA DRAGON! Breathes fire, rains meteors. Loop the ladder to x1,000,000!',
-        boss: { type: 'magma', hp: 5e15, speed: 0.55 },
-        waves: { every: 2.6, swarm: 13, imp: 4, bomber: 3, ramp: 0.5 },
+        boss: { type: 'magma', hp: 2e17, speed: 0.55 },
+        waves: { every: 2.8, swarm: 12, imp: 3, bomber: 2, ramp: 0.45 },
         meteors: { every: 3.2, r: 2.2 },
         gates: [
           { t: 'upgrade', up: 'twin', need: 120, x: -3.3, d: 8, w: 5.6 },
@@ -425,14 +425,14 @@ export const MORE_LEVELS = [
   {
     name: "Pharaoh's Tomb",
     theme: 'tomb',
-    threat: 2.7,
+    threat: 3.38,
     feature: 'Sliding walls + cursed mummies',
     blurb: 'The tomb walls slide back and forth, opening and closing the lanes. Mummies get back up!',
     enemy: 'Mummies: rise again once',
     stages: [
       {
         tip: 'The walls slide! Wait for the lane to open, then pour in.',
-        tower: 200000,
+        tower: 320000,
         waves: { every: 3.0, swarm: 9, mummy: 2, ramp: 0.45 },
         walls: [{ x: 0, d1: 14, d2: 40, slide: { amp: 3.2, speed: 0.9, ph: 0 } }],
         gates: [
@@ -444,8 +444,8 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Three sliding walls, statues full of treasure. Break in!',
-        tower: 2e12,
-        waves: { every: 2.6, swarm: 13, mummy: 4, ramp: 0.5 },
+        tower: 300000,
+        waves: { every: 2.8, swarm: 11, mummy: 2, ramp: 0.45 },
         walls: [
           { x: -2.2, d1: 14, d2: 38, slide: { amp: 1.6, speed: 1.0, ph: 0 } },
           { x: 2.2, d1: 14, d2: 38, slide: { amp: 1.6, speed: 1.0, ph: 3.14 } },
@@ -461,14 +461,14 @@ export const MORE_LEVELS = [
           { t: 'mul', v: 4, x: 0, d: 42, w: 12.9 },
         ],
         spawners: [
-          { x: -4.6, d: 50, hp: 2e7, every: 2.2, n: 4, kind: 10, style: 'dome' },
-          { x: 4.6, d: 50, hp: 2e7, every: 2.2, n: 4, kind: 10, style: 'dome' },
+          { x: -4.6, d: 50, hp: 20000, every: 2.8, n: 2, kind: 10, unitHp: 2, style: 'dome' },
+          { x: 4.6, d: 50, hp: 20000, every: 2.8, n: 2, kind: 10, unitHp: 2, style: 'dome' },
         ],
       },
       {
         tip: 'THE PHARAOH! Sandstorms, mummies, curses. Show no mercy!',
-        boss: { type: 'pharaoh', hp: 5e16, speed: 0.55 },
-        waves: { every: 2.6, swarm: 14, mummy: 5, ramp: 0.5 },
+        boss: { type: 'pharaoh', hp: 1.2e20, speed: 0.55 },
+        waves: { every: 2.8, swarm: 12, mummy: 3, ramp: 0.45 },
         walls: [{ x: 0, d1: 18, d2: 34, slide: { amp: 4, speed: 0.7, ph: 0 } }],
         gates: [
           { t: 'upgrade', up: 'twin', need: 150, x: -4.45, d: 9, w: 4.1 },
@@ -488,7 +488,7 @@ export const MORE_LEVELS = [
   {
     name: 'Storm Peaks',
     theme: 'storm',
-    threat: 2.8,
+    threat: 3.5,
     feature: 'Tornados fling everything',
     blurb: 'Tornados throw your army up the road and shred the red horde. Ride the storm!',
     enemy: 'Drones + runners, lightning from above',
@@ -510,8 +510,8 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Two tornados guard the mega lane. Squeeze between them!',
-        tower: 5e12,
-        waves: { every: 2.5, swarm: 14, drone: 4, runner: 4, ramp: 0.5 },
+        tower: 2e8,
+        waves: { every: 2.8, swarm: 11, drone: 2, runner: 2, ramp: 0.45 },
         tornados: [
           { x: -2.5, d: 24, r: 1.6, speed: 0.9, amp: 3.5 },
           { x: 2.5, d: 34, r: 1.6, speed: 1.1, amp: 3.5 },
@@ -526,12 +526,12 @@ export const MORE_LEVELS = [
           { t: 'star', need: 20000, x: -4.6, d: 40, w: 3.4 },
           { t: 'star', need: 20000, x: 4.6, d: 40, w: 3.4 },
         ],
-        pillars: [{ x: -5.6, d: 52, hp: 1e9 }, { x: 5.6, d: 49, hp: 1e9 }],
+        pillars: [{ x: -5.6, d: 52, hp: 2.5e7 }, { x: 5.6, d: 49, hp: 2.5e7 }],
       },
       {
         tip: 'THE THUNDER GOD! Lightning everywhere. Make it rain units!',
-        boss: { type: 'thunder', hp: 1e18, speed: 0.55 },
-        waves: { every: 2.5, swarm: 15, drone: 5, runner: 5, ramp: 0.5 },
+        boss: { type: 'thunder', hp: 7.2e23, speed: 0.55 },
+        waves: { every: 2.8, swarm: 12, drone: 3, runner: 3, ramp: 0.45 },
         tornados: [{ x: 0, d: 36, r: 1.7, speed: 0.8, amp: 5 }],
         gates: [
           { t: 'upgrade', up: 'twin', need: 150, x: -4.45, d: 8, w: 4.1 },
@@ -549,7 +549,7 @@ export const MORE_LEVELS = [
   {
     name: 'Black Hole',
     theme: 'blackhole',
-    threat: 3.0,
+    threat: 3.75,
     feature: 'SUPERNOVA black holes + everything',
     blurb: 'Black holes swallow both armies. Feed one enough power and it goes SUPERNOVA. The final test!',
     enemy: 'Every enemy, every trap, the Emperor',
@@ -570,10 +570,10 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'Belts, slots, jump pads, ghost gates... ALL of it. Then: SUPERNOVA.',
-        tower: 5e14,
-        waves: { every: 2.4, swarm: 15, runner: 4, splitter: 3, ghost: 3, imp: 2, ramp: 0.5 },
+        tower: 3.1e7,
+        waves: { every: 2.8, swarm: 11, runner: 2, splitter: 1, ghost: 2, imp: 1, ramp: 0.45 },
         belts: [{ x: 0, w: 12.9, v: 3.2, d1: 12, d2: 17 }],
-        holes: [{ x: -3.0, d: 44, r: 1.3, need: 5e9, mult: 3, dmg: 0.3 }],
+        holes: [{ x: -3.0, d: 44, r: 1.3, need: 1e5, mult: 3, dmg: 0.3 }],
         walls: [{ x: 0, d1: 20, d2: 38 }],
         gates: [
           { t: 'hangar', need: 400, x: -3.3, d: 9, w: 5.6 },
@@ -583,13 +583,13 @@ export const MORE_LEVELS = [
           { t: 'jump', x: -3.3, d: 35, w: 5.6, to: { x: 3.3, d: 24 } },
           ...ladder(3.3, 21, 2, 7, 3, 5.6),
         ],
-        balls: [{ x: 0, d: 50, hp: 1e8, r: 2.6, speed: 1.6, delay: 20, dmg: 3 }],
+        balls: [{ x: 0, d: 50, hp: 50000, r: 2.6, speed: 1.6, delay: 20, dmg: 3 }],
       },
       {
         tip: 'THE VOID EMPEROR. Everything you have learned. BURN THE OCEAN!',
-        boss: { type: 'emperor', hp: 1e20, speed: 0.55 },
-        waves: { every: 2.4, swarm: 16, runner: 5, splitter: 3, ghost: 3, imp: 3, ramp: 0.5 },
-        holes: [{ x: 0, d: 40, r: 1.5, need: 1e12, mult: 5, dmg: 0.25 }],
+        boss: { type: 'emperor', hp: 1.4e33, speed: 0.55 },
+        waves: { every: 2.8, swarm: 12, runner: 3, splitter: 2, ghost: 2, imp: 2, ramp: 0.45 },
+        holes: [{ x: 0, d: 40, r: 1.5, need: 5e14, mult: 5, dmg: 0.25 }],
         gates: [
           { t: 'upgrade', up: 'twin', need: 150, x: -4.45, d: 8, w: 4.1 },
           { t: 'upgrade', up: 'power', need: 200, x: 0, d: 8, w: 3.9 },
