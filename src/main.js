@@ -92,11 +92,13 @@ const halos = new FX.Halos(scene);
 const debris = new FX.Debris(scene);
 const ambient = new FX.Ambient(scene);
 const tracers = new FX.Tracers(scene);
+let sceneReady = false;
 
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  if (sceneReady && G.paused && G.phase !== 'menu') { renderWorld(0); renderer.render(scene,camera); }
 }
 addEventListener('resize', resize);
 resize();
@@ -605,6 +607,9 @@ function applyTheme(theme) {
 }
 
 function startLevel(idx, stageIdx = 0) {
+  if ($('pause').open) $('pause').close();
+  document.body.classList.remove('game-paused');
+  resetInput(); sound.setPaused(false);
   disposeLevel();
   const def = LEVELS[idx];
   G.levelIdx = idx;
@@ -625,7 +630,7 @@ function startLevel(idx, stageIdx = 0) {
   // disposeLevel traverses effects too, including mushroom clouds made of nested groups.
   G.effects.length = 0;
   Object.assign(G, {
-    paused: false, weaponCursor: 0, t: 0,
+    paused: false, resumePhase: null, weaponCursor: 0, t: 0,
     log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgTotal: 0, army: 0, squad: 0, nextMile: 1000, armyAvg: 0,
     chassis: 0, weapon: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, overdrive: 0, rank: 0,
@@ -641,6 +646,7 @@ function startLevel(idx, stageIdx = 0) {
   setHud('lvl', hud.level, `LEVEL ${idx + 1} · ${def.name.toUpperCase()}`);
   renderUps();
   hud.hint.classList.toggle('hidden', !(idx === 0 && stageIdx === 0));
+  canvas.focus({ preventScroll: true });
 }
 function setBarrels(n) {
   cannon.setBarrels(n); twinCannon.setBarrels(n);
@@ -2450,18 +2456,24 @@ function renderWorld(dt) {
 
 // ---------------------------------------------------------------- menus
 function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
-function showMenu() {
+function showMenu(preserveRun = false) {
+  if (preserveRun === true && ['intro','play','clear','move'].includes(G.phase)) G.resumePhase = G.phase;
+  else G.resumePhase = null;
+  if ($('pause').open) $('pause').close();
+  document.body.classList.remove('game-paused');
+  resetInput(); sound.setPaused(true);
   G.phase = 'menu';
   hud.root.classList.add('hidden');
   $('result').classList.add('hidden');
-  const status = renderCampaignMap($('levels'), LEVELS, THEMES, progress, index => { sound.unlock(); startLevel(index); });
+  const status = renderCampaignMap($('levels'), LEVELS, THEMES, progress, index => { sound.unlock(); if (G.resumePhase && index === G.levelIdx) resumeRun(); else startLevel(index); });
   $('mapcount').textContent = `${status.cleared} / ${LEVELS.length} worlds cleared`;
-  $('mapresume').textContent = status.complete ? 'Replay the finale' : `${status.unlocked ? 'Continue' : 'Play'} / ${status.unlocked + 1}`;
-  $('mapresume').onclick = () => { sound.unlock(); startLevel(status.unlocked); };
+  $('mapresume').textContent = G.resumePhase ? `Resume / ${G.levelIdx+1}.${G.stageIdx+1}` : status.complete ? 'Replay the finale' : `${status.unlocked ? 'Continue' : 'Play'} / ${status.unlocked + 1}`;
+  $('mapresume').onclick = () => { sound.unlock(); if (G.resumePhase) resumeRun(); else startLevel(status.unlocked); };
   $('menu').classList.remove('hidden');
   requestAnimationFrame(() => {
     if (G.phase !== 'menu') return;
-    if (innerWidth <= 600 && status.unlocked >= 6) $('levels').querySelector('.current')?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const focusLevel = G.resumePhase ? G.levelIdx : status.unlocked;
+    if (innerWidth <= 600 && focusLevel >= 6) $('levels').querySelector(`[data-level="${focusLevel}"]`)?.scrollIntoView({ block: 'center', behavior: 'instant' });
     else $('menu').scrollTop = 0;
   });
   for (const L of bruteLabels) hideLabel(L);
@@ -2523,7 +2535,7 @@ $('rretry').addEventListener('click', () => {
 });
 $('rrestart').addEventListener('click', () => startLevel(G.levelIdx));
 $('rmenu').addEventListener('click', showMenu);
-$('menubtn').addEventListener('click', showMenu);
+$('menubtn').addEventListener('click', () => { if (!pauseGame() && ['won','lost'].includes(G.phase)) showMenu(); });
 const muteBtn = $('mute');
 muteBtn.textContent = sound.muted ? '🔇' : '🔊';
 muteBtn.addEventListener('click', () => { sound.unlock(); muteBtn.textContent = sound.toggle() ? '🔇' : '🔊'; });
@@ -2531,7 +2543,37 @@ muteBtn.addEventListener('click', () => { sound.unlock(); muteBtn.textContent = 
 // ---------------------------------------------------------------- input
 let drag = null;
 const keys = { left: false, right: false };
+function resetInput() { drag = null; keys.left = keys.right = false; }
+function pauseGame() {
+  if ($('pause').open || !['intro','play','clear','move'].includes(G.phase)) return false;
+  resetInput(); G.paused = true; acc = 0; sound.setPaused(true);
+  document.body.classList.add('game-paused');
+  $('pausewhere').textContent = `${LEVELS[G.levelIdx].name} / Stage ${G.stageIdx+1}`;
+  $('pause').showModal();
+  return true;
+}
+function resumeGame() {
+  if (!$('pause').open) return;
+  $('pause').close(); G.paused = false; resetInput(); acc = 0; last = performance.now();
+  document.body.classList.remove('game-paused');
+  if (!TURBO) sound.unlock(); sound.setPaused(false);
+  canvas.focus({ preventScroll: true });
+}
+function resumeRun() {
+  if (!G.resumePhase) return;
+  G.phase = G.resumePhase; G.resumePhase = null; G.paused = false;
+  $('menu').classList.add('hidden'); hud.root.classList.remove('hidden');
+  resetInput(); acc = 0; last = performance.now(); sound.setPaused(false);
+  canvas.focus({ preventScroll: true });
+}
+$('resume').addEventListener('click', resumeGame);
+$('pauseretry').addEventListener('click', () => $('rretry').click());
+$('pausemap').addEventListener('click', () => showMenu(true));
+$('pause').addEventListener('cancel', event => { event.preventDefault(); resumeGame(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+addEventListener('blur', () => { resetInput(); pauseGame(); });
 canvas.addEventListener('pointerdown', (e) => {
+  if (G.paused || !['intro','play'].includes(G.phase)) return;
   sound.unlock();
   drag = { id: e.pointerId, x: e.clientX, aim: G.aim };
   try { canvas.setPointerCapture(e.pointerId); } catch {}
@@ -2546,6 +2588,10 @@ const endDrag = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
 addEventListener('pointerup', endDrag);
 addEventListener('pointercancel', endDrag);
 addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('pause').open) { if (pauseGame()) e.preventDefault(); return; }
+  if ((e.key === 'p' || e.key === 'P') && !e.repeat) { e.preventDefault(); if ($('pause').open) resumeGame(); else pauseGame(); return; }
+  if (G.paused || G.phase === 'menu' || G.shown) return;
+  if (['ArrowLeft','ArrowRight','a','A','d','D'].includes(e.key)) e.preventDefault();
   if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
   if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
   if (keys.left || keys.right) hud.hint.classList.add('hidden');
@@ -2566,7 +2612,7 @@ function frame(now) {
   if (fpsAcc > 0.5) { G.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
   // The map is opaque, so rendering the battlefield behind it only spends GPU time.
   if (G.phase === 'menu') { acc = 0; return; }
-  if (G.paused) { if (!TURBO) { renderWorld(0); renderer.render(scene, camera); } return; }
+  if (G.paused) { acc = 0; return; }
   if (TURBO) {
     // headless balance testing: burn ~30ms of CPU per frame on simulation, render nothing
     const t0 = performance.now();
@@ -2593,6 +2639,7 @@ showMenu();
 const startParam = params.get('level');
 if (startParam) startLevel(clamp((+startParam || 1) - 1, 0, LEVELS.length - 1), clamp((+params.get('stage') || 1) - 1, 0, 2));
 requestAnimationFrame(frame);
+sceneReady = true;
 
 // test / debug hooks
 window.__game = {

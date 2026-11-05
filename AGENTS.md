@@ -14,6 +14,7 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 ## Current status and recent changes
 - Troop weapons now spend firing capacity only on valid targets, search past enemies behind cover, and reacquire quickly when idle. Front-line troops cannot be starved by idle back-line troops. Eighteen focused regressions pass.
 - Beam effects use a reusable 128-slot instanced pool in `src/fx.js`. The isolated 64-trace case needs one extra draw call instead of 64 and stops allocating a geometry per shot. Nineteen focused regressions cover expiry and capacity as well.
+- Pause uses the HUD button, Escape or P. Losing focus pauses active play and clears held controls. The pause menu can return to the map while retaining the current run in memory; Resume restores the exact battle. Starting another world replaces that run. Pause freezes simulation, sound, HUD animations and repeated rendering. Twenty-two focused regressions cover these transitions.
 - Added continuous ball collision during deployment delays, remaining-power conservation, damage feedback, and a four-second x2 wreck bonus.
 - Rapid doubles rate to x8; Power triples output. Added Bulldog and Siege tank transformations with armor, three troop weapons, and repeated air strikes. Equipment persists across stages and retries.
 - All 60 stages have equipment routes and revised pacing. Long fights expose armor gradually, increasing hit damage up to x4. Preserved the largest multiplier routes and extra crowd capacity on surge stages.
