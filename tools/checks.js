@@ -61,6 +61,49 @@ window.runGameChecks = (g) => {
     buildGrid(gR,R); updateArsenal(G.stage,STEP);
     return {pass:B.shot[i]<=.13,cooldown:B.shot[i]};
   })()`);
+  check('Scatterguns hit a bounded close fan', `(() => {
+    for(const [x,z] of [[0,-5],[1,-5],[-1,-5],[0,-9]]) spawn(R,x,z,100,0);
+    const i=spawn(B,0,-3,10,0); B.weapon[i]=4; B.shot[i]=0;
+    buildGrid(gR,R); updateArsenal(G.stage,1);
+    return {pass:Array.from(R.hp.slice(0,3)).every(hp=>hp<100) && R.hp[3]===100,hp:Array.from(R.hp.slice(0,4))};
+  })()`);
+  check('Railguns pierce a line and leave off-axis troops untouched', `(() => {
+    for(const [x,z] of [[0,-6],[0,-8],[0,-11],[2,-7],[0,-14]]) spawn(R,x,z,100,0);
+    const i=spawn(B,0,-3,10,0); B.weapon[i]=5; B.shot[i]=0;
+    buildGrid(gR,R); updateArsenal(G.stage,1);
+    return {pass:R.hp[0]===89 && R.hp[1]<100 && R.hp[2]<100 && R.hp[3]===100 && R.hp[4]===100,hp:Array.from(R.hp.slice(0,5))};
+  })()`);
+  check('Flamethrower burns expire and reused slots have no old status', `(() => {
+    const j=spawn(R,0,-5,100,0), i=spawn(B,0,-3,10,0); B.weapon[i]=6; B.shot[i]=0;
+    buildGrid(gR,R); updateArsenal(G.stage,1); const hit=R.hp[j];
+    moveRed(G.stage,1); const burned=R.hp[j]<hit && R.burn[j]>0;
+    moveRed(G.stage,1.1); const expired=R.burn[j]===0 && R.burnDamage[j]===0;
+    R.hp[j]=0; compact(R); const k=spawn(R,0,-5,100,0);
+    return {pass:burned && expired && R.burn[k]===0 && R.burnDamage[k]===0 && R.chill[k]===0};
+  })()`);
+  check('Frost slows troops temporarily and affects stationary balls', `(() => {
+    const j=spawn(R,0,-5,100,0), i=spawn(B,0,-3,10,0); B.weapon[i]=7; B.shot[i]=0;
+    buildGrid(gR,R); updateArsenal(G.stage,1); moveRed(G.stage,.25);
+    const slowed=R.chill[j]>0 && R.vz[j]<RED_TYPES[0].speed*.5;
+    moveRed(G.stage,2); moveRed(G.stage,.25); const thawed=R.chill[j]===0 && Math.abs(R.vz[j]-RED_TYPES[0].speed)<1e-5;
+    R.n=0; const ball=addBall(G.stage,G.root,0,-5,100,1,1,{delay:5});
+    B.shot[i]=0; buildGrid(gR,R); updateArsenal(G.stage,1);
+    return {pass:slowed && thawed && ball.hp<100 && ball.chill===1.8,slowed,thawed,chill:ball.chill};
+  })()`);
+  check('Plasma reaches the wider splash radius and respects cover', `(() => {
+    for(const [x,z] of [[0,-5],[2,-6],[-2,-6]]) spawn(R,x,z,100,0);
+    G.stage.gates.push({alive:true,def:{t:'barrier'},x:-1,z:-5.5,w:.6});
+    const i=spawn(B,0,-3,10,0); B.weapon[i]=8; B.shot[i]=0;
+    buildGrid(gR,R); updateArsenal(G.stage,1);
+    return {pass:R.hp[0]<100 && R.hp[1]<100 && R.hp[2]===100,hp:Array.from(R.hp.slice(0,3))};
+  })()`);
+  check('Unlocked weapons mix across spawns and survive a retry', `(() => {
+    upgradeCannon('rifle'); upgradeCannon('flame'); upgradeCannon('frost');
+    for(let k=0;k<12;k++) spawn(B,0,-3,10,0);
+    const types=new Set(B.weapon.slice(0,B.n)), mask=G.weaponMask;
+    enterStage(1); G.weaponMask=0; $('rretry').click();
+    return {pass:types.size===3 && types.has(1) && types.has(6) && types.has(7) && G.weaponMask===mask && G.weapon===7};
+  })()`);
   check('Gates preserve multiplied power at the population cap', `(() => {
     for(let k=0;k<420;k++) spawn(B,0,-8,1,0);
     applyGate(G.stage,{cur:{t:'mul',v:8},boost:1,flash:1,x:0,w:12,z:-8},0);

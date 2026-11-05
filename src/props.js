@@ -2,6 +2,7 @@
 // black holes, rolling swarm balls, the rival cannon and spider webs.
 import * as THREE from 'three';
 import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, buildGate, troopWeaponGeo } from './models.js';
+import { WEAPON_IDS } from './arsenal.js';
 
 function stripeTexture(a, b, n = 8, w = 128, h = 32) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -97,8 +98,8 @@ export function buildArmory(w, upgrade) {
       icon.add(mesh(new THREE.SphereGeometry(.26,8,6),gold,side*.4,.15,0));
       icon.add(mesh(new THREE.CylinderGeometry(.09,.11,.55,8).rotateX(Math.PI/2),light,side*.4,.15,-.35));
     }
-  } else if (['rifle', 'rockets', 'arc'].includes(upgrade)) {
-    const gun = new THREE.Mesh(troopWeaponGeo({ rifle: 1, rockets: 2, arc: 3 }[upgrade]), new THREE.MeshToonMaterial({ vertexColors: true }));
+  } else if (WEAPON_IDS[upgrade]) {
+    const gun = new THREE.Mesh(troopWeaponGeo(WEAPON_IDS[upgrade]), new THREE.MeshToonMaterial({ vertexColors: true }));
     gun.scale.setScalar(2); gun.position.set(-.65, -.9, -.7); gun.rotation.y = Math.PI / 2; icon.add(gun);
   } else if (upgrade === 'air') {
     const plane = buildSupportPlane(); plane.group.scale.setScalar(.5); icon.add(plane.group);
