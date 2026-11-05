@@ -615,7 +615,7 @@ function startLevel(idx, stageIdx = 0) {
   G.explosions.length = 0;
   G.splits.length = 0;
   G.revives = [];
-  for (const e of G.effects) for (const m of [e.mesh, e.outer, e.inner]) if (m) m.geometry.dispose();
+  // disposeLevel traverses effects too, including mushroom clouds made of nested groups.
   G.effects.length = 0;
   Object.assign(G, {
     paused: false, weaponCursor: 0, t: 0,

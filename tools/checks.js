@@ -94,6 +94,12 @@ window.runGameChecks = (g) => {
       if(stored===null) localStorage.removeItem('swarm-progress'); else localStorage.setItem('swarm-progress',stored);
     }
   })()`);
+  check('Restarting during a grouped nuke effect does not crash', `(() => {
+    const cloud=M.buildMushroom(); G.root.add(cloud);
+    G.effects.push({kind:'mush',mesh:cloud,life:2,max:2,z:-20});
+    startLevel(0);
+    return {pass:G.phase==='intro' && G.effects.length===0};
+  })()`);
   g.start(1); g.pause();
   return results;
 };
