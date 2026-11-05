@@ -26,6 +26,8 @@ python3 -m http.server 8000
 
 Useful URL parameters: `?level=12&stage=2` jumps straight to a stage, `speed=2` runs the game faster, `turbo=1` runs it as fast as possible (for bots).
 
+Press Escape or P, or tap the pause button, to pause. Switching tabs pauses automatically. Resume continues the same battle with its units and equipment intact. Returning to the world map keeps one run in memory until you start another world or reload the page.
+
 ## Focused checks
 
 Serve the game, install the optional tools with `cd tools && npm ci`, then run:

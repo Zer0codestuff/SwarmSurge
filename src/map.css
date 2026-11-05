@@ -49,3 +49,12 @@
   .map-number { left: 9px; top: 51px; width: 24px; height: 24px; font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { .map-stop > svg { transition: none; } }
+
+#pause { width: min(330px, calc(100% - 36px)); padding: 26px; border: 1px solid #b9d9e9; border-radius: 20px; background: #173249; color: #fff; text-align: center; box-shadow: 0 18px 70px #081a3055; }
+#pause::backdrop { background: #081a30a6; }
+#pausetitle { font-size: 32px; }
+#pausewhere { font-family: system-ui,sans-serif; color: #c4d9e6; font-size: 13px; margin: 8px 0 20px; }
+#pause .btn { display: block; width: 100%; margin: 10px 0; font-size: 16px; border-width: 1px; padding: 11px; border-radius: 11px; }
+#pause small { display: block; font-family: system-ui,sans-serif; color: #bfd3e0; font-size: 11px; line-height: 1.5; margin-top: 20px; }
+.game-paused #hud *, .game-paused #labels * { animation-play-state: paused !important; }
+#c:focus { outline: none; }

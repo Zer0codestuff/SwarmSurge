@@ -199,7 +199,7 @@
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="c" tabindex="0" aria-label="Battlefield. Use A and D or arrow keys to aim. Press Escape to pause."></canvas>
 <div id="labels"></div>
 
 <div id="hud" class="hidden">
@@ -208,7 +208,7 @@
     <div id="left" class="stroke"><div id="lvlname"></div><div id="pips"></div></div>
     <div id="armybox" class="stroke"><div class="dot"></div><div id="army">0</div></div>
     <div id="right">
-      <div id="btns"><button id="mute" aria-label="Toggle sound">🔊</button><button id="menubtn" aria-label="Menu">☰</button></div>
+      <div id="btns"><button id="mute" aria-label="Toggle sound">🔊</button><button id="menubtn" aria-label="Pause game">Ⅱ</button></div>
       <div id="lives"></div>
       <div id="shieldcount"></div>
     </div>
@@ -246,6 +246,15 @@
     <button id="rmenu" class="btn grey">MENU</button>
   </div>
 </div>
+
+<dialog id="pause" aria-labelledby="pausetitle">
+  <div id="pausetitle">Paused</div>
+  <p id="pausewhere"></p>
+  <button id="resume" class="btn" autofocus>Resume</button>
+  <button id="pauseretry" class="btn alt">Retry stage</button>
+  <button id="pausemap" class="btn grey">World map</button>
+  <small>Your run stays available on the map until you start another world.</small>
+</dialog>
 
 <noscript>This game needs JavaScript.</noscript>
 <script type="module" src="./src/main.js"></script>

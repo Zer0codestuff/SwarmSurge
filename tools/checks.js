@@ -127,6 +127,26 @@ window.runGameChecks = (g) => {
     pool.mesh.geometry.dispose(); pool.mesh.material.dispose();
     return {pass:bounded && expired && pool.mesh.count===0};
   })()`);
+  check('Pause clears held input and resume preserves the battle', `(() => {
+    G.paused=false; keys.left=true; drag={id:1,x:0,aim:0};
+    const i=spawn(B,0,-3,10,0); G.time=7; upgradeCannon('tank');
+    const opened=pauseGame() && $('pause').open && G.paused && sound.paused && !keys.left && drag===null;
+    resumeGame();
+    return {pass:opened && !$('pause').open && !G.paused && !sound.paused && G.time===7 && B.hp[i]===10 && G.chassis===1};
+  })()`);
+  check('Returning to the map keeps a resumable run', `(() => {
+    G.paused=false; G.time=13; const i=spawn(B,1,-8,42,0); upgradeCannon('rockets');
+    pauseGame(); $('pausemap').click();
+    const saved=G.phase==='menu' && G.resumePhase==='play' && !$('pause').open && $('mapresume').textContent.includes('Resume');
+    $('mapresume').click();
+    return {pass:saved && G.phase==='play' && !G.paused && G.resumePhase===null && G.time===13 && B.hp[i]===42 && G.weapon===2};
+  })()`);
+  check('Loss of window focus pauses active play', `(() => {
+    G.paused=false; keys.right=true;
+    window.dispatchEvent(new Event('blur'));
+    const paused=G.paused && $('pause').open && !keys.right;
+    resumeGame(); return {pass:paused};
+  })()`);
   g.start(1); g.pause();
   return results;
 };

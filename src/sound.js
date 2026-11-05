@@ -4,13 +4,14 @@ export class Sound {
     this.ctx = null;
     this.muted = localStorage.getItem('swarm-muted') === '1';
     this.last = {};
+    this.paused = false;
   }
   unlock() {
     if (!this.ctx) {
       try {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         this.master = this.ctx.createGain();
-        this.master.gain.value = 0.3;
+        this.master.gain.value = this.paused ? 0 : 0.3;
         this.master.connect(this.ctx.destination);
         const len = this.ctx.sampleRate * 0.4;
         this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -18,7 +19,13 @@ export class Sound {
         for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       } catch { this.ctx = null; }
     }
-    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+  }
+  setPaused(paused) {
+    this.paused = paused;
+    if (!this.ctx) return;
+    this.master.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.master.gain.setTargetAtTime(paused ? 0 : .3, this.ctx.currentTime, .025);
   }
   toggle() {
     this.muted = !this.muted;
@@ -44,7 +51,7 @@ export class Sound {
     s.start(t); s.stop(t + dur);
   }
   play(name, p = 1) {
-    if (this.muted || !this.ctx) return;
+    if (this.muted || this.paused || !this.ctx) return;
     const now = performance.now();
     const gap = { pop: 45, shoot: 90, gate: 70, hit: 150, boom: 120, warp: 90, zap: 80, crush: 150, combo: 120 }[name] || 0;
     if (now - (this.last[name] || 0) < gap) return;
