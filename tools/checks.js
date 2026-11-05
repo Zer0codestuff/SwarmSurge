@@ -169,6 +169,18 @@ window.runGameChecks = (g) => {
     G.phase='clear'; updateEffects(2);
     return {pass:R.n===0};
   })()`);
+  check('Storm clouds stay outside the road camera corridor', `(() => {
+    startLevel(18); const clouds=G.root.getObjectByName('storm-cloud-banks');
+    if(!clouds) return {pass:false};
+    clouds.geometry.computeBoundingBox(); const transform=new THREE.Matrix4();
+    let clear=true;
+    for(let i=0;i<clouds.count;i++) {
+      clouds.getMatrixAt(i,transform);
+      const bounds=clouds.geometry.boundingBox.clone().applyMatrix4(transform);
+      if(bounds.min.x<10 && bounds.max.x>-10) clear=false;
+    }
+    return {pass:clear,count:clouds.count};
+  })()`);
   g.start(1); g.pause();
   return results;
 };

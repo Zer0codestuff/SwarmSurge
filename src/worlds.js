@@ -158,7 +158,9 @@ const DECOR = {
     scatter(g, merge([t1, tr]), vc(), 220, 9, 40, zc, total, 0.7, 1.5);
     const puff = [];
     for (let k = 0; k < 4; k++) { const s = paint(new THREE.SphereGeometry(2.4 - k * 0.3, 10, 8), 0x3a4048); s.translate((k - 1.5) * 2.2, (k % 2) * 0.8, (k % 2) * 1.0); puff.push(s); }
-    scatter(g, merge(puff), vc(false), 60, 4, 50, zc, total, 1, 2.2, 24, false);
+    // Keep the entire cloud geometry outside the road's camera corridor, including the intro swoop.
+    const clouds = scatter(g, merge(puff), vc(false), 28, 34, 34, zc, total, .9, 1.7, 34, false);
+    clouds.name = 'storm-cloud-banks';
   },
   blackhole(g, zc, total) {
     stars(g, zc, 900, 0xffffff, 0);

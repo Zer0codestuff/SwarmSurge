@@ -13,6 +13,7 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 - Optional older bot tools require `npm install` in `tools/`. Their Chromium path is currently hardcoded to `/usr/bin/chromium`, and screenshot tools assume `/tmp/ss` exists. Adapt these prerequisites before running them on macOS. No automated test script is configured in package.json.
 
 ## Current status and recent changes
+- Storm Peaks clouds now form lateral banks outside the camera corridor, including the opening swoop. Twenty-seven focused checks include transformed cloud bounds; the focused world-19 campaign still clears.
 - Balls absorb continuous contact and ranged damage even during deployment, preserve unused troop power and grant a four-second x2 wreck bonus. Charged giants preserve output in a full pool and receive that multiplier too.
 - Rapid doubles rate to x8; Power triples output. Bulldog and Siege tanks add armor. Three troop weapons, escort cannons and repeated air strikes persist through stages and retries. Escorts appear in worlds 8, 12 and 14.
 - Weapons select visible targets through the spatial grid and spend firing capacity only on actual shots. Idle back-line troops cannot starve the front line.
@@ -28,11 +29,13 @@ Browser crowd shooter with 20 levels and three stages per level. Plain JavaScrip
 - Progress and mute settings use browser localStorage.
 - Campaign checks use a bot and do not replace human balance feedback. Sustained performance and physical mobile devices remain unvalidated.
 - User requests frequent logical commits followed immediately by merging to main through a PR with `gh pr merge --squash --delete-branch`. Do not ask for another confirmation. Keep the biome map and progressive unlocks; preserve existing localStorage progress.
+- Overnight work is active: improve native 3D troop and weapon assets, add multiple distinct vehicle transformations, and limit tutorials to first introductions. A morning report is scheduled for 2026-11-06 at 09:00 Europe/Rome. Delegate work by file ownership and integrate through separate verified PRs.
 
 ## Do not
 - Do not introduce a build system, backend, or external asset dependency just to serve the game.
 - Do not restore the flat level-card grid or erase legacy progress when changing unlock rules.
 - Do not remove the deliberately overpowered multiplier routes or collapse the intermediate troop ranks.
 - Do not spend excessive time on UI testing; keep browser checks focused.
+- Do not place storm clouds above the playable road or repeat tutorial prose on every stage.
 - Do not commit generated screenshots, node_modules, or unrelated user changes.
 - Do not push directly to the default branch or add agent commit signatures.
