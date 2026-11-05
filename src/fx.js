@@ -180,6 +180,16 @@ const AMBIENT = {
   moon: { n: 160, color: 0xc8d0ff, color2: 0x8a90c0, size: 0.16, vel: [0, 0.25, 0], sway: 0.3, opacity: 0.7, add: true, twinkle: 1 },
   sky: { n: 140, color: 0xffffff, color2: 0xcfe8ff, size: 0.35, vel: [1.2, 0.1, 0.5], sway: 0.6, opacity: 0.6, add: false },
   void: { n: 320, color: 0xff9af0, color2: 0x9a3aff, size: 0.26, vel: [0, 1.6, 0], sway: 0.6, opacity: 0.95, add: true, twinkle: 1 },
+  factory: { n: 200, color: 0xffb060, color2: 0x8a8a8a, size: 0.22, vel: [0.4, 1.0, 0], sway: 0.5, opacity: 0.7, add: false },
+  casino: { n: 260, color: 0xffd21a, color2: 0xff3a5a, size: 0.25, vel: [0.2, -1.2, 0.2], sway: 1.4, opacity: 0.95, add: true, twinkle: 1 },
+  coral: { n: 220, color: 0xffffff, color2: 0x8af0ff, size: 0.25, vel: [0, 1.2, 0], sway: 0.8, opacity: 0.7, add: true },
+  spooky: { n: 180, color: 0xb0ff6a, color2: 0x6a3aff, size: 0.22, vel: [0.2, 0.3, 0.2], sway: 1.2, opacity: 0.9, add: true, twinkle: 1 },
+  arena: { n: 160, color: 0xff6a6a, color2: 0xffd0a0, size: 0.24, vel: [0.8, -0.6, 0.3], sway: 1.4, opacity: 0.85, add: false },
+  crystal: { n: 300, color: 0x9afff8, color2: 0xc08aff, size: 0.2, vel: [0, 0.4, 0], sway: 0.4, opacity: 0.95, add: true, twinkle: 1 },
+  volcano: { n: 360, color: 0xffb040, color2: 0xff3a0a, size: 0.3, vel: [0.6, 2.4, 0.3], sway: 0.9, opacity: 0.95, add: true, twinkle: 1 },
+  tomb: { n: 220, color: 0xfff0c8, color2: 0xe0b070, size: 0.18, vel: [2.4, 0.05, 0.6], sway: 0.6, opacity: 0.6, add: false },
+  storm: { n: 520, color: 0xd0e8ff, color2: 0x8aa0c0, size: 0.16, vel: [0.8, -7, 0.4], sway: 0.2, opacity: 0.7, add: false },
+  blackhole: { n: 360, color: 0xffc08a, color2: 0x9a3aff, size: 0.24, vel: [0, 0, 3], sway: 0.3, opacity: 0.95, add: true, twinkle: 1 },
 };
 export class Ambient {
   constructor(scene) {
