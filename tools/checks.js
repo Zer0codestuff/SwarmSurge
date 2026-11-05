@@ -147,6 +147,18 @@ window.runGameChecks = (g) => {
     const paused=G.paused && $('pause').open && !keys.right;
     resumeGame(); return {pass:paused};
   })()`);
+  check('Flanking reinforcements wait for their warning and use bounded power', `(() => {
+    G.armyAvg=1e30;
+    scheduleFlank(G.stage,{kind:4,count:3,warning:1.4,firstSide:0});
+    updateEffects(1); const waiting=R.n===0;
+    updateEffects(.5);
+    return {pass:waiting && R.n===3 && R.kind[0]===4 && R.hp[0]<100 && G.stage.flankN===1};
+  })()`);
+  check('A cleared stage cancels pending flanking reinforcements', `(() => {
+    scheduleFlank(G.stage,{kind:4,count:3,warning:1.4,firstSide:0});
+    G.phase='clear'; updateEffects(2);
+    return {pass:R.n===0};
+  })()`);
   g.start(1); g.pause();
   return results;
 };

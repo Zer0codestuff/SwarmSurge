@@ -438,7 +438,7 @@ function buildStage(sd, i, root, theme) {
   const st = {
     def: sd, i, z0, group, gates: [], walls: [], saws: [], spawners: [], crushers: [], turrets: [], exits: [],
     belts: [], pillars: [], tornados: [], holes: [], balls: [], metT: sd.meteors?.every ?? 0,
-    tower: null, boss: null, fort: null, waveT: 2.0, waveN: 0, time: 0, enraged: false, comboNext: 10,
+    tower: null, boss: null, fort: null, waveT: 2.0, waveN: 0, flankT: sd.flanks?.start ?? Infinity, flankN: 0, time: 0, enraged: false, comboNext: 10,
   };
   sd.gates?.forEach((gd, k) => {
     const cur = gd.t === 'flip' ? gd.a : gd.t === 'slot' ? gd.opts[0] : gd;
@@ -1468,6 +1468,21 @@ function spawnWave(S) {
     for (let k = 0; k < cnt; k++) spawnRed(rand(-5.5, 5.5), zb - rand(0, 3), kind, RED_TYPES[kind].hp * m);
   }
 }
+function scheduleFlank(S, def = S.def.flanks) {
+  if (!def) return;
+  const x = (S.flankN + def.firstSide) % 2 ? -4.5 : 4.5, z = S.z0 - 14;
+  S.flankN++;
+  popup('FLANK INCOMING', 'combo c1', x, 2, z, 1.1);
+  sound.play('warn');
+  addTelegraph('circle',x,z,1.6,0,def.warning,() => {
+    if (S !== G.stage || G.phase !== 'play') return;
+    const hp = RED_TYPES[def.kind].hp * threat(S);
+    for (let k = 0; k < def.count; k++) {
+      spawnRed(x + (k-(def.count-1)/2)*.4,z-(k%2)*.55,def.kind,hp);
+    }
+    burst(x,.3,z,PCOL.red,12,3); addRing(x,z,1.8,0xff6854,.35);
+  });
+}
 
 // boss attacks + telegraph effects
 function addRing(x, z, r, color, life) {
@@ -2009,6 +2024,10 @@ function step(dt) {
     if (S.time > 80 && !S.enraged) { S.enraged = true; banner('ENEMY RAGE!', 'red', 1.8); sound.play('warn'); }
     S.waveT -= dt;
     if (S.waveT <= 0) { S.waveT = S.def.waves.every * (S.enraged ? 0.55 : 1); spawnWave(S); }
+    if (S.def.flanks && S.flankN < S.def.flanks.limit) {
+      S.flankT -= dt;
+      if (S.flankT <= 0) { scheduleFlank(S); S.flankT = S.def.flanks.every; }
+    }
     for (const s of S.spawners) {
       if (!s.alive) continue;
       s.timer -= dt;
