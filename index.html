@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#1b1440">
+<meta name="theme-color" content="#183450">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Swarm Surge</title>
@@ -172,6 +172,70 @@
   .btn.alt { background: #4a7cff; box-shadow: 0 5px 0 #233f99; }
   .btn.grey { background: #6a6a88; box-shadow: 0 5px 0 #3a3a55; }
   .btn:active { transform: translateY(3px); box-shadow: none; }
+  /* Compact field instruments leave the road clear. */
+  :root { --ink: #142c46; --glass: rgba(20,44,70,.88); }
+  .lbl.ball { background: linear-gradient(90deg, #b83239 var(--health,100%), #3e2535 var(--health,100%)); border: 2px solid #ffd68b; font-size: clamp(16px, 3vw, 22px); padding: 3px 12px; box-shadow: 0 3px 0 #552436; }
+  .lbl.pillar { font-size: 13px; background: #694c42; border: 1px solid #ffe3bb; border-radius: 5px; padding: 1px 6px; }
+  .lbl.tower { font-size: 22px; border-width: 2px; padding: 2px 10px; }
+  #topbar { left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); }
+  #armybox { background: var(--glass); border: 1px solid #c8eaff; border-radius: 16px; padding: 3px 14px 3px 8px; box-shadow: 0 4px 12px #142c4626; }
+  #army { font-size: 27px; }
+  #armybox .dot { width: 20px; height: 20px; border-width: 1px; }
+  #lvlname { top: 49px; color: #e9f5ff; text-shadow: 0 1px 4px #142c46; }
+  #btns button { width: 36px; height: 36px; border: 1px solid #c8eaff; background: var(--glass); border-radius: 11px; }
+  #lives { border: 1px solid #c8eaff; background: var(--glass); font-size: 17px; }
+  #shieldcount { color: #c1f5ff; font-size: 11px; min-height: 14px; text-shadow: 0 1px 3px #142c46; }
+  #target { position: absolute; top: 79px; left: 50%; transform: translateX(-50%); width: min(180px, 37vw); text-align: center; }
+  #targettrack { height: 5px; background: #142c4677; border: 1px solid #ffffff88; border-radius: 8px; overflow: hidden; }
+  #targetfill { height: 100%; background: #ff7181; transition: width .15s; }
+  #targetname { font-size: 10px; text-shadow: 0 1px 3px #142c46; }
+  #bottom { width: min(440px, 90vw); bottom: max(10px, env(safe-area-inset-bottom)); }
+  #ups { gap: 4px; margin-bottom: 7px; }
+  .up { font-family: system-ui, sans-serif; font-weight: 800; border: 1px solid #ffffffbb; font-size: 10px; padding: 2px 7px; border-radius: 6px; box-shadow: 0 2px 0 #142c4633; }
+  #rank { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 6px; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 800; }
+  #rankdot { width: 9px; height: 9px; border-radius: 3px; border: 1px solid #fff; }
+  #surge { color: #ffe091; font-size: 12px; min-height: 16px; margin-bottom: 3px; }
+  #charge { height: 12px; border: 1px solid #d8f2ff; background: var(--glass); }
+  #charge span { font-size: 8px; line-height: 10px; vertical-align: top; }
+  #banner { top: 34%; max-width: 94vw; white-space: normal; text-align: center; font-size: clamp(26px, 6vw, 50px); line-height: 1.05; }
+  #tip { top: auto; bottom: 18%; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 750; width: min(490px, 88vw); padding: 8px 12px; border-radius: 10px; background: var(--glass); text-shadow: none; line-height: 1.35; }
+  #hint { font-family: system-ui, sans-serif; font-weight: 800; font-size: 14px; bottom: 27%; }
+  #army.t4 { animation: none; }
+  .pop span.c4 { animation: rise 1.4s ease-out forwards; }
+  .pop span.c3, .pop span.c4 { font-size: min(32px, 7vw); }
+  .overlay { background: linear-gradient(160deg, #19394eea, #18233df5); }
+  #title { font-size: clamp(44px, 9vw, 72px); animation: none; letter-spacing: -2px; }
+  #title b { animation: none; color: #ff986e; }
+  #sub { font-family: system-ui, sans-serif; font-size: 14px; font-weight: 650; margin: 10px 0 20px; }
+  .card { border: 1px solid #ffffff66; border-radius: 14px; padding: 12px; box-shadow: 0 3px 0 #081c3044; }
+  .card .name { font-size: 17px; }
+  .card .blurb { font-weight: 500; line-height: 1.4; }
+  .card .enemy { display: none; }
+  .diff { border-width: 1px; letter-spacing: 0; font-size: 9px; }
+  .diff.d3 { animation: none; }
+  #howto { font-weight: 500; line-height: 1.5; color: #e1eef8; background: #11283d; }
+  button:focus-visible { outline: 3px solid #fff0a8; outline-offset: 4px; }
+  @media (max-width: 480px) {
+    #army { font-size: 23px; }
+    #armybox { top: 0; }
+    #lvlname { font-size: 10px; top: 48px; max-width: calc(100% - 120px); }
+    .pip { width: 20px; height: 20px; font-size: 10px; border-width: 1px; }
+    #pips { gap: 4px; }
+    #btns button { width: 31px; height: 31px; font-size: 15px; }
+    #target { top: 72px; }
+    #lives { font-size: 15px; }
+    #tip { font-size: 12px; bottom: 18%; }
+    #levels { gap: 8px; }
+  }
+  @media (max-height: 520px) and (orientation: landscape) {
+    #bottom { left: 12px; transform: none; width: 250px; }
+    #target { top: 12px; left: 65%; }
+    #tip { bottom: 10px; left: 64%; width: 40vw; }
+    #hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
 </style>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
@@ -187,10 +251,14 @@
     <div id="right">
       <div id="btns"><button id="mute" aria-label="Toggle sound">🔊</button><button id="menubtn" aria-label="Menu">☰</button></div>
       <div id="lives"></div>
+      <div id="shieldcount"></div>
     </div>
   </div>
+  <div id="target"><div id="targettrack"><div id="targetfill"></div></div><span id="targetname"></span></div>
   <div id="bottom" class="stroke">
+    <div id="surge"></div>
     <div id="ups"></div>
+    <div id="rank"><i id="rankdot"></i><span id="rankname">Recruit</span></div>
     <div id="charge"><div id="chargefill"></div><span>GIANT</span></div>
   </div>
   <div id="white"></div>
@@ -201,9 +269,9 @@
 
 <div id="menu" class="overlay hidden">
   <div id="title">SWARM<br><b>SURGE</b></div>
-  <div id="sub" class="stroke">Multiply your army. Crush the red horde.</div>
+  <div id="sub">Build your tank. Arm the swarm. Call the air wing.</div>
   <div id="levels"></div>
-  <div id="howto">Drag left/right (or use ← →) to aim. Gates in a row MULTIPLY each other: x2 → x3 → x4 = x24. When the screen is full your units fuse into bigger, stronger ones (blue → purple → gold → pink → rainbow). Gold gates eat units but upgrade your cannon for the whole level. Break fences, ice and barriers to reach the crazy gates behind them. You have 10 hearts; hearts left decide your ★ rating.</div>
+  <div id="howto">Drag or use A/D and arrow keys to aim. Chain gates to multiply your army. Feed gold crates to unlock tanks, troop weapons and air support for the level. Troops evolve through 13 ranks, from blue recruits to prismatic elites. Extra power fuses into troops when the road gets crowded. Smash rolling swarms for a four-second x2 bonus. Keep your hearts to earn three stars.</div>
 </div>
 
 <div id="result" class="overlay hidden">

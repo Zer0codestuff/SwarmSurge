@@ -5,7 +5,7 @@
 //   loop:      gate { to: { x, d }, max }      sends units back down the road with every gate fresh again
 //   phase:     on any gate { on, period, off } the gate only exists `on` s out of every `period`
 //   heart:     absorber { need, v }            +v lives (refillable, 2.5x the price each time)
-//   hangar:    absorber { need }               +1 squad cannon for the rest of the level
+//   hangar:    absorber { need }               repeated air strikes for the rest of the level
 //   tesla:     absorber { need, every, zaps, range, dmg } once charged it zaps red units nearby forever
 //   redmul / redadd: red gates { v, hp }       multiply RED units walking through; break them with `hp` power
 //   pillars:   { x, d, hp, fall }              smash one and it topples across the road, crushing reds
@@ -26,7 +26,7 @@ export const MORE_LEVELS = [
     name: 'Clockwork Factory',
     theme: 'factory',
     threat: 1.9,
-    feature: 'Conveyor belts + squad hangar',
+    feature: 'Conveyor belts + air wing',
     blurb: 'Belts drag your army sideways: aim ahead! Fill the hangar to deploy extra cannons.',
     enemy: 'Drones: fly straight over walls',
     stages: [
@@ -277,7 +277,7 @@ export const MORE_LEVELS = [
         spawners: [{ x: 0, d: 47, hp: 3000, every: 2.0, n: 2, kind: 4, unitHp: 1, style: 'rival', slide: { amp: 4, speed: 0.7 } }],
       },
       {
-        tip: 'Hit the rival hard: the hangar gives you your own squad!',
+        tip: 'Hit the rival hard: the hangar calls in your own air wing!',
         tower: 670000,
         waves: { every: 3.4, swarm: 7, shielder: 1, ramp: 0.4 },
         walls: [{ x: 0, d1: 8, d2: 36 }],
@@ -467,7 +467,7 @@ export const MORE_LEVELS = [
       },
       {
         tip: 'THE PHARAOH! Sandstorms, mummies, curses. Show no mercy!',
-        boss: { type: 'pharaoh', hp: 1.2e20, speed: 0.55 },
+        boss: { type: 'pharaoh', hp: 2e16, speed: 0.55 },
         waves: { every: 2.8, swarm: 12, mummy: 3, ramp: 0.45 },
         walls: [{ x: 0, d1: 18, d2: 34, slide: { amp: 4, speed: 0.7, ph: 0 } }],
         gates: [
