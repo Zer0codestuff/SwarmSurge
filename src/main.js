@@ -509,14 +509,18 @@ const opText = (c, boost = 1) => (c.t === 'mul' ? 'x' + fmt(c.v * boost) : c.t =
 function refreshGate(g) {
   const c = g.cur, L = g.model.label, t = g.def.t;
   g.dirty = false;
-  if (t === 'flip') {
+  if (g.locked) M.drawLabel(L, opText(c, g.boost), '', -1, '#c9b886');
+  else if (t === 'flip') {
     const p = Math.ceil((1 - g.flipT / g.def.period) * 8) / 8;
     M.drawLabel(L, c.t === 'mul' ? 'x' + fmt(c.v * g.boost) : '÷' + c.v, '', p, c.t === 'mul' ? '#ffffff' : '#ffd9d9');
   } else if (t === 'mul') M.drawLabel(L, 'x' + fmt(c.v * g.boost), '', -1, g.boost > 1 ? '#ffe9ff' : '#ffffff');
   else if (t === 'add') M.drawLabel(L, '+' + fmt(c.v * g.boost));
   else if (t === 'div') M.drawLabel(L, '÷' + c.v, '', -1, '#ffd9d9');
   else if (t === 'barrier') M.drawLabel(L, '−' + fmtHp(g.hp));
-  else if (t === 'ice' || t === 'fence') M.drawLabel(L, fmtHp(g.hp), 'SMASH!');
+  else if (t === 'ice' || t === 'fence') {
+    if (g.def.vault) M.drawLabel(L, 'x10M', 'SEAL ' + fmtHp(g.hp), -1, '#ffe680');
+    else M.drawLabel(L, fmtHp(g.hp), 'SMASH!');
+  }
   else if (t === 'statue') M.drawLabel(L, fmtHp(g.hp));
   else if (t === 'upgrade') M.drawLabel(L, UP_NAMES[c.up], `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
   else if (t === 'nuke') M.drawLabel(L, 'NUKE', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#9aff5a');
@@ -562,8 +566,13 @@ function buildStage(sd, i, root, theme) {
     const g = {
       def: gd, cur, bit: (1 << (k & 31)) >>> 0, hi: k >= 32, baseX: gd.x, x: gd.x, z: z0 - gd.d, w: gd.w, alive: true,
       hp: gd.hp || 0, prog: 0, need: gd.need || 0, val: gd.v || 1, fed: 0, flipT: 0, flipIdx: 0, flash: 0, model,
-      ph: Math.random() * 6.28, dying: 0, dirty: true, refT: 0, boost: 1, on: true, spin: 0, active: false, zapT: 0,
+      ph: gd.slide?.ph ?? Math.random() * 6.28, dying: 0, dirty: true, refT: 0, boost: 1, on: !gd.requires, locked: !!gd.requires, spin: 0, active: false, zapT: 0,
     };
+    g.textScale = gd.requires ? 3.4 / model.text.geometry.parameters.width : gd.vault ? 4.8 / model.text.geometry.parameters.width : 1;
+    if (gd.requires || gd.vault) {
+      model.text.position.y = gd.vault ? 2.1 : 3.7 + gd.vaultStep * 0.9;
+      model.text.scale.setScalar(g.textScale);
+    }
     model.group.position.set(g.x, 0, g.z);
     root.add(model.group);
     refreshGate(g);
@@ -576,6 +585,7 @@ function buildStage(sd, i, root, theme) {
       st.exits.push(ex);
     }
   });
+  for (const g of st.gates) if (g.def.requires) g.seal = st.gates.find(seal => seal.def.id === g.def.requires);
   sd.walls?.forEach((wd) => {
     const m = M.buildWall(wd.d2 - wd.d1);
     m.position.set(wd.x, 0, z0 - (wd.d1 + wd.d2) / 2);
@@ -1295,7 +1305,7 @@ function absorb(S, g, i) {
     spark(g.x, 1.2, g.z, col, 20, 7, 1, 0.6);
     sound.play('boom');
     G.shake = Math.max(G.shake, 0.4);
-    popup('BROKEN!', 'combo c1', g.x, 2.5, g.z, 1.0);
+    popup(g.def.vault ? 'VAULT OPEN!' : 'BROKEN!', 'combo c1', g.x, 2.5, g.z, 1.0);
   }
 }
 // trampoline: fly over walls, gates and traps, land in another lane
@@ -2118,11 +2128,15 @@ function updateMechanics(S, dt) {
   for (const g of S.gates) {
     if (!g.alive) continue;
     const d = g.def;
+    if (d.requires) {
+      const locked = !g.seal || g.seal.alive;
+      if (locked !== g.locked) { g.locked = locked; g.dirty = true; }
+    }
     if (d.phase) {
       const was = g.on;
-      g.on = ((G.t + (d.phase.off ?? 0)) % d.phase.period) < d.phase.on;
+      g.on = !g.locked && ((G.t + (d.phase.off ?? 0)) % d.phase.period) < d.phase.on;
       if (was !== g.on && !TURBO) spark(g.x, 1.2, g.z, PCOL.white, 6, 3, 0.9, 0.4, 0);
-    }
+    } else if (d.requires) g.on = !g.locked;
     if (d.t === 'slot') {
       g.flipT += dt;
       if (g.spin > 0) { g.spin -= dt; g.dirty = true; if (g.spin <= 0) { g.flash = 1; if (!TURBO) g.model.setColor(gateColor(d, g.cur)); } }
@@ -2639,13 +2653,14 @@ function renderWorld(dt) {
       if (g.dirty && G.t - g.refT > 0.08) { g.refT = G.t; refreshGate(g); }
       const t = g.def.t;
       if (g.model.icon) { g.model.icon.rotation.y = Math.sin(G.t * 1.5 + g.ph) * .35; g.model.icon.position.y = 2.8 + Math.sin(G.t * 2 + g.ph) * .12; }
-      if (g.def.phase) {
+      if (g.locked) grp.visible = true;
+      else if (g.def.phase) {
         const P2 = g.def.phase, ph = (G.t + (P2.off ?? 0)) % P2.period, edge = g.on ? P2.on - ph : P2.period - ph;
         const blink = edge < 0.5 && Math.sin(G.t * 40) > 0;
         grp.visible = g.on ? edge >= 0.5 || blink : blink;
       }
       if (!BLOCKERS.has(t) && t !== 'jump') grp.scale.set(1 + g.flash * 0.05, 1 + g.flash * 0.09, 1);
-      if (g.model.text) g.model.text.scale.setScalar(1 + g.flash * 0.14 + (g.def.mega ? Math.sin(G.t * 5) * 0.04 : 0) + (g.spin > 0 ? 0.08 : 0));
+      if (g.model.text) g.model.text.scale.setScalar(g.textScale * (1 + g.flash * 0.14 + (g.def.mega ? Math.sin(G.t * 5) * 0.04 : 0) + (g.spin > 0 ? 0.08 : 0)));
       if (t === 'portal' || t === 'loop') { g.model.swirl.rotation.z -= dt * (t === 'loop' ? -7 : 5); g.model.panelMat.opacity = 0.55 + g.flash * 0.35; }
       else if (t === 'jump') { grp.scale.set(1, 1 - g.flash * 0.35, 1); }
       else if (t === 'hangar') { g.model.plane.position.y = 2.2 + Math.sin(G.t * 2 + g.ph) * 0.15; g.model.plane.rotation.z = Math.sin(G.t * 1.3 + g.ph) * 0.1; }
@@ -3039,6 +3054,7 @@ window.__game = {
     return G.stage.gates.filter((g) => g.alive).map((g) => ({
       t: g.def.t === 'flip' || g.def.t === 'slot' ? g.cur.t : g.def.t, flip: g.def.t === 'flip', slot: g.def.t === 'slot', opts: g.def.opts,
       boost: g.boost, v: (g.def.t === 'charge' ? g.val : g.cur.v) * (g.cur.t === 'div' ? 1 : g.boost), max: g.def.max,
+      id: g.def.id, requires: g.def.requires, locked: g.locked,
       x: +g.x.toFixed(2), d: +(G.z0 - g.z).toFixed(1), w: g.w, hp: g.hp, need: g.need, prog: g.prog, up: g.cur.up, to: g.def.to,
       slide: !!g.def.slide, fa: g.def.a, fb: g.def.b, passes: g.passes || 0, on: g.on, active: g.active, phase: g.def.phase, loopMax: g.def.max,
     }));

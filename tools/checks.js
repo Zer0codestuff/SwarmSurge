@@ -423,6 +423,27 @@ window.runGameChecks = (g) => {
     G.phase='clear'; updateEffects(2);
     return {pass:R.n===0};
   })()`);
+  check('Optional prizes cannot be collected by bypassing an intact seal', `(() => {
+    startLevel(3); G.paused=true; G.phase='play'; G.bot=null; B.n=R.n=0;
+    const S=G.stage, prize=S.gates.find(g=>g.def.requires), seal=prize.seal;
+    const passPrize=()=>{
+      B.n=R.n=0; G.t=0; prize.x=seal.x;
+      const i=spawn(B,prize.x,prize.z+.6,1,0); B.vz[i]=-9;
+      buildCoarse(cR,R); buildGrid(gB,B); updateMechanics(S,0); moveBlue(S,.1);
+      let power=0; for(let j=0;j<B.n;j++)power+=B.hp[j]; return power;
+    };
+    const blocked=passPrize()===1 && prize.locked && !prize.on;
+    seal.alive=false; const rewarded=passPrize()>1;
+    return {pass:blocked && rewarded && !prize.locked};
+  })()`);
+  check('A sealed route resets after retry and a normal route remains available', `(() => {
+    startLevel(3); G.paused=true;
+    const seal=G.stage.gates.find(g=>g.def.vault); seal.alive=false;
+    updateMechanics(G.stage,0); const opened=G.stage.gates.filter(g=>g.def.requires).every(g=>!g.locked);
+    $('rretry').click(); G.paused=true;
+    const reset=G.stage.gates.filter(g=>g.def.requires).every(g=>g.locked && !g.on);
+    return {pass:opened && reset && G.stage.gates.some(g=>g.def.t==='mul'&&!g.def.requires)};
+  })()`);
   check('Storm clouds stay outside the road camera corridor', `(() => {
     startLevel(18); const clouds=G.root.getObjectByName('storm-cloud-banks');
     if(!clouds) return {pass:false};
