@@ -21,6 +21,10 @@ window.__policies = (() => {
     const L = gates.filter((q) => q.d > d0 && Math.abs(x - q.x) <= q.w / 2 - 0.15).sort((a, b) => a.d - b.d);
     let m = 1;
     for (const q of L) {
+      if (q.locked) {
+        const seal = gates.find(g => g.id === q.requires);
+        if (!seal || seal.d > d0 && Math.abs(x - seal.x) > seal.w / 2 - 0.15) continue;
+      }
       if (q.t === 'tesla' && q.active) continue;
       const on = q.phase ? q.phase.on / q.phase.period : 1;
       if (on < 1 && !BLK.has(q.t)) {
@@ -121,7 +125,7 @@ window.__policies = (() => {
   // casual player: aims at the biggest visible multiplier product, ignores gold gates and blockers
   function naive(g) {
     const threats = g.threats ? g.threats() : [];
-    const gates = g.gates().filter((q) => !ABS.has(q.t) && !BLK.has(q.t) && q.t !== 'portal');
+    const gates = g.gates().filter((q) => !q.locked && !ABS.has(q.t) && !BLK.has(q.t) && q.t !== 'portal');
     let best = -1, bx = 0;
     for (let x = -6; x <= 6.01; x += 0.25) {
       let v = 1;

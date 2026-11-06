@@ -42,6 +42,27 @@ const LESSONS = {
   squad: 'Deploy an escort cannon. It mirrors your guns and adds two armor points.',
 };
 const FLANK_TYPES = { jungle:4, neon:7, candy:6, moon:5, sky:7, void:9, factory:8, casino:2, coral:4, spooky:9, arena:3, crystal:6, volcano:12, tomb:10, storm:7, blackhole:9 };
+const VAULTS = [
+  { world: 4, stage: 1, x: 5.65, d: 30.5, hp: 1000, t: 'ice', prizes: [34, 37, 40] },
+  { world: 6, stage: 2, x: 5.65, d: 31, hp: 8000, t: 'fence', prizes: [34.5, 37.5, 40.5] },
+  { world: 12, stage: 1, x: -5.65, d: 24, hp: 350, t: 'fence', prizes: [28, 33, 38] },
+  { world: 16, stage: 1, x: -5.65, d: 31.5, hp: 3000, t: 'ice', prizes: [35, 38, 41] },
+];
+
+function addVault(s, world, stage) {
+  const vault = VAULTS.find(v => v.world === world && v.stage === stage);
+  if (!vault) return;
+  const id = `vault-${world}-${stage}`, period = 3.2;
+  // Fixed costs buy five to seven seconds of an established narrow stream, before timing the prizes.
+  s.gates.push({ t: vault.t, id, vault: true, x: vault.x, d: vault.d, w: 1.5, hp: vault.hp });
+  vault.prizes.forEach((d, i) => s.gates.push({
+    t: 'mul', v: [100, 100, 1000][i], requires: id, vaultStep: i, x: i ? vault.x : Math.sign(vault.x) * 5.1,
+    d, w: i ? 1.5 : 1.25, color: 'gold', mega: true,
+    slide: i ? undefined : { amp: 0.55, speed: 1.2, ph: 0 },
+    // Match the phase windows to a regular troop's travel time along the chain.
+    phase: { period, on: 0.7, off: (period - (d - vault.prizes[0]) / 9 % period) % period },
+  }));
+}
 
 export function prepareCampaign(levels) {
   return levels.map((level, li) => ({
@@ -94,6 +115,7 @@ export function prepareCampaign(levels) {
         b.delay = Math.min(b.delay ?? 0, 5);
         b.hp *= 0.7;
       }
+      addVault(s, li + 1, si + 1);
       return s;
     }),
   }));
