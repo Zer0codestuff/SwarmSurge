@@ -16,6 +16,8 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - `src/tutorials.js`: persisted first-introduction lessons. Other modules build worlds, props, bosses, pooled effects and synthesized audio.
 
 ## Run and verification
+- Railway deployment uses the root Dockerfile and Caddyfile to serve only index.html, src and vendor. Caddy listens on Railway's PORT, defaulting to 8080. No application build step is required.
+- Railway project: SwarmSurge (85f13dc6-b388-49b6-8958-ac97f96b5d56), production environment e72c5f09-fe4f-4302-b2d0-a32eb632bbe8. Deploy the GitHub main branch through the connected Railway service.
 - Serve from the root: `python3 -m http.server 8000 --bind 127.0.0.1`. Open `http://localhost:8000/index.html`.
 - Drag horizontally, use arrow keys or A/D to aim. Firing is automatic. Pause with the HUD button, Escape or P.
 - `?level=12&stage=2` starts a selected stage. `speed=2` accelerates simulation; `turbo=1` skips rendering for bots.
