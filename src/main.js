@@ -392,7 +392,7 @@ const G = {
   shake: 0, recoil: 0, kills: 0, time: 0, explosions: [], splits: [], revives: [], effects: [], army: 0, maxArmy: 0, bestCombo: 1, fps: 60,
   moveFrom: 0, moveTo: 0, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, armyPrev: 0, pumpT: 0,
   squad: 0, rad: 0, zones: [], nextMile: 1000, armyAvg: 0,
-  chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
+  chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
 };
 const cannon = M.buildCannon();
 const twinCannon = M.buildCannon(0xff4fd8);
@@ -683,7 +683,7 @@ function startLevel(idx, stageIdx = 0) {
     log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, army: 0, armyShown: 0, armyPrev: 0, pumpT: 0, squad: 0, nextMile: 1000, armyAvg: 0,
     recoil: 0, cannonPulse: 0, kick: 0,
-    chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
+    chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
   });
   setBarrels(1);
   cannon.setChassis(0); twinCannon.setChassis(0);
@@ -847,6 +847,20 @@ function nearestVisibleRed(S, x, z, range, excluded = null, forwardOnly = true) 
 }
 function hitArmedRed(j, damage, spec, troopPower) {
   if (R.hp[j] <= 0) return;
+  let reaction = null;
+  if (spec.key === 'rail' && R.chill[j] > 0) {
+    damage *= 1.6; R.chill[j] = 0; reaction = 'SHATTER';
+  } else if (spec.key === 'plasma' && R.burn[j] > 0) {
+    damage *= 1.4; R.burn[j] = R.burnDamage[j] = 0; reaction = 'IGNITION';
+  }
+  if (reaction && G.t >= G.reactionFxT) {
+    G.reactionFxT = G.t + 1;
+    const ice = reaction === 'SHATTER', color = ice ? 0xb4efff : 0xffad6c;
+    popup(reaction + '!', 'combo c1', R.x[j], redAimY(j) + .7, R.z[j], .9);
+    addRing(R.x[j], R.z[j], 1.2, color, .3);
+    spark(R.x[j], redAimY(j), R.z[j], ice ? PCOL.ice : PCOL.orange, 6, 3, .45, .3);
+    if (!TURBO) sound.play(ice ? 'shatter' : 'ignite');
+  }
   R.hp[j] -= damage; R.flash[j] = 1; R.st[j] = 0;
   if (R.hp[j] <= 0) { killRed(j); return; }
   if (spec.burn) {

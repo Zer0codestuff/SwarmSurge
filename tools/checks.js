@@ -104,6 +104,18 @@ window.runGameChecks = (g) => {
     buildGrid(gR,R); updateArsenal(G.stage,1);
     return {pass:R.hp[0]<100 && R.hp[1]<100 && R.hp[2]===100,hp:Array.from(R.hp.slice(0,3))};
   })()`);
+  check('Railguns shatter frost once and consume the chilled state', `(() => {
+    const j=spawn(R,0,-6,200,0),i=spawn(B,0,-3,10,0); R.chill[j]=1.8; B.weapon[i]=5; B.shot[i]=0;
+    buildGrid(gR,R); updateArsenal(G.stage,STEP); const shattered=Math.abs(R.hp[j]-182.4)<1e-4 && R.chill[j]===0;
+    B.shot[i]=0; updateArsenal(G.stage,STEP);
+    return {pass:shattered && Math.abs(R.hp[j]-171.4)<1e-4,hp:R.hp[j]};
+  })()`);
+  check('Plasma ignition consumes burning without multiplying troops', `(() => {
+    const j=spawn(R,0,-6,200,0),i=spawn(B,0,-3,10,0); R.burn[j]=2; R.burnDamage[j]=.9; B.weapon[i]=8; B.shot[i]=0;
+    buildGrid(gR,R); updateArsenal(G.stage,STEP); const ignited=Math.abs(R.hp[j]-188.8)<1e-4 && R.burn[j]===0 && R.burnDamage[j]===0;
+    B.shot[i]=0; updateArsenal(G.stage,STEP);
+    return {pass:ignited && Math.abs(R.hp[j]-180.8)<1e-4 && B.n===1 && R.n===1,hp:R.hp[j]};
+  })()`);
   check('Unlocked weapons mix across spawns and survive a retry', `(() => {
     upgradeCannon('rifle'); upgradeCannon('flame'); upgradeCannon('frost');
     for(let k=0;k<12;k++) spawn(B,0,-3,10,0);
