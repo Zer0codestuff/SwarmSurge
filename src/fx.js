@@ -424,20 +424,95 @@ export class Debris {
   clear() { this.life.fill(0); }
 }
 
-// break a model apart: every mesh flies off with its own spin, then shrinks away
-export function shatter(group, root, cx, cz, power = 8) {
+// Break a model into spatial chunks. Asset meshes are batched by material, so moving
+// whole meshes would peel one material layer off everything and leave holes. Instead,
+// triangles are binned into a coarse grid and every chunk carries all of its materials.
+const _rel = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _nm = new THREE.Matrix3(), _v = new THREE.Vector3();
+function shown(o, top) {
+  for (let p = o; p; p = p.parent) { if (!p.visible) return false; if (p === top) return true; }
+  return true;
+}
+export function shatter(group, root, cx, cz, power = 8, target = 36) {
+  // Refresh only this model and the root's own ancestors; the whole level tree is large.
+  group.updateWorldMatrix(true, true);
+  root.updateWorldMatrix(true, false);
+  _inv.copy(root.matrixWorld).invert();
+  const sources = [];
+  let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  group.traverse((o) => {
+    const g = o.geometry, pos = g?.attributes.position;
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !pos || !o.layers.isEnabled(0) || !shown(o, group)) return;
+    _rel.multiplyMatrices(_inv, o.matrixWorld);
+    _nm.getNormalMatrix(_rel);
+    const wp = new Float32Array(pos.count * 3), nrm = g.attributes.normal, wn = nrm ? new Float32Array(pos.count * 3) : null;
+    for (let i = 0; i < pos.count; i++) {
+      _v.fromBufferAttribute(pos, i).applyMatrix4(_rel).toArray(wp, i * 3);
+      if (wn) _v.fromBufferAttribute(nrm, i).applyMatrix3(_nm).normalize().toArray(wn, i * 3);
+      for (let a = 0; a < 3; a++) { const c = wp[i * 3 + a]; if (c < lo[a]) lo[a] = c; if (c > hi[a]) hi[a] = c; }
+    }
+    // Plain float arrays copy directly; anything else goes through the attribute accessors.
+    const attrs = Object.entries(g.attributes).map(([name, attr]) => ({
+      name, attr, k: attr.itemSize,
+      src: name === 'position' ? wp : name === 'normal' ? wn : !attr.isInterleavedBufferAttribute && !attr.normalized ? attr.array : null,
+    }));
+    sources.push({ o, g, wp, attrs, flip: _rel.determinant() < 0 });
+  });
   const parts = [];
-  group.updateMatrixWorld(true);
-  const meshes = [];
-  group.traverse((o) => { if (o.isMesh) meshes.push(o); });
-  for (const m of meshes) {
-    root.attach(m);
-    const wp = m.position;
-    const dx = wp.x - cx, dz = wp.z - cz;
-    const d = Math.hypot(dx, dz) || 1;
+  if (!sources.length) { group.visible = false; return parts; }
+  const size = hi.map((h, a) => Math.max(h - lo[a], 1e-3));
+  const cell = Math.max(Math.cbrt(size[0] * size[1] * size[2] / target), Math.max(...size) / 8);
+  // cell -> material slot -> vertex list
+  const cells = new Map();
+  for (const s of sources) {
+    const { o, g, wp } = s, idx = g.index, n = idx ? idx.count : g.attributes.position.count;
+    const mats = Array.isArray(o.material) ? o.material : null;
+    const groups = mats && g.groups.length ? g.groups : [{ start: 0, count: n, materialIndex: 0 }];
+    for (const gr of groups) {
+      const material = mats ? mats[gr.materialIndex] : o.material;
+      if (!material) continue;
+      const end = Math.min(n, gr.start + gr.count);
+      for (let t = gr.start; t + 2 < end; t += 3) {
+        const a = idx ? idx.getX(t) : t, b = idx ? idx.getX(t + 1) : t + 1, c = idx ? idx.getX(t + 2) : t + 2;
+        let key = 0;
+        for (let k = 0; k < 3; k++) {
+          const m = (wp[a * 3 + k] + wp[b * 3 + k] + wp[c * 3 + k]) / 3;
+          key = key * 64 + Math.min(63, Math.floor((m - lo[k]) / cell));
+        }
+        let slots = cells.get(key);
+        if (!slots) cells.set(key, slots = new Map());
+        let slot = slots.get(s.o.id * 64 + gr.materialIndex);
+        if (!slot) slots.set(s.o.id * 64 + gr.materialIndex, slot = { s, material, v: [] });
+        if (s.flip) slot.v.push(a, c, b); else slot.v.push(a, b, c);
+      }
+    }
+  }
+  for (const slots of cells.values()) {
+    const center = new THREE.Vector3();
+    let count = 0;
+    for (const { s, v } of slots.values()) for (const i of v) { center.x += s.wp[i * 3]; center.y += s.wp[i * 3 + 1]; center.z += s.wp[i * 3 + 2]; count++; }
+    center.divideScalar(count);
+    const pivot = new THREE.Group();
+    pivot.position.copy(center);
+    for (const { s, material, v } of slots.values()) {
+      const geo = new THREE.BufferGeometry();
+      for (const { name, attr, k, src } of s.attrs) {
+        const out = new Float32Array(v.length * k);
+        if (src) for (let j = 0; j < v.length; j++) { const i = v[j] * k; for (let c = 0; c < k; c++) out[j * k + c] = src[i + c]; }
+        else for (let j = 0; j < v.length; j++) for (let c = 0; c < k; c++) out[j * k + c] = attr.getComponent(v[j], c);
+        if (name === 'position') for (let j = 0; j < out.length; j += 3) { out[j] -= center.x; out[j + 1] -= center.y; out[j + 2] -= center.z; }
+        geo.setAttribute(name, new THREE.BufferAttribute(out, k));
+      }
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.castShadow = s.o.castShadow; mesh.receiveShadow = s.o.receiveShadow; mesh.renderOrder = s.o.renderOrder;
+      pivot.add(mesh);
+    }
+    root.add(pivot);
+    const dx = center.x - cx, dz = center.z - cz, d = Math.hypot(dx, dz) || 1;
+    const h = (center.y - lo[1]) / size[1];
     parts.push({
-      m, vx: (dx / d) * power * (0.4 + Math.random()), vy: power * (0.6 + Math.random() * 0.9), vz: (dz / d) * power * (0.4 + Math.random()) + power * 0.5,
-      wx: (Math.random() - 0.5) * 10, wy: (Math.random() - 0.5) * 10, wz: (Math.random() - 0.5) * 10, s0: m.scale.clone(),
+      m: pivot, vx: (dx / d) * power * (0.3 + Math.random() * 0.8), vy: power * (0.35 + h * 0.6 + Math.random() * 0.5),
+      vz: (dz / d) * power * (0.3 + Math.random() * 0.8) + power * 0.35,
+      wx: (Math.random() - 0.5) * 7, wy: (Math.random() - 0.5) * 7, wz: (Math.random() - 0.5) * 7, s0: pivot.scale.clone(),
     });
   }
   group.visible = false;
@@ -453,5 +528,9 @@ export function updateShatter(parts, dt, t) {
     p.m.scale.copy(p.s0).multiplyScalar(Math.max(0.001, k));
   }
   return k > 0;
+}
+/** Remove finished chunks. Their geometry is private; materials still belong to the source model. */
+export function disposeShatter(parts) {
+  for (const p of parts) { p.m.removeFromParent(); for (const c of p.m.children) c.geometry.dispose(); }
 }
 export function setGlowScale(v) { for (const m of glowMaterials) m.uniforms.uScale.value = v; }
