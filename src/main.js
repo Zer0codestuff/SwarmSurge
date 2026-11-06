@@ -11,6 +11,7 @@ import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
 import { TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
+import { createTitleScreen } from './title-scene.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -101,6 +102,7 @@ const ambient = new FX.Ambient(scene);
 const tracers = new FX.Tracers(scene);
 const impactRings = new FX.Rings(scene);
 let sceneReady = false;
+let titleScreen = null;
 let labelBoundsDirty = true, labelTop = 110, labelBottom = innerHeight - 75;
 
 function updateGlowScale() {
@@ -733,6 +735,7 @@ function applyTheme(theme) {
 }
 
 function startLevel(idx, stageIdx = 0) {
+  titleScreen?.hide();
   if ($('pause').open) $('pause').close();
   document.body.classList.remove('game-paused');
   resetInput(); sound.setPaused(false);
@@ -2816,6 +2819,7 @@ function renderWorld(dt) {
 // ---------------------------------------------------------------- menus
 function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
 function showMenu(preserveRun = false) {
+  titleScreen?.hide();
   if (preserveRun === true && ['intro','play','clear','move'].includes(G.phase)) G.resumePhase = G.phase;
   else G.resumePhase = null;
   if ($('pause').open) $('pause').close();
@@ -3004,6 +3008,7 @@ function frame(now) {
   const elapsed = (now - last) / 1000;
   const dt = Math.min(0.1, elapsed);
   last = now;
+  if (titleScreen?.visible) { acc = 0; titleScreen.render(dt); return; }
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { G.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
   // The map is opaque, so rendering the battlefield behind it only spends GPU time.
@@ -3034,6 +3039,10 @@ function frame(now) {
 
 // Build the battlefield only when a run starts. Opening the map must not consume onboarding.
 showMenu();
+titleScreen = createTitleScreen(renderer, sound);
+$('welcome-play').onclick = () => { titleScreen.hide(); $('menu').classList.remove('hidden'); $('mapresume').focus({ preventScroll: true }); };
+$('maphome').onclick = () => titleScreen.show();
+titleScreen.show();
 const startParam = params.get('level');
 if (startParam) startLevel(clamp((+startParam || 1) - 1, 0, LEVELS.length - 1), clamp((+params.get('stage') || 1) - 1, 0, 2));
 requestAnimationFrame(frame);
