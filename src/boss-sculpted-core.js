@@ -63,9 +63,9 @@ function arm(parent,s,{x=2,y=5.7,length=2.8,width=.75,color=C.steel,hand=color,b
   return { g,s,length };
 }
 
-function skeleton(titan=false) {
-  const {group,pose}=rig(titan?'ossuary-titan':'bone-regent');
-  const bone=titan?0xd7d8eb:C.bone, armor=titan?0x4c3b70:0x3e6588, accent=titan?0xe2acff:C.cyan;
+function skeleton() {
+  const {group,pose}=rig('bone-regent');
+  const bone=C.bone, armor=0x3e6588, accent=C.cyan;
   const legs=[-1,1].map(s=>leg(pose,s,{x:.85,y:3.5,color:bone,foot:bone,width:.56,bone:true}));
   const torso=node(pose,'open-rib-cage',0,3.45), b=assetBatch();
   loft(b,[[-.2,.82,.52],[.15,1.2,.7],[.42,1.08,.56],[.66,.5,.38]],bone);
@@ -88,19 +88,83 @@ function skeleton(titan=false) {
   for(const s of [-1,1]) shell(armorBatch,[[-.82,.14],[-.65,.68],[.15,.86],[.86,.37],[.73,-.39],[-.31,-.5]],armor,s*1.78,6.62,-.02,.28,.34,0,-s*.28,s*.12);
   armorBatch.finish(pose,'forged-shoulder-shells',bossMetal);
   const regalia=assetBatch();
-  if(titan)for(const s of [-1,1]) path(regalia,[[s*.85,.85,-.15],[s*1.36,1.7,-.25],[s*1.15,2.43,-.14],[s*.82,2.64,.1]],[.27,.23,.13,.015],armor,{segments:10,steps:18});
-  else regalia.add(crownGeometry(1.03,.77,5),armor,0,1.01,0);
+  regalia.add(crownGeometry(1.03,.77,5),armor,0,1.01,0);
   regalia.finish(head,'forged-bone-regalia',bossMetal);
   const seal=node(torso,'sternum-seal',0,1.9,.91), sealBatch=assetBatch();
   shell(sealBatch,[[-.29,0],[0,.5],[.29,0],[0,-.5]],accent,0,0,0,.08,.08);sealBatch.finish(seal,'sternum-soul',assetGlow);
   const cloak=node(torso,'torn-shroud',0,3.28,-.73);
   assetBatch().add(clothGeometry(2.3,4.6,{folds:5,flare:.25,depth:.16,segments:18,steps:16}),armor).finish(cloak,'folded-shroud',bossCloth);
-  return fitBoss(group,pose,titan?3.4:2.7,titan?13.5:10.5,(t,p,state={})=>{
+  return fitBoss(group,pose,2.7,10.5,(t,p,state={})=>{
     const a=attackPose(p),walk=walking(t,state,2.8);hitPose(pose,t,state);
     legs.forEach(l=>{l.g.rotation.x=l.s*walk*.18;l.g.position.y=l.y+Math.max(0,l.s*walk)*.07;});
     arms.forEach(({g,s})=>{g.rotation.x=-a*(s<0?1.3:.78)-s*walk*.09;g.rotation.z=-s*(.1+a*.09);});
     head.rotation.y=Math.sin(t*.65)*.09;head.rotation.x=a*.12;torso.rotation.y=Math.sin(t*.5)*.035;
     cloak.rotation.x=.12+Math.sin(t*1.5)*.05+a*.12;seal.rotation.z=-t*.25;
+  });
+}
+
+// World 10 colossus: hunched obsidian armor, a slit helm, heavy gauntlets and a halo of void shards.
+function voidTitan() {
+  const {group,pose}=rig('void-colossus');
+  const obsidian=0x4a3f70, plate=0x6a54a0, trim=0xa991e0, glow=0xe2acff, deep=0x1d1734;
+  const legs=[-1,1].map(s=>leg(pose,s,{x:1.3,y:3.1,width:1.0,color:obsidian,foot:plate}));
+  const greaves=assetBatch();
+  for(const s of [-1,1]) {
+    shell(greaves,[[-.55,.9],[.55,.9],[.62,-.2],[0,-.95],[-.62,-.2]],plate,s*1.3,1.75,.92,.16,.3,-.12);
+    shell(greaves,[[-.42,.36],[.42,.36],[.48,-.2],[0,-.46],[-.48,-.2]],trim,s*1.3,2.95,.86,.12,.24,-.2);
+  }
+  greaves.finish(pose,'forged-greaves-and-knee-guards',bossMetal);
+  const torso=node(pose,'hunched-void-torso',0,3.05), b=assetBatch();
+  loft(b,[[0,1.3,1.0,0,.0,.8],[.55,1.55,1.12,0,.05,.75],[1.5,1.9,1.3,0,.18,.7],[2.7,2.55,1.55,0,.32,.62],[3.6,2.6,1.5,0,.28,.62],[4.25,1.9,1.2,0,.2,.7],[4.55,.9,.8,0,.24,.8]],obsidian,
+    {segments:32,steps:26,warp(x,y,z,u,v,a){const back=Math.max(0,-Math.cos(a))**3;return[x,y+back*.25*Math.exp(-(((y-3.4)/.7)**2)),z-back*.35*Math.exp(-(((y-3.2)/.9)**2))];}});
+  shell(b,[[-1.55,.95],[-.6,1.25],[0,1.05],[.6,1.25],[1.55,.95],[1.3,-.7],[0,-1.35],[-1.3,-.7]],plate,0,2.85,1.6,.16,.42,-.1);
+  for(const s of [-1,1]) shell(b,[[-.62,.42],[.62,.42],[.7,-.2],[0,-.62],[-.7,-.2]],plate,s*.92,.85,1.12,.12,.24,-.2,s*.18);
+  shell(b,[[-.75,.4],[.75,.4],[.82,-.25],[0,-.75],[-.82,-.25]],plate,0,.62,1.18,.13,.28,-.25);
+  for(let k=0;k<5;k++)path(b,[[0,1.6+k*.62,-1.25],[0,1.95+k*.62,-1.95],[0,2.08+k*.62,-2.2]],[.24,.15,.012],trim,{segments:7,steps:8});
+  b.finish(torso,'hunched-armored-torso-and-dorsal-fins',bossShell);
+  const core=node(torso,'void-core',0,2.9,1.98), cb=assetBatch();
+  shell(cb,[[-.42,0],[0,.62],[.42,0],[0,-.62]],glow,0,0,0,.1,.14);
+  path(cb,[[-.15,-.55,-.02],[-.55,-1.05,-.18],[-.9,-1.4,-.42]],[.1,.07,.015],glow,{segments:5,steps:8});
+  path(cb,[[.18,.5,-.02],[.6,.95,-.2],[1.05,1.15,-.48]],[.1,.07,.015],glow,{segments:5,steps:8});
+  path(cb,[[.2,-.5,-.02],[.5,-.95,-.2],[.62,-1.5,-.4]],[.09,.06,.015],glow,{segments:5,steps:8});
+  cb.finish(core,'void-core-and-fractures',assetGlow);
+  const ring=assetBatch();ring.add(new THREE.TorusGeometry(.62,.07,8,28),trim);ring.finish(core,'core-rim',bossMetal);
+  const arms=[-1,1].map(s=>arm(pose,s,{x:2.75,y:7.05,length:3.7,width:1.18,color:obsidian,hand:plate,bulky:true}));
+  for(const {g,s,length} of arms) {
+    const gauntlet=assetBatch();
+    loft(gauntlet,[[-length+.05,1.05,1.0,0,.22,.7],[-length+.35,1.22,1.12,0,.2,.66],[-length*.62,1.12,1.05,0,.12,.66],[-length*.5,.92,.88,0,.1,.7]],plate,{segments:20,steps:14});
+    for(let k=0;k<3;k++)path(gauntlet,[[s*.98,-length*.62-k*.42,.05],[s*1.42,-length*.6-k*.42,-.05],[s*1.62,-length*.52-k*.42,-.2]],[.17,.1,.01],trim,{segments:6,steps:7});
+    gauntlet.finish(g,'spiked-gauntlet',bossMetal);
+  }
+  const pauldrons=assetBatch();
+  for(const s of [-1,1]) {
+    shell(pauldrons,[[-1.05,.25],[-.8,.9],[.2,1.12],[1.12,.5],[.98,-.5],[-.42,-.68]],plate,s*2.55,7.2,.05,.34,.5,0,-s*.25,s*.22);
+    shell(pauldrons,[[-.8,.18],[-.6,.66],[.12,.82],[.84,.36],[.72,-.36],[-.3,-.5]],trim,s*2.7,7.62,.1,.2,.3,0,-s*.25,s*.3);
+    for(let k=0;k<3;k++)path(pauldrons,[[s*(2.2+k*.42),8.05-k*.12,-.1],[s*(2.35+k*.5),8.55-k*.15,-.25],[s*(2.42+k*.52),8.72-k*.16,-.3]],[.16,.09,.008],trim,{segments:6,steps:7});
+  }
+  pauldrons.finish(pose,'horned-pauldrons',bossMetal);
+  const head=node(pose,'slit-helm',0,8.3,.8), h=assetBatch();
+  loft(h,[[-.6,.66,.72,0,.12,.75],[-.25,.86,.95,0,.08,.7],[.35,.9,1.0,0,.0,.7],[.85,.74,.84,0,-.08,.72],[1.2,.36,.48,0,-.12,.8],[1.32,.05,.06,0,-.12]],plate,{segments:24,steps:16});
+  loft(h,[[-.72,.7,.78,0,.2,.8],[-.5,.82,.92,0,.24,.75],[-.15,.78,.9,0,.25,.75]],deep,{segments:22,steps:8});
+  path(h,[[0,1.28,-.1],[0,1.36,.5],[0,1.12,1.0],[0,.5,1.12]],[.14,.18,.14,.06],trim,{segments:8,steps:14});
+  for(const s of [-1,1])path(h,[[s*.72,.55,0],[s*1.35,.75,.25],[s*1.75,1.35,.62],[s*1.7,2.05,.95],[s*1.42,2.42,1.05]],[.3,.26,.18,.08,.008],deep,{segments:10,steps:20});
+  h.finish(head,'horned-helm',bossMetal);
+  const visor=assetBatch();shell(visor,[[-.62,.03],[-.2,.1],[.2,.1],[.62,.03],[.5,-.06],[-.5,-.06]],glow,0,.28,1.02,.05,.05);visor.finish(head,'visor-slit',assetGlow);
+  const halo=node(pose,'void-shard-halo',0,7.6,-1.75), hb=assetBatch(), shards=[];
+  for(let k=0;k<7;k++) {
+    const a=-Math.PI*.42+k/6*Math.PI*.84, r=3.3, geo=new THREE.OctahedronGeometry(.42,0);
+    geo.scale(.55,1.5+(k%2)*.4,.55);
+    hb.add(geo,k%2?glow:0xb88cf0,Math.sin(a)*r,Math.cos(a)*r*.75+.6,0,0,0,-a*.6);
+  }
+  hb.add(new THREE.TorusGeometry(3.3,.05,6,48,Math.PI*.9).rotateZ(Math.PI*.05),0x9b6ee6,0,.6,0);
+  hb.finish(halo,'floating-void-shards',assetGlow);
+  return fitBoss(group,pose,3.4,13.5,(t,p,state={})=>{
+    const a=attackPose(p),walk=walking(t,state,2.2);hitPose(pose,t,state);
+    torso.rotation.x=.08+a*.14;head.rotation.x=-a*.2;head.rotation.y=Math.sin(t*.45)*.08;
+    legs.forEach(l=>{l.g.rotation.x=l.s*walk*.15;l.g.position.y=l.y+Math.max(0,l.s*walk)*.06;});
+    arms.forEach(({g,s})=>{g.rotation.x=-a*(s<0?1.6:1.1)-s*walk*.12;g.rotation.z=-s*(.12+a*.08);});
+    halo.rotation.z=Math.sin(t*.4)*.12;halo.position.y=7.6+Math.sin(t*1.3)*.12+a*.3;
+    const pulse=1+Math.sin(t*3.2)*.06+a*.25;core.scale.set(pulse,pulse,1);
   });
 }
 
@@ -303,7 +367,7 @@ function dragon(sky=false) {
 export function buildSculptedCore(type) {
   switch(type) {
     case 'skeleton': return skeleton();
-    case 'titan': return skeleton(true);
+    case 'titan': return voidTitan();
     case 'golem': return golem();
     case 'brute': return brute();
     case 'jelly': return jelly();
