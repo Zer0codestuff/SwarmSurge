@@ -188,6 +188,87 @@ export function troopGeometry(enemy = false, detail = 'high') {
   return geometry;
 }
 
+function droneKit(b) {
+  const p = ENEMY;
+  b.box([0.27, 0.29, 0.17], [0, 0.53, -0.255], p.dark, 0.035);
+  b.box([0.16, 0.16, 0.03], [0, 0.55, -0.354], p.armor, 0.022);
+  b.box([0.07, 0.075, 0.018], [0, 0.56, -0.379], p.light, 0.012);
+  for (const side of [-1, 1]) {
+    b.box([0.24, 0.055, 0.17], [side * 0.335, 0.615, -0.245], p.armor, 0.018, [0, 0, side * 0.2]);
+    b.box([0.035, 0.095, 0.16], [side * 0.445, 0.662, -0.245], p.trim, 0.012, [0, 0, side * 0.2]);
+    b.cylinder(0.071, 0.071, 0.275, [side * 0.184, 0.515, -0.269], p.joint, 'y', 6);
+    b.cylinder(0.048, 0.071, 0.07, [side * 0.184, 0.687, -0.269], p.armor, 'y', 6);
+    b.cylinder(0.063, 0.082, 0.075, [side * 0.184, 0.364, -0.269], p.dark, 'y', 6);
+    b.add(new THREE.TorusGeometry(0.061, 0.02, 4, 8), p.trim, [side * 0.184, 0.324, -0.269], [Math.PI / 2, 0, 0]);
+    b.cylinder(0.036, 0.036, 0.015, [side * 0.184, 0.332, -0.269], p.light, 'y', 6);
+  }
+  b.box([0.045, 0.105, 0.065], [0, 0.743, -0.27], p.trim, 0.012);
+}
+
+function crabKit(b) {
+  const p = ENEMY;
+  const shell = new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  shell.scale(0.36, 0.20, 0.285);
+  b.add(shell, p.joint, [0, 0.59, -0.045]);
+  b.box([0.075, 0.075, 0.32], [0, 0.775, -0.065], p.trim, 0.018);
+  for (const side of [-1, 1]) {
+    b.box([0.22, 0.075, 0.27], [side * 0.16, 0.712, -0.06], p.armor, 0.024, [0, 0, -side * 0.3]);
+    b.box([0.15, 0.145, 0.20], [side * 0.328, 0.442, 0.15], p.dark, 0.025);
+    b.box([0.18, 0.14, 0.20], [side * 0.391, 0.44, 0.295], p.armor, 0.03);
+    b.cylinder(0.056, 0.056, 0.035, [side * 0.391, 0.52, 0.295], p.trim, 'y', 6);
+    for (const finger of [-1, 1]) {
+      const x = side * 0.391 + finger * 0.076;
+      b.box([0.065, 0.085, 0.18], [x, 0.446, 0.438], p.trim, 0.016, [0, -finger * 0.28, 0]);
+      b.add(new THREE.ConeGeometry(0.044, 0.125, 5), p.armor, [x - finger * 0.025, 0.446, 0.565], [Math.PI / 2, -finger * 0.36, 0]);
+    }
+  }
+}
+
+function spectralWisp(points, radius) {
+  const path = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+  const steps = 8, sides = 4;
+  const geometry = new THREE.TubeGeometry(path, steps, radius, sides, false);
+  const position = geometry.attributes.position;
+  const center = new THREE.Vector3(), offset = new THREE.Vector3();
+  for (let step = 0; step <= steps; step++) {
+    path.getPointAt(step / steps, center);
+    const taper = 0.08 + 0.92 * (1 - step / steps) ** 0.8;
+    for (let side = 0; side <= sides; side++) {
+      const index = step * (sides + 1) + side;
+      offset.fromBufferAttribute(position, index).sub(center).multiplyScalar(taper).add(center);
+      position.setXYZ(index, offset.x, offset.y, offset.z);
+    }
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function ghostKit(b) {
+  const pale = 0xdbffff, mist = 0x9ee6f0;
+  // Open rings and rear wisps leave the helmet, torso and legs visible.
+  b.add(new THREE.TorusGeometry(0.294, 0.021, 4, 14, Math.PI * 1.7), pale, [0, 1.145, -0.025], [Math.PI / 2, 0, 0.47]);
+  b.add(new THREE.TorusGeometry(0.274, 0.025, 4, 12, Math.PI * 1.6), mist, [0, 0.655, -0.025], [Math.PI / 2, 0, 0.63]);
+  for (const side of [-1, 1]) {
+    b.box([0.09, 0.065, 0.13], [side * 0.252, 0.655, -0.036], pale, 0.022);
+    b.add(spectralWisp([
+      [side * 0.275, 0.645, -0.075], [side * 0.355, 0.475, -0.145],
+      [side * 0.317, 0.27, -0.275], [side * 0.36, 0.105, -0.39],
+    ], 0.037), mist);
+  }
+  b.add(spectralWisp([[0, 0.57, -0.29], [0.075, 0.405, -0.35], [-0.035, 0.23, -0.43], [-0.015, 0.08, -0.51]], 0.033), pale);
+}
+
+/** Nominal troop scale. Each call returns a fresh overlay for an instanced enemy. */
+export function enemyKitGeometry(kind) {
+  const kit = { 7: droneKit, 8: crabKit, 9: ghostKit }[kind];
+  if (!kit) throw new RangeError(`Unknown enemy equipment kind: ${kind}`);
+  const b = builder();
+  kit(b);
+  const geometry = b.finish();
+  geometry.name = { 7: 'Drone jetpack', 8: 'Crab armor', 9: 'Ghost halo' }[kind];
+  return geometry;
+}
+
 function grip(b, magazine = true) {
   b.box([0.068, 0.13, 0.075], [0.29, 0.387, 0.19], GUN.dark, 0.012, [-0.17, 0, 0]);
   if (magazine) b.box([0.077, 0.095, 0.11], [0.29, 0.373, 0.31], GUN.edge, 0.014, [0.12, 0, 0]);

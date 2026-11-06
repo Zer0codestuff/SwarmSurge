@@ -9,7 +9,7 @@ import * as W from './worlds.js';
 import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
-import { installTroopMotion, updateTroopMotion } from './unit-assets.js';
+import { installTroopMotion, updateTroopMotion, enemyKitGeometry } from './unit-assets.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -138,6 +138,9 @@ const overlays = {
   3: instanced(M.shieldGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
   5: instanced(M.helmetGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
   6: instanced(M.spikesGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  7: instanced(enemyKitGeometry(7).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  8: instanced(enemyKitGeometry(8).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  9: instanced(enemyKitGeometry(9).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
 };
 const partMesh = instanced(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), MAX_PART, false);
 partMesh.count = MAX_PART;
@@ -838,6 +841,13 @@ function hitArmedRed(j, damage, spec, troopPower) {
   }
   if (spec.chill) R.chill[j] = spec.chill;
 }
+function redLift(i) {
+  const type = RED_TYPES[R.kind[i]], phase = R.phase[i];
+  if (type.fly) return (.8 + Math.sin(phase * .45) * .12) * R.sc[i];
+  if (type.ghost) return (.22 + Math.sin(phase * .5) * .05) * R.sc[i];
+  return 0;
+}
+function redAimY(i) { return redLift(i) + .7 * R.sc[i]; }
 function updateArsenal(S, dt) {
   let budget = 5, searches = 0;
   for (let i = 0; i < B.n; i++) B.shot[i] -= dt;
@@ -875,8 +885,8 @@ function updateArsenal(S, dt) {
       addBeam(sx, sy, sz, target.x ?? 0, 2, target.z, color, .08, width);
       continue;
     }
-    const tx = R.x[j], tz = R.z[j], primary = j;
-    addBeam(sx, sy, sz, tx, .6, tz, color, .09, width);
+    const tx = R.x[j], tz = R.z[j], ty = redAimY(j), primary = j;
+    addBeam(sx, sy, sz, tx, ty, tz, color, .09, width);
     hitArmedRed(j, damage, spec, B.hp[i]);
     if (spec.splash) {
       addRing(tx, tz, spec.splash, color, .2);
@@ -885,14 +895,14 @@ function updateArsenal(S, dt) {
       }
     } else if (spec.chain) {
       const visited = new Set([j]);
-      let fromX = tx, fromZ = tz;
+      let fromX = tx, fromY = ty, fromZ = tz;
       for (let chain = 0; chain < spec.chain; chain++) {
         j = nearestVisibleRed(S, fromX, fromZ, 3.5, visited, false);
         if (j < 0) break;
         visited.add(j);
-        addBeam(fromX, .7, fromZ, R.x[j], .7, R.z[j], color, .12);
+        addBeam(fromX, fromY, fromZ, R.x[j], redAimY(j), R.z[j], color, .12);
         hitArmedRed(j, damage * .7, spec, B.hp[i]);
-        fromX = R.x[j]; fromZ = R.z[j];
+        fromX = R.x[j]; fromY = redAimY(j); fromZ = R.z[j];
       }
     } else if (spec.cone || spec.pierce) {
       const distance = Math.hypot(tx - x, tz - z), dx = (tx - x) / distance, dz = (tz - z) / distance;
@@ -909,7 +919,7 @@ function updateArsenal(S, dt) {
       const count = (spec.targets || spec.pierce) - 1;
       for (const { k } of candidates.slice(0, count)) {
         hitArmedRed(k, damage * (spec.pierce ? .8 : .75), spec, B.hp[i]);
-        addBeam(sx, sy, sz, R.x[k], .6, R.z[k], color, spec.burn ? .16 : .09, width);
+        addBeam(sx, sy, sz, R.x[k], redAimY(k), R.z[k], color, spec.burn ? .16 : .09, width);
       }
     }
   }
@@ -2012,7 +2022,7 @@ function updateMechanics(S, dt) {
         for (let k = 0; k < (d.zaps ?? 3); k++) {
           const j = nearestRed(cx, cz - 6, d.range ?? 14);
           if (j < 0) break;
-          addBeam(cx, cy, cz, R.x[j], 0.6, R.z[j], 0x9af6ff, 0.12);
+          addBeam(cx, cy, cz, R.x[j], redAimY(j), R.z[j], 0x9af6ff, 0.12);
           killRed(j); hit++;
         }
         if (!hit) {
@@ -2284,7 +2294,8 @@ function troopInstance(P, i, near, far) {
   const mesh = P.detail[i] ? near : far, at = mesh.count++;
   const motion = mesh.geometry.attributes.unitMotion.array;
   motion[at * 2] = P.phase[i];
-  motion[at * 2 + 1] = P.st[i] || P.adur[i] > 0 ? 0 : Math.min(1, Math.hypot(P.vx[i], P.vz[i]) / 6);
+  const floating = P === R && (RED_TYPES[P.kind[i]].fly || RED_TYPES[P.kind[i]].ghost);
+  motion[at * 2 + 1] = P.st[i] || P.adur[i] > 0 || floating ? 0 : Math.min(1, Math.hypot(P.vx[i], P.vz[i]) / 6);
   return mesh;
 }
 function finishTroopMeshes(near, far) {
@@ -2333,6 +2344,7 @@ function writeMatrix(m, i, P, s, lean, instance = i) {
   const st = Math.sin(ph * 2) * 0.07 * (0.4 + run);
   const sy = s * pop * (1 + st), sxz = s * pop * (1 - st * 0.5);
   let y = Math.abs(Math.sin(ph)) * 0.14 * s * (0.3 + run);
+  if (P === R && (RED_TYPES[P.kind[i]].fly || RED_TYPES[P.kind[i]].ghost)) y = redLift(i);
   if (P.adur[i] > 0) { const p = P.air[i] / P.adur[i]; y += Math.sin(Math.PI * Math.min(1, p)) * (2.5 + P.adur[i] * 4); }
   const o = instance * 16;
   m[o] = c * sxz; m[o + 1] = 0; m[o + 2] = -si * sxz; m[o + 3] = 0;
@@ -2340,11 +2352,20 @@ function writeMatrix(m, i, P, s, lean, instance = i) {
   m[o + 8] = si * cp * sxz; m[o + 9] = -sp * sxz; m[o + 10] = c * cp * sxz; m[o + 11] = 0;
   m[o + 12] = P.x[i]; m[o + 13] = y; m[o + 14] = P.z[i]; m[o + 15] = 1;
 }
-const ovCount = { 2: 0, 3: 0, 5: 0, 6: 0 };
+const ovCount = Object.fromEntries(Object.keys(overlays).map(kind => [kind, 0]));
+function addUnitGlow(matrix, index, x, y, z, color, size, alpha) {
+  const o = index * 16;
+  halos.add(
+    matrix[o]*x + matrix[o+4]*y + matrix[o+8]*z + matrix[o+12],
+    matrix[o+1]*x + matrix[o+5]*y + matrix[o+9]*z + matrix[o+13],
+    matrix[o+2]*x + matrix[o+6]*y + matrix[o+10]*z + matrix[o+14],
+    color, size, alpha,
+  );
+}
 function writeRed() {
   redMesh.count = redFarMesh.count = 0;
   for (const k in ovCount) ovCount[k] = 0;
-  let labels = 0;
+  let labels = 0, specialGlow = 0;
   for (let i = 0; i < R.n; i++) {
     const kind = R.kind[i], col = R.chill[i] > 0 ? TIER_RGB[1] : R.burn[i] > 0 ? TIER_RGB[6] : RED_RGB[kind];
     if (R.st[i]) { R.vx[i] = 0; R.vz[i] = 0.01; }
@@ -2355,6 +2376,17 @@ function writeRed() {
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
     const ov = overlays[kind];
     if (ov) { ov.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), ovCount[kind] * 16); ovCount[kind]++; }
+    if (body === redMesh && specialGlow < 12) {
+      if (kind === 7 && specialGlow <= 10) {
+        for (const side of [-1, 1]) {
+          addUnitGlow(m, index, side * .184 * 1.2, .29 * 1.2, -.269 * 1.2, PCOL.ice, .55 * R.sc[i], .4);
+        }
+        specialGlow += 2;
+      } else if (kind === 9) {
+        halos.add(R.x[i], m[index * 16 + 13] + .7 * R.sc[i], R.z[i], PCOL.purple, 1.4 * R.sc[i], .12);
+        specialGlow++;
+      }
+    }
     if ((kind === 1 || kind === 5) && labels < bruteLabels.length) placeLabel(bruteLabels[labels++], R.x[i], 1.2 + R.sc[i] * 0.9, R.z[i], fmtHp(R.hp[i]));
   }
   finishTroopMeshes(redMesh, redFarMesh);
@@ -2554,8 +2586,8 @@ function renderWorld(dt) {
   troopPixelScale = innerHeight * 1.2 / (2 * Math.tan(camera.fov * Math.PI / 360));
   halos.begin();
   writeBlue();
-  halos.end();
   writeRed();
+  halos.end();
   updateParticles(dt);
   updatePopups(dt);
   sparks.update(dt);
