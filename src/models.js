@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
+import * as S from './scenery-assets.js';
 import { raiderGeometry } from './troop-forms.js';
 import { sculptedWeaponGeometry } from './weapon-assets.js';
 import { createVehicleRig, cannonBarrelGeometry } from './vehicle-assets.js';
@@ -443,26 +444,17 @@ export function buildWorld(theme, len) {
 
   const vc = (flat = true) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: flat });
   if (theme === 'desert') {
-    const trunk = paint(new THREE.CylinderGeometry(0.35, 0.4, 2.4, 8), 0x4f9a3a); trunk.translate(0, 1.2, 0);
-    const a1 = paint(new THREE.CylinderGeometry(0.22, 0.22, 1.0, 6), 0x5aa844); a1.translate(0.55, 1.5, 0);
-    const a2 = paint(new THREE.CylinderGeometry(0.2, 0.2, 0.8, 6), 0x5aa844); a2.translate(-0.5, 1.2, 0);
-    const c1 = paint(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 6), 0x5aa844); c1.rotateZ(Math.PI / 2); c1.translate(0.3, 1.0, 0);
-    scatter(g, merge([trunk, a1, a2, c1]), vc(false), 260, 11, 55, zc, total);
-    scatter(g, new THREE.IcosahedronGeometry(0.35, 0), lam(0x9a8a4a, { flatShading: true }), 400, 9, 60, zc, total, 0.6, 1.4, 0.1, false);
+    scatter(g, S.saguaro(), vc(false), 160, 11, 55, zc, total, 0.8, 1.5);
+    scatter(g, S.rockCluster(0xc9a06a, 2), vc(false), 50, 13, 55, zc, total, 0.8, 2.2, 0, false);
+    scatter(g, S.pebble(3, 0x9a8a5a), vc(false), 400, 9, 60, zc, total, 0.25, 0.5, 0, false);
   } else if (theme === 'mob') {
     // dry desert like the reference shots: tumbleweeds, dunes, dead trees
-    scatter(g, new THREE.IcosahedronGeometry(0.3, 0), lam(0x8a7a4a, { flatShading: true }), 700, 9, 70, zc, total, 0.5, 1.3, 0.1, false);
+    scatter(g, S.pebble(5, 0x8a7a4a), vc(false), 700, 9, 70, zc, total, 0.5, 1.3, 0.1, false);
     const dune = new THREE.SphereGeometry(4, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2); dune.scale(1.8, 0.35, 1);
     scatter(g, dune, lam(0xe2c193), 50, 16, 70, zc, total, 0.8, 2.2, -0.1, false);
-    const tr = paint(new THREE.CylinderGeometry(0.08, 0.12, 1.6, 5), 0x5a4030); tr.translate(0, 0.8, 0);
-    const b1 = paint(new THREE.CylinderGeometry(0.05, 0.06, 0.9, 4), 0x5a4030); b1.rotateZ(0.8); b1.translate(0.3, 1.3, 0);
-    const b2 = paint(new THREE.CylinderGeometry(0.05, 0.06, 0.8, 4), 0x5a4030); b2.rotateZ(-0.7); b2.translate(-0.28, 1.1, 0);
-    scatter(g, merge([tr, b1, b2]), vc(), 40, 10, 40, zc, total, 0.8, 1.6);
+    scatter(g, S.deadTree(0x5a4030, .85), vc(false), 40, 10, 40, zc, total, 0.8, 1.6);
   } else if (theme === 'lava') {
-    const r1 = paint(new THREE.DodecahedronGeometry(1.0), 0x2b2025); r1.scale(1, 0.7, 1); r1.translate(0, 0.4, 0);
-    const s1 = paint(new THREE.ConeGeometry(0.35, 1.8, 5), 0x1a1216); s1.translate(0.6, 1.1, 0.2);
-    const g1 = paint(new THREE.OctahedronGeometry(0.25), 0xff7a2a); g1.translate(-0.4, 0.9, 0.3);
-    scatter(g, merge([r1, s1, g1]), vc(), 260, 11, 55, zc, total);
+    scatter(g, S.rockCluster(0x2b2025, 4, { accent: 0xff6a1a, accentDepth: .9 }), vc(false), 260, 11, 55, zc, total, 0.6, 1.5, 0, false);
     const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff5a1a });
     for (const sx of [-1, 1]) {
       const lv = new THREE.Mesh(new THREE.PlaneGeometry(5, total), lavaMat); lv.rotation.x = -Math.PI / 2; lv.position.set(sx * 12.5, 0.0, zc); g.add(lv);
@@ -470,25 +462,11 @@ export function buildWorld(theme, len) {
       glow.rotation.x = -Math.PI / 2; glow.position.set(sx * 12.5, 0.02, zc); g.add(glow);
     }
   } else if (theme === 'frost') {
-    const t1 = paint(new THREE.ConeGeometry(1.0, 1.6, 8), 0x2f6b4f); t1.translate(0, 1.4, 0);
-    const t2 = paint(new THREE.ConeGeometry(0.75, 1.3, 8), 0x3b7d5d); t2.translate(0, 2.3, 0);
-    const sn = paint(new THREE.ConeGeometry(0.45, 0.7, 8), 0xffffff); sn.translate(0, 3.0, 0);
-    const tr = paint(new THREE.CylinderGeometry(0.15, 0.15, 0.7, 6), 0x6a4a2a); tr.translate(0, 0.35, 0);
-    scatter(g, merge([t1, t2, sn, tr]), vc(), 260, 11, 55, zc, total);
-    const cr = new THREE.OctahedronGeometry(0.6); cr.scale(1, 1.8, 1);
-    scatter(g, cr, lam(0x9fe6ff, { flatShading: true, emissive: 0x1d5878 }), 160, 9.5, 40, zc, total, 0.6, 1.6, 0.5);
+    scatter(g, S.pine(true), vc(false), 200, 11, 55, zc, total, 0.7, 1.4);
+    scatter(g, S.crystalCluster(0x9fe6ff, 2, 0xdfe9f5), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x123a52 }), 120, 9.5, 40, zc, total, 0.4, 0.9, 0, false);
   } else if (theme === 'jungle') {
-    const trunk = paint(new THREE.CylinderGeometry(0.2, 0.3, 4.2, 7), 0x7a5a32); trunk.translate(0, 2.1, 0);
-    const leaves = [];
-    for (let k = 0; k < 6; k++) {
-      const l = paint(new THREE.ConeGeometry(0.5, 2.6, 4), k % 2 ? 0x2f9a3a : 0x3fb84a);
-      l.rotateZ(Math.PI / 2 + 0.35); l.translate(1.2, 4.0, 0); l.rotateY((k / 6) * Math.PI * 2);
-      leaves.push(l);
-    }
-    scatter(g, merge([trunk, ...leaves]), vc(), 220, 11, 55, zc, total, 0.7, 1.4);
-    const bush = paint(new THREE.IcosahedronGeometry(0.9, 0), 0x2f8a35); bush.scale(1.3, 0.8, 1.2); bush.translate(0, 0.4, 0);
-    const fl = paint(new THREE.SphereGeometry(0.2, 6, 4), 0xff4f9a); fl.translate(0.5, 0.9, 0.3);
-    scatter(g, merge([bush, fl]), vc(), 260, 9, 50, zc, total, 0.6, 1.5);
+    scatter(g, S.palm({ trunk: 0x7a5a32, leaf: 0x3fb84a, leaf2: 0x2f9a3a }), vc(false), 170, 11, 55, zc, total, 0.7, 1.3);
+    scatter(g, S.bush(), vc(false), 200, 9, 50, zc, total, 0.6, 1.4, 0, false);
   } else if (theme === 'neon') {
     const bld = paint(new THREE.BoxGeometry(3, 1, 3), 0x1a1a3a); bld.translate(0, 0.5, 0);
     const inst = scatter(g, bld, vc(), 120, 12, 45, zc, total, 1, 1, 0, false);
@@ -513,19 +491,13 @@ export function buildWorld(theme, len) {
     for (let i = 0; i < 60; i++) { mm.makeTranslation(i % 2 ? 9 : -9, 0, zc - total / 2 + (i >> 1) * (total / 30)); lamps.setMatrixAt(i, mm); }
     g.add(lamps);
   } else if (theme === 'candy') {
-    const stick = paint(new THREE.CylinderGeometry(0.08, 0.08, 2.4, 6), 0xffffff); stick.translate(0, 1.2, 0);
-    const disc = paint(new THREE.CylinderGeometry(0.9, 0.9, 0.25, 16), 0xff4f9a); disc.rotateX(Math.PI / 2); disc.translate(0, 2.6, 0);
-    const swirl = paint(new THREE.TorusGeometry(0.55, 0.12, 6, 16), 0xffffff); swirl.translate(0, 2.6, 0.13);
-    scatter(g, merge([stick, disc, swirl]), vc(false), 140, 11, 50, zc, total, 0.8, 1.8);
-    const cols = [0x3ad0ff, 0xffe03a, 0x7aff5a, 0xb06aff];
-    for (let k = 0; k < 4; k++) {
-      const gd = paint(new THREE.SphereGeometry(0.7, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), cols[k]); gd.scale(1, 1.3, 1);
-      scatter(g, gd, vc(false), 70, 9, 55, zc, total, 0.6, 1.5);
-    }
+    scatter(g, S.lollipop(0xff4f9a), vc(false), 80, 11, 50, zc, total, 0.8, 1.8);
+    scatter(g, S.lollipop(0x8a5aff), vc(false), 60, 11, 50, zc, total, 0.8, 1.6);
+    scatter(g, S.candyCane(), vc(false), 60, 10, 45, zc, total, 0.8, 1.4);
+    [0x3ad0ff, 0xffe03a, 0x7aff5a, 0xb06aff].forEach(c => scatter(g, S.gumdrop(c), vc(false), 70, 9, 55, zc, total, 0.6, 1.4, 0, false));
   } else if (theme === 'moon') {
-    const crater = paint(new THREE.TorusGeometry(1.4, 0.35, 6, 18), 0x7a7a8a); crater.rotateX(Math.PI / 2); crater.scale(1, 0.5, 1);
-    scatter(g, crater, vc(), 120, 10, 55, zc, total, 0.6, 2.4, 0, false);
-    scatter(g, new THREE.DodecahedronGeometry(0.7), lam(0x6a6a7a, { flatShading: true }), 180, 9, 55, zc, total, 0.4, 1.4, 0.2);
+    scatter(g, S.crater(), vc(false), 120, 10, 55, zc, total, 0.6, 2.4, 0, false);
+    scatter(g, S.rockCluster(0x6a6a7a, 6), vc(false), 180, 9, 55, zc, total, 0.3, 1.0, 0, false);
     const starGeo = new THREE.BufferGeometry();
     const pts = new Float32Array(600 * 3);
     for (let i = 0; i < 600; i++) { pts[i * 3] = (Math.random() - 0.5) * 400; pts[i * 3 + 1] = 30 + Math.random() * 120; pts[i * 3 + 2] = zc - 60 - Math.random() * 200; }
@@ -539,13 +511,10 @@ export function buildWorld(theme, len) {
     const puff = [];
     for (let k = 0; k < 4; k++) { const s = paint(new THREE.SphereGeometry(1.2 - k * 0.15, 10, 8), 0xffffff); s.translate((k - 1.5) * 1.1, 0.3 + (k % 2) * 0.4, (k % 2) * 0.5); puff.push(s); }
     scatter(g, merge(puff), vc(false), 160, 10, 60, zc, total, 1, 2.6, -0.4, false);
-    const col = paint(new THREE.CylinderGeometry(0.5, 0.6, 6, 10), 0xfff6e0); col.translate(0, 3, 0);
-    const cap = paint(new THREE.BoxGeometry(1.5, 0.4, 1.5), 0xffe7a0); cap.translate(0, 6.2, 0);
-    scatter(g, merge([col, cap]), vc(false), 40, 9.5, 8, zc, total, 0.9, 1.1);
+    scatter(g, S.column(), vc(false), 40, 9.5, 8, zc, total, 0.9, 1.1);
   } else if (theme === 'void') {
-    const cr = new THREE.OctahedronGeometry(0.8); cr.scale(1, 2.4, 1);
-    scatter(g, cr, lam(0xb04aff, { flatShading: true, emissive: 0x5a0a9a }), 200, 9.5, 55, zc, total, 0.5, 2.0, 0.6);
-    scatter(g, new THREE.TetrahedronGeometry(0.8), lam(0xff3a8a, { flatShading: true, emissive: 0x6a0a3a }), 120, 12, 55, zc, total, 0.5, 1.8, 3.5, false);
+    scatter(g, S.crystalCluster(0xb04aff, 7, 0x2a0a3a), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x3a0a6a }), 200, 9.5, 55, zc, total, 0.5, 1.4);
+    scatter(g, S.floatingShard(0xff3a8a), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x5a0a3a }), 120, 12, 55, zc, total, 0.5, 1.8, 3.5, false);
     const starGeo = new THREE.BufferGeometry();
     const pts = new Float32Array(500 * 3);
     for (let i = 0; i < 500; i++) { pts[i * 3] = (Math.random() - 0.5) * 400; pts[i * 3 + 1] = 20 + Math.random() * 120; pts[i * 3 + 2] = zc - 60 - Math.random() * 200; }

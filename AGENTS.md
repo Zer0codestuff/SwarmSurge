@@ -11,6 +11,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - `src/asset-kit.js`, `src/boss-shapes.js`: batched surfaces, continuous anatomical lofts, swept forms, domed armor and folded cloth.
 - `src/boss-sculpted-core.js`, `src/boss-sculpted-late.js`, `src/boss-sculpted-royal.js`: the full sculpted boss roster. `src/bosses.js` adapts the late builders.
 - `src/fort-assets.js`: sculpted biome forts (curved curtain wall, pillowed stone courses, arched gatehouse, one tower design per family). `src/battlefield-assets.js` re-exports it and builds turret, bunker, divider, hydraulic crusher and falling pillar models.
+- `src/scenery-assets.js`: sculpted roadside props (saguaros, rock clusters, pines, palms, coral, lollipops, columns, gears, crates, mountains, crystals and more) used by `models.buildWorld` and `src/worlds.js`.
 - `src/map.js`, `src/map.css`: biome island map and progressive unlocks.
 - `src/tutorials.js`: persisted first-introduction lessons. Other modules build worlds, props, bosses, pooled effects and synthesized audio.
 
@@ -56,6 +57,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Fifty-six focused gameplay checks and fifteen tutorial policy checks pass. The latest full seed-42 smart-bot run clears all 20 worlds and 60 stages. Bot success does not replace human balance feedback.
 - All twenty sculpted bosses were inspected in contact sheets, including a royal before/after under identical lighting and camera. They use 7 to 23 meshes and 8,454 to 37,280 triangles. Asset contracts pass. Sculpted forts keep seven meshes and use 5,480 to 12,264 triangles (previously 3,260 to 5,308).
 - The refreshed seed-42 bot run clears all twenty worlds and sixty stages with the sculpted roster. All twenty rendered defeats complete, desktop and portrait opening silhouettes clear the HUD, and eight finale restarts after warmup hold at 189 geometries, 24 textures and 32 shader programs. These counts do not establish physical mobile frame rate.
+- Sculpted scenery replaced the primitive props in all twenty biomes with the same scatter placement. Opening scenes measured +37k to +140k rendered triangles (for example world 4 128k to 225k, world 19 104k to 244k) with unchanged draw calls; small props no longer cast shadows.
 - Desktop and 390 x 844 scenes were inspected for Storm Peaks, mixed troops, vehicles and aircraft. A short Terra 6.1 medium review identified the tornado obstruction, which was corrected.
 - A rendered 800-troop, two-ball comparison reduced total triangles from 3,624,204 to 1,693,964. Each ball dropped from 276,480 to 92,160 triangles. Six cannons with six barrels each dropped from 441 to 369 draw calls including shadows. These measure workload, not physical mobile frame rate.
 - Ten rendered Coral Coast restarts after aircraft warmup held at 139 geometries, 18 textures and 31 shader programs. A 1,000-impact stress run stayed within 64 rings. All eight weapon sounds produced finite nonzero offline audio.
@@ -69,7 +71,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Do not introduce a build system, backend or external asset dependency just to serve the game.
 - Do not restore the flat level grid, erase legacy progress, collapse troop ranks or remove the overpowered multiplier routes.
 - Do not repeat tutorial prose on every stage or place storm clouds above the road.
-- Do not return forts to one recolored box template.
+- Do not return forts to one recolored box template or scenery to bare cones, cylinders and floating primitives.
 - Do not build boss anatomy from stacked boxes or replace the sculpted forms with slightly rounded primitives.
 - Do not return troops, enemies or weapons to box-built models. The user asked for troops that transform with rank (bot, then soldier, then stronger forms).
 - Do not spend excessive time on UI testing or commit screenshots, node_modules or generated reports.
