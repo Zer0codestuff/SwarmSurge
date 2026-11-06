@@ -118,6 +118,7 @@ addEventListener('resize', resize);
 resize();
 
 // ---------------------------------------------------------------- instanced unit meshes
+const { uploadUsed } = FX;
 function instanced(geo, mat, n, shadow = true) {
   const m = new THREE.InstancedMesh(geo, mat, n);
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -179,7 +180,6 @@ overlays[6] = overlaysFar[6] = gearMesh(M.spikesGeo());
 overlays[9] = overlaysFar[9] = gearMesh(ghostKitGeometry());
 const overlayMeshes = [...new Set([...Object.values(overlays), ...Object.values(overlaysFar)])];
 const partMesh = instanced(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), MAX_PART, false);
-partMesh.count = MAX_PART;
 
 // ---------------------------------------------------------------- unit pools (struct of arrays)
 function makePool(N) {
@@ -275,11 +275,11 @@ function seek(C, x, z, maxD, dir) {
 const PT = {
   x: new Float32Array(MAX_PART), y: new Float32Array(MAX_PART), z: new Float32Array(MAX_PART),
   vx: new Float32Array(MAX_PART), vy: new Float32Array(MAX_PART), vz: new Float32Array(MAX_PART),
-  life: new Float32Array(MAX_PART), max: new Float32Array(MAX_PART), head: 0,
+  life: new Float32Array(MAX_PART), max: new Float32Array(MAX_PART), col: new Float32Array(MAX_PART * 3), head: 0,
 };
 function burst(x, y, z, col, n, spd = 4, size = 1) {
   if (TURBO) return;
-  const c = partMesh.instanceColor.array;
+  const c = PT.col;
   for (let k = 0; k < n; k++) {
     const i = PT.head; PT.head = (PT.head + 1) % MAX_PART;
     PT.x[i] = x; PT.y[i] = y; PT.z[i] = z;
@@ -292,23 +292,26 @@ function burst(x, y, z, col, n, spd = 4, size = 1) {
 function spark(x, y, z, col, n, speed = 4, size = 0.8, life = 0.5, grav = -6) {
   if (!TURBO) sparks.emit(x, y, z, col, n, speed, size, life, grav);
 }
+// Live particles are packed at the front so only they are drawn and uploaded.
 function updateParticles(dt) {
-  const m = partMesh.instanceMatrix.array;
+  const m = partMesh.instanceMatrix.array, c = partMesh.instanceColor.array;
+  let n = 0;
   for (let i = 0; i < MAX_PART; i++) {
-    let s = 0;
-    if (PT.life[i] > 0) {
-      PT.life[i] -= dt;
-      PT.vy[i] -= 20 * dt;
-      PT.x[i] += PT.vx[i] * dt; PT.y[i] += PT.vy[i] * dt; PT.z[i] += PT.vz[i] * dt;
-      if (PT.y[i] < 0.08) { PT.y[i] = 0.08; PT.vy[i] *= -0.4; PT.vx[i] *= 0.7; PT.vz[i] *= 0.7; }
-      s = Math.max(0, PT.life[i] / PT.max[i]) * 1.4;
-    }
-    const o = i * 16;
-    m[o] = s; m[o + 5] = s; m[o + 10] = s; m[o + 15] = 1;
-    m[o + 12] = PT.x[i]; m[o + 13] = PT.y[i]; m[o + 14] = PT.z[i];
+    if (PT.life[i] <= 0) continue;
+    PT.life[i] -= dt;
+    if (PT.life[i] <= 0) continue;
+    PT.vy[i] -= 20 * dt;
+    PT.x[i] += PT.vx[i] * dt; PT.y[i] += PT.vy[i] * dt; PT.z[i] += PT.vz[i] * dt;
+    if (PT.y[i] < 0.08) { PT.y[i] = 0.08; PT.vy[i] *= -0.4; PT.vx[i] *= 0.7; PT.vz[i] *= 0.7; }
+    const s = PT.life[i] / PT.max[i] * 1.4, o = n * 16;
+    m[o] = s; m[o + 1] = m[o + 2] = m[o + 3] = m[o + 4] = 0; m[o + 5] = s; m[o + 6] = m[o + 7] = m[o + 8] = m[o + 9] = 0;
+    m[o + 10] = s; m[o + 11] = 0; m[o + 12] = PT.x[i]; m[o + 13] = PT.y[i]; m[o + 14] = PT.z[i]; m[o + 15] = 1;
+    c[n * 3] = PT.col[i * 3]; c[n * 3 + 1] = PT.col[i * 3 + 1]; c[n * 3 + 2] = PT.col[i * 3 + 2];
+    n++;
   }
-  partMesh.instanceMatrix.needsUpdate = true;
-  partMesh.instanceColor.needsUpdate = true;
+  partMesh.count = n;
+  uploadUsed(partMesh.instanceMatrix, n);
+  uploadUsed(partMesh.instanceColor, n);
 }
 const PCOL = {
   blue: rgb(0x55b8ff), red: rgb(0xff3030), gold: rgb(0xffcc22), orange: rgb(0xff7a1a), white: rgb(0xffffff), ice: rgb(0xb8f0ff),
@@ -2405,9 +2408,9 @@ function troopInstance(P, i, near, far) {
 function finishTroopMeshes(near, far) {
   for (const mesh of [near, far]) {
     mesh.visible = mesh.count > 0;
-    if (!mesh.visible) continue;
-    mesh.instanceMatrix.needsUpdate = mesh.instanceColor.needsUpdate = true;
-    mesh.geometry.attributes.unitMotion.needsUpdate = true;
+    uploadUsed(mesh.instanceMatrix, mesh.count);
+    uploadUsed(mesh.instanceColor, mesh.count);
+    uploadUsed(mesh.geometry.attributes.unitMotion, mesh.count);
   }
   const proxy = near.userData.shadowProxy;
   proxy.count = near.count; proxy.visible = near.visible;
@@ -2439,7 +2442,7 @@ function writeBlue() {
   G.rank = topRank;
   for (let k = 1; k < weaponMeshes.length; k++) for (const mesh of [weaponMeshes[k], weaponFarMeshes[k]]) {
     mesh.visible = mesh.count > 0;
-    if (mesh.visible) mesh.instanceMatrix.needsUpdate = true;
+    uploadUsed(mesh.instanceMatrix, mesh.count);
   }
   for (const form of blueForms) finishTroopMeshes(form.near, form.far);
 }
@@ -2503,7 +2506,7 @@ function writeRed() {
   finishTroopMeshes(redMesh, redFarMesh);
   for (const mesh of overlayMeshes) {
     mesh.visible = mesh.count > 0;
-    if (mesh.visible) mesh.instanceMatrix.needsUpdate = true;
+    uploadUsed(mesh.instanceMatrix, mesh.count);
   }
   for (let k = labels; k < bruteLabels.length; k++) hideLabel(bruteLabels[k]);
 }
