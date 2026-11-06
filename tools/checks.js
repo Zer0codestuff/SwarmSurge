@@ -321,6 +321,16 @@ window.runGameChecks = (g) => {
     const visible=label.vis; label.el.remove();
     return {pass:blocked && visible && $('targetname').textContent.includes(fmtHp(G.stage.tower.hp))};
   })()`);
+  check('Boss rendering preserves authored scale and passes the full attack cycle', `(() => {
+    startLevel(0,2); G.paused=true; G.phase='play';
+    const b=G.stage.boss; b.visualScale.setScalar(1.2); b.flash=0; b.atk=.625;
+    b.model.normalizedAttack=true; let capture;
+    b.model.animate=(time,attack,state)=>{capture={attack,...state};};
+    renderWorld(0);
+    const active=b.model.group.scale.x===1.2 && capture.attack===.5 && capture.moving && capture.health===1;
+    b.stun=1; renderWorld(0);
+    return {pass:active && !capture.moving && capture.stunned,active,capture};
+  })()`);
   check('Pause clears held input and resume preserves the battle', `(() => {
     G.paused=false; keys.left=true; drag={id:1,x:0,aim:0};
     const i=spawn(B,0,-3,10,0); G.time=7; upgradeCannon('tank');

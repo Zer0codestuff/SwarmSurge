@@ -568,7 +568,7 @@ function buildStage(sd, i, root, theme) {
     }[sd.boss.type];
     const b = {
       type: sd.boss.type, hp: sd.boss.hp, max: sd.boss.hp, speed: sd.boss.speed, push: sd.boss.push ?? 40, startZ: z0 - 60, x: 0, z: z0 - 60,
-      model: m, alive: true, every: sd.boss.every ?? every, sweep: !!sd.boss.sweep, atkT: 4, atk: 0, atkN: 0, label: makeLabel('boss'), flash: 0, dead: 0,
+      model: m, visualScale: m.group.scale.clone(), visualState: {}, alive: true, every: sd.boss.every ?? every, sweep: !!sd.boss.sweep, atkT: 4, atk: 0, atkN: 0, label: makeLabel('boss'), flash: 0, dead: 0,
     };
     m.group.position.set(0, 0, b.z);
     root.add(m.group);
@@ -2608,8 +2608,14 @@ function renderWorld(dt) {
       if (b.dead > 0) {
         b.dead += dt;
       } else {
-        b.model.animate(G.t, b.atk > 0 ? Math.min(1, b.atk) : 0);
-        grp.scale.setScalar(1 + b.flash * 0.025);
+        const pose = b.visualState;
+        pose.moving = cur && G.phase === 'play' && !(b.stun > 0);
+        pose.health = Math.max(0, b.hp / b.max);
+        pose.hit = b.flash;
+        pose.stunned = b.stun > 0;
+        const attack = b.atk > 0 ? Math.min(1, b.atk / (b.model.normalizedAttack ? 1.25 : 1)) : 0;
+        b.model.animate(G.t, attack, pose);
+        grp.scale.copy(b.visualScale).multiplyScalar(1 + b.flash * 0.025);
         if (cur) placeLabel(b.label, b.x, b.model.height + 1.6, b.z, fmtHp(b.hp));
         else hideLabel(b.label);
       }

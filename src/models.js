@@ -3,6 +3,7 @@ import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
 import { troopGeometry, weaponGeometry } from './unit-assets.js';
 import { createVehicleRig, cannonBarrelGeometry } from './vehicle-assets.js';
+import { buildCoreBoss } from './boss-assets-core.js';
 
 // ---------- helpers ----------
 const matCache = new Map();
@@ -460,6 +461,8 @@ export function buildTower(theme) {
 
 // ---------- bosses ----------
 export function buildBoss(type) {
+  const model = buildCoreBoss(type);
+  if (model) { model.normalizedAttack = true; return model; }
   switch (type) {
     case 'king': return buildKing({});
     case 'jelly': return buildKing({ body: 0xff4fb0, belly: 0x7af0ff, crown: 0xfff04d, horn: 0x7af0ff, emissive: 0x5a0a3a });
