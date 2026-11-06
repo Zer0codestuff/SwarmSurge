@@ -4,6 +4,7 @@ import { THEMES } from './levels.js';
 import { troopGeometry, weaponGeometry } from './unit-assets.js';
 import { createVehicleRig, cannonBarrelGeometry } from './vehicle-assets.js';
 import { buildCoreBoss } from './boss-assets-core.js';
+export { buildBattleTower as buildTower, buildBattleTurret as buildTurret, buildBattleSpawner as buildSpawner, buildBattleWall as buildWall, buildBattleCrusher as buildCrusher } from './battlefield-assets.js';
 
 // ---------- helpers ----------
 const matCache = new Map();
@@ -357,12 +358,6 @@ export function buildPortalExit() {
 }
 
 // ---------- obstacles ----------
-export function buildWall(len) {
-  const g = new THREE.Group();
-  g.add(mesh(new THREE.BoxGeometry(0.34, 0.9, len), lam(0xe4e8ee), 0, 0.45, 0));
-  g.add(mesh(new THREE.BoxGeometry(0.38, 0.14, len), lam(0xffc61a), 0, 0.92, 0, false));
-  return g;
-}
 export function buildSaw(r) {
   const g = new THREE.Group();
   const blade = new THREE.Group();
@@ -383,82 +378,6 @@ export function buildSaw(r) {
   g.add(mesh(new THREE.BoxGeometry(r * 2.4, 0.1, 0.5), lam(0x333333), 0, 0.03, 0, false));
   return { group: g, blade };
 }
-export function buildSpawner(style = 'igloo') {
-  const g = new THREE.Group();
-  if (style === 'dome') {
-    const gold = lam(0xffc21a, { emissive: 0x442800 }), red = lam(0xe8263a);
-    g.add(mesh(new THREE.SphereGeometry(1.6, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), gold, 0, 0, 0));
-    { const _m = mesh(new THREE.TorusGeometry(1.6, 0.14, 8, 28), red, 0, 0.05, 0); _m.rotation.x = Math.PI / 2; g.add(_m); }
-    const star = new THREE.Shape();
-    for (let k = 0; k < 10; k++) {
-      const a = (k / 10) * Math.PI * 2 - Math.PI / 2, rr = k % 2 ? 0.28 : 0.62;
-      if (k) star.lineTo(Math.cos(a) * rr, -Math.sin(a) * rr); else star.moveTo(Math.cos(a) * rr, -Math.sin(a) * rr);
-    }
-    const st = mesh(new THREE.ShapeGeometry(star), red, 0, 0.95, 1.31, false);
-    st.rotation.x = -0.65; g.add(st);
-    return { group: g };
-  }
-  const dome = mesh(new THREE.SphereGeometry(1.5, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), lam(0xe9f3ff), 0, 0, 0);
-  g.add(dome);
-  const door = mesh(new THREE.CylinderGeometry(0.62, 0.62, 1.2, 12, 1, false, 0, Math.PI), lam(0xc0283a), 0, 0.5, 1.2);
-  door.rotation.y = -Math.PI / 2;
-  g.add(door);
-  g.add(mesh(new THREE.ConeGeometry(0.25, 0.8, 4), lam(0xc0283a), 0, 1.8, 0));
-  return { group: g };
-}
-export function buildTurret() {
-  const g = new THREE.Group();
-  const dark = lam(0x2a2d38), red = lam(0xe8263a), metal = lam(0x8a90a0);
-  g.add(mesh(new THREE.CylinderGeometry(1.0, 1.2, 0.8, 12), dark, 0, 0.4, 0));
-  const head = new THREE.Group(); head.position.y = 1.2; g.add(head);
-  head.add(mesh(new THREE.SphereGeometry(0.7, 14, 10), metal));
-  const barrel = new THREE.CylinderGeometry(0.14, 0.18, 1.3, 10); barrel.rotateX(Math.PI / 2); barrel.translate(0, 0, 0.75);
-  head.add(mesh(barrel, dark));
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff2a3a }));
-  eye.position.set(0, 0.25, 0.55); head.add(eye);
-  { const _m = mesh(new THREE.TorusGeometry(1.05, 0.08, 6, 20), red, 0, 0.82, 0); _m.rotation.x = Math.PI / 2; g.add(_m); }
-  return { group: g, head, eye };
-}
-export function buildCrusher(w) {
-  const g = new THREE.Group();
-  const metal = lam(0x6a707c), dark = lam(0x2a2d34);
-  for (const sx of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.4, 5.2, 0.6), metal, sx * (w / 2 + 0.2), 2.6, 0));
-  g.add(mesh(new THREE.BoxGeometry(w + 0.8, 0.4, 0.7), dark, 0, 5.2, 0));
-  const block = new THREE.Group(); g.add(block);
-  block.add(mesh(new THREE.BoxGeometry(w - 0.1, 1.4, 1.6), metal, 0, 0.7, 0));
-  // hazard stripes
-  const c = document.createElement('canvas'); c.width = 128; c.height = 16;
-  const ctx = c.getContext('2d');
-  for (let i = 0; i < 10; i++) { ctx.fillStyle = i % 2 ? '#1b1b1b' : '#ffcc1a'; ctx.beginPath(); ctx.moveTo(i * 16, 16); ctx.lineTo(i * 16 + 8, 0); ctx.lineTo(i * 16 + 24, 0); ctx.lineTo(i * 16 + 16, 16); ctx.fill(); }
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-  const stripe = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.1, 0.35), new THREE.MeshBasicMaterial({ map: tex }));
-  stripe.position.set(0, 0.25, 0.81); block.add(stripe);
-  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.6), new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.0, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.04; g.add(shadow);
-  return { group: g, block, shadow };
-}
-
-// ---------- enemy fort ----------
-export function buildTower(theme) {
-  const T = THEMES[theme];
-  const g = new THREE.Group();
-  const wall = lam(T.tower), roof = lam(T.roof), dark = lam(0x2a0d10), flag = lam(0xff2a3a);
-  g.add(mesh(new THREE.BoxGeometry(14.6, 2.6, 1.8), wall, 0, 1.3, 0));
-  const cren = new THREE.BoxGeometry(0.7, 0.55, 1.8);
-  for (let x = -6.6; x <= 6.61; x += 1.2) g.add(mesh(cren, wall, x, 2.85, 0));
-  g.add(mesh(new THREE.BoxGeometry(3.2, 1.9, 1.9), dark, 0, 0.95, 0.02, false));
-  for (const sx of [-1, 1]) {
-    g.add(mesh(new THREE.CylinderGeometry(1.3, 1.5, 5, 10), wall, sx * 7.0, 2.5, -0.3));
-    g.add(mesh(new THREE.ConeGeometry(1.7, 2.0, 10), roof, sx * 7.0, 6.0, -0.3));
-    g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.6, 5), dark, sx * 7.0, 7.6, -0.3));
-    const f = mesh(new THREE.BoxGeometry(0.9, 0.55, 0.04), flag, sx * 7.0 + 0.45, 8.1, -0.3);
-    g.add(f);
-  }
-  const em = mesh(new THREE.CircleGeometry(0.75, 20), lam(0xffc21a), 0, 2.35, 0.92, false);
-  g.add(em);
-  return { group: g };
-}
-
 // ---------- bosses ----------
 export function buildBoss(type) {
   const model = buildCoreBoss(type);
