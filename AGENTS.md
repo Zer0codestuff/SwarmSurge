@@ -58,6 +58,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Storm Peaks clouds stay in lateral banks. Open wind spirals leave gate labels visible through tornadoes. HUD panels exclude world health labels; the fixed target bar shows remaining HP and percentage. Future-stage geometry is hidden.
 - The frame loop skips animation callbacks closer than 9 ms, so 120 Hz screens render at 60 fps (the simulation rate) instead of repeating frames; 90 and 100 Hz screens keep their rate.
 - On touch devices, sustained slow frame timing can lower the rendering pixel ratio in steps and restore it after recovery. Stable 30 Hz cadence and long interruptions do not trigger a reduction; glow sizing follows resolution changes. Text shadows avoid duplicated letter silhouettes. Landscape phone layouts place the target bar below the level name and lower banners clear of it.
+- Dynamic instance and point buffers upload only their used prefix through `FX.uploadUsed` (update ranges); empty meshes skip the upload. Burst particles are packed at the front each frame, sparks draw up to their highest live slot and idle debris skips its matrix rebuild. An 850-troop scene went from about 1.9 MB to 0.23 MB of instance uploads per frame.
 - Tracers use 128 reusable slots; splash rings use 64. Halo and combo effects are capped. Shared geometry/material templates live for the module lifetime. Level cleanup releases instance buffers without disposing borrowed templates, including grouped effects.
 
 ## Latest evidence and next steps

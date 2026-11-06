@@ -1,5 +1,13 @@
 import * as THREE from 'three';
 
+/** Upload only the first `count` items of a dynamic attribute: most pools run far below capacity. */
+export function uploadUsed(attribute, count) {
+  if (count <= 0) return;
+  attribute.clearUpdateRanges();
+  attribute.addUpdateRange(0, count * attribute.itemSize);
+  attribute.needsUpdate = true;
+}
+
 // Soft round glowing points (additive). Used for sparks, muzzle flashes, halos and ambient particles.
 const glowVert = `
   attribute float size;
@@ -89,8 +97,8 @@ export class Rings {
       alpha[count] = fade; count++;
     }
     this.mesh.count = count;
-    this.mesh.instanceMatrix.needsUpdate = this.mesh.instanceColor.needsUpdate = true;
-    this.mesh.geometry.attributes.ringAlpha.needsUpdate = true;
+    uploadUsed(this.mesh.instanceMatrix, count); uploadUsed(this.mesh.instanceColor, count);
+    uploadUsed(this.mesh.geometry.attributes.ringAlpha, count);
   }
   clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; }
 }
@@ -137,7 +145,7 @@ export class Tracers {
       count++;
     }
     this.mesh.count = count;
-    this.mesh.instanceMatrix.needsUpdate = this.mesh.instanceColor.needsUpdate = true;
+    uploadUsed(this.mesh.instanceMatrix, count); uploadUsed(this.mesh.instanceColor, count);
   }
   clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; }
 }
@@ -195,8 +203,10 @@ export class Sparks {
   }
   update(dt) {
     const P = this.pos, V = this.vel;
+    let used = 0;
     for (let i = 0; i < this.N; i++) {
       if (this.life[i] <= 0) { if (this.alpha[i] !== 0) { this.alpha[i] = 0; this.size[i] = 0; } continue; }
+      used = i + 1;
       this.life[i] -= dt;
       V[i * 3 + 1] += this.grav[i] * dt;
       const drag = this.grav[i] === 0 ? 1 : 1 - dt * 1.5;
@@ -207,7 +217,8 @@ export class Sparks {
       this.alpha[i] = Math.min(1, p * 1.6);
       this.size[i] = this.size0[i] * (0.4 + p * 0.6);
     }
-    for (const k of ['position', 'color', 'size', 'alpha']) this.geo.attributes[k].needsUpdate = true;
+    this.geo.setDrawRange(0, used);
+    for (const k of ['position', 'color', 'size', 'alpha']) uploadUsed(this.geo.attributes[k], used);
   }
   clear() { this.life.fill(0); }
 }
@@ -240,7 +251,7 @@ export class Halos {
   }
   end() {
     this.geo.setDrawRange(0, this.n);
-    for (const k of ['position', 'color', 'size', 'alpha']) this.geo.attributes[k].needsUpdate = true;
+    for (const k of ['position', 'color', 'size', 'alpha']) uploadUsed(this.geo.attributes[k], this.n);
   }
 }
 
@@ -388,6 +399,7 @@ export class Debris {
   }
   update(dt) {
     let any = false;
+    if (!this.mesh.visible && !this.life.some(life => life > 0)) return;
     for (let i = 0; i < this.N; i++) {
       let s = 0;
       if (this.life[i] > 0) {
