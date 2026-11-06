@@ -201,17 +201,45 @@ export function shineTexture() {
   shineTex.repeat.set(0.5, 1);
   return shineTex;
 }
+const gateTrim = new THREE.MeshLambertMaterial({ color: 0x27313f }); gateTrim.userData.shared = true;
+function gateLathe(profile, sides = 12) {
+  return new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(Math.max(.001, r), y)), sides);
+}
+// Vertex shades let one tinted material read as pale collars over a deeper shaft.
+function gateShade(geo, fn) {
+  const p = geo.attributes.position, c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { const v = fn(p.getX(i), p.getY(i), p.getZ(i)); c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = v; }
+  geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return geo;
+}
 export function buildGate(w, hex, mega = false) {
   const g = new THREE.Group();
   const H = mega ? 2.5 : 2.0;
-  const frameMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(hex).multiplyScalar(0.55) });
-  const postGeo = new THREE.BoxGeometry(0.26, H, 0.26);
-  g.add(mesh(postGeo, frameMat, -w / 2, H / 2, 0), mesh(postGeo, frameMat, w / 2, H / 2, 0));
-  g.add(mesh(new THREE.BoxGeometry(w + 0.26, 0.26, 0.26), frameMat, 0, H, 0));
-  g.add(mesh(new THREE.BoxGeometry(w + 0.26, 0.1, 0.26), frameMat, 0, 0.05, 0, false));
+  // Sculpted pylons, a rounded lintel and a ramped sill share one tinted mesh.
+  const frameMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(hex).multiplyScalar(0.55), vertexColors: true });
+  const capMat = new THREE.MeshBasicMaterial({ color: hex });
+  const parts = [], trim = [], caps = [];
+  for (const sx of [-1, 1]) {
+    const post = gateLathe([[.27, 0], [.27, .12], [.2, .2], [.15, .34], [.14, H * .55], [.13, H - .3], [.19, H - .22], [.21, H - .04], [.13, H + .02], [.001, H + .03]]);
+    parts.push(gateShade(post, (x, y) => (y < .22 || y > H - .24 ? 1.45 : .9 + .25 * y / H)).translate(sx * w / 2, 0, 0));
+    for (const y of [.24, H - .27]) trim.push(new THREE.TorusGeometry(.155, .035, 5, 14).rotateX(Math.PI / 2).translate(sx * w / 2, y, 0));
+    caps.push(new THREE.SphereGeometry(mega ? .2 : .16, 12, 8).translate(sx * w / 2, H + .2, 0));
+    caps.push(new THREE.BoxGeometry(.05, H * .5, .06).translate(sx * w / 2, H * .5, .14));
+  }
+  parts.push(gateShade(new THREE.CylinderGeometry(.1, .1, w, 10, 1).rotateZ(Math.PI / 2).translate(0, H - .02, 0), () => 1.25));
+  const sill = new THREE.CylinderGeometry(.16, .16, w + .2, 10, 1, false, Math.PI, Math.PI); sill.rotateZ(Math.PI / 2); sill.scale(1, .45, 1.6);
+  parts.push(gateShade(sill.translate(0, .005, 0), () => 1.1));
+  for (let i = 0; i < 3; i++) {
+    const chevron = new THREE.Shape([[-.22, .05], [0, -.12], [.22, .05], [.22, .14], [0, -.03], [-.22, .14]].map(([x, y]) => new THREE.Vector2(x, y)));
+    caps.push(new THREE.ShapeGeometry(chevron).rotateX(-Math.PI / 2).translate((i - 1) * Math.min(.9, w * .28), .085, .02));
+  }
+  const frame = mesh(mergeGeometries(parts.map(geo => { const n = geo.index ? geo.toNonIndexed() : geo; n.deleteAttribute('uv'); return n; })), frameMat);
+  const trimMesh = mesh(mergeGeometries(trim.map(geo => { const n = geo.toNonIndexed(); n.deleteAttribute('uv'); return n; })), gateTrim, 0, 0, 0, false);
+  const capMesh = new THREE.Mesh(mergeGeometries(caps.map(geo => { const n = geo.index ? geo.toNonIndexed() : geo; n.deleteAttribute('uv'); return n; })), capMat);
+  g.add(frame, trimMesh, capMesh);
   const panelMat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
-  const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, H - 0.13), panelMat);
-  panel.position.y = (H - 0.13) / 2 + 0.05;
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(w - .12, H - 0.16), panelMat);
+  panel.position.y = (H - 0.16) / 2 + 0.06;
   g.add(panel);
   // moving shine stripe (one shared texture animates every gate)
   const shine = new THREE.Mesh(panel.geometry, new THREE.MeshBasicMaterial({ map: shineTexture(), transparent: true, opacity: mega ? 0.55 : 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
@@ -226,7 +254,7 @@ export function buildGate(w, hex, mega = false) {
   g.add(text);
   return {
     group: g, panel, panelMat, frameMat, label, text,
-    setColor(c) { panelMat.color.set(c); frameMat.color.set(c).multiplyScalar(0.55); },
+    setColor(c) { panelMat.color.set(c); capMat.color.set(c); frameMat.color.set(c).multiplyScalar(0.55); },
   };
 }
 
