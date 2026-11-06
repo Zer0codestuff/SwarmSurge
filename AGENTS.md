@@ -3,6 +3,7 @@
 ## Purpose and architecture
 Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScript ES modules and vendored Three.js, with no build step or backend.
 - `index.html`: UI, styles and import map.
+- `src/title-scene.js`, `src/title-screen.css`: animated title screen, isolated camp diorama and audio/menu-motion settings. Uses the existing renderer and sculpted troop, weapon, vehicle and scenery assets.
 - `src/main.js`: rendering, simulation, input, saved progress and debug hooks.
 - `src/levels.js`, `src/levels2.js`, `src/campaign.js`: stage definitions, equipment routes, pacing and announced flanks.
 - `src/arsenal.js`: thirteen troop ranks, eight weapons, six vehicle forms, three aircraft grades and swept circle collision.
@@ -29,6 +30,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Older optional bots hardcode `/usr/bin/chromium`; older screenshot tools assume `/tmp/ss`. Adapt them before use on macOS. The main checker polls readiness on a timer because background headless tabs can throttle animation frames.
 
 ## Current behavior
+- Normal startup opens the animated title screen. Play opens the existing campaign map; its Home button returns to the title screen without losing a resumable battle. Debug level URLs still start directly. Settings reuse the audio preference and separately persist menu motion. The camp never advances gameplay or consumes tutorials/progress; it updates at up to 30 Hz only while visible and focused. Disabled or system-reduced motion renders a still scene, and the camp stops behind the map or a battle.
 - Balls absorb contact and ranged damage during deployment and rolling, including continuous collision against fast troops. Overkill preserves unused troop power and grants four seconds of x2 cannon output. Frost and impact timers expire during deployment too. Charged giants preserve their output when the troop pool is full.
 - Rapid doubles rate up to x8; Power triples output. Levels accumulate a mixed arsenal through crates, with multiplication copies retaining their weapon. Equipment persists across stages and stage retries. Escorts mirror cannon volleys and reinforce armor.
 - Weapons have separate ranges, cooldowns and effects: blasters, rocket splash, chain lightning, scatter cones, piercing railguns, burning flames, frost slow and plasma splash. Spatial targeting respects cover and reserves firing capacity for troops with actual targets.
@@ -66,6 +68,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Tracers use 128 reusable slots; splash rings use 64. Halo and combo effects are capped. Shared geometry/material templates live for the module lifetime. Level cleanup releases instance buffers without disposing borrowed templates, including grouped effects.
 
 ## Latest evidence and next steps
+- The title screen passed desktop, portrait and landscape bounds checks, settings persistence and Play/map/Home/start navigation. All 61 engine checks pass. Inspected the running camp with authored troops, training targets, mechanic, commander and parked tank. Physical-device rendering performance remains unmeasured.
 - The sealed-route revision passes 61 engine checks and a full 20-world, 60-stage seed-42 campaign. Focused route attempts open the four seals at 12.2 to 20.3 seconds and reach complete combos of x100 million to x7.2 billion including the preceding gates. All four worlds also clear with vaults disabled. Desktop and portrait openings were inspected; undersized vault labels were corrected.
 - Enemy/defense tuning passed 59 focused engine checks and a full seed-42 campaign covering all 20 worlds and 60 stages. Independent-seed policy comparisons exposed Moon's investment bottleneck and excessive boss duration; its warmup and boss pattern were corrected separately. Keep human difficulty feedback as the final balance criterion.
 - Mobile text shadows, landscape HUD overlap and multitouch aiming were corrected; portrait, narrow, landscape and desktop layouts were inspected. The full seed-42 bot campaign cleared 20 worlds and 60 stages; 56 gameplay, 15 tutorial and all boss, fort and defense asset checks passed. Mobile emulation does not measure physical-device performance.
@@ -88,6 +91,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Make frequent logical commits. Push each change on its own branch, then use a PR and `gh pr merge --squash --delete-branch` immediately. The user authorized this workflow without another confirmation. Keep Zer0codestuff as sole author.
 - Do not push directly to main, add agent signatures or include unrelated user changes.
 - Do not introduce a build system, backend or external asset dependency just to serve the game.
+- Do not run a real campaign as the title background, replace the camp with a flat image, or animate its renderer behind the map or a battle.
 - Do not restore the flat level grid, erase legacy progress, collapse troop ranks or remove the overpowered multiplier routes.
 - Do not repeat tutorial prose on every stage or place storm clouds above the road.
 - Do not turn normal stages into prolonged stationary HP grinds, use uncapped scaling against the live army, or charge higher upgrade prices after a retry.
