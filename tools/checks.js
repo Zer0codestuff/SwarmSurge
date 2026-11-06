@@ -234,6 +234,31 @@ window.runGameChecks = (g) => {
     $('rretry').click();
     return {pass:G.chassis===1 && G.weapon===3 && G.aircraft===1 && G.rate===2 && G.power===2 && G.shield===3};
   })()`);
+  check('Inherited firepower prices supplies once and retries preserve the price', `(() => {
+    upgradeCannon('tank'); upgradeCannon('rapid');
+    enterStage(1);
+    const supply=G.stage.gates.find(g=>g.def.t==='upgrade'), price=supply.need;
+    const scaled=price>supply.def.need;
+    upgradeCannon('power'); const fixed=supply.need===price;
+    $('rretry').click();
+    const retried=G.stage.gates.find(g=>g.def.t==='upgrade');
+    return {pass:scaled && fixed && retried.need===price && retried.prog===0,price,retry:retried.need};
+  })()`);
+  check('Armored enemies resist gunfire and burning while railguns pierce the shell', `(() => {
+    const shield=spawnRed(0,-6,3,100), crab=spawnRed(2,-6,8,100);
+    hitArmedRed(shield,10,WEAPON_SPECS[1],10);
+    hitArmedRed(crab,10,WEAPON_SPECS[6],10);
+    const protectedHits=Math.abs(R.hp[shield]-94)<.001 && Math.abs(R.hp[crab]-96.5)<.001;
+    const burn=R.burnDamage[crab];
+    hitArmedRed(shield,10,WEAPON_SPECS[5],10);
+    return {pass:protectedHits && Math.abs(burn-.315)<.001 && Math.abs(R.hp[shield]-84)<.001};
+  })()`);
+  check('Air strikes respect enemy armor', `(() => {
+    const j=spawnRed(0,-6,8,100);
+    G.aircraft=1; G.airTier=1; G.airPass=.86; G.airHit=false; G.airX=0; G.armyAvg=0;
+    updateArsenal(G.stage,.02);
+    return {pass:Math.abs(R.hp[j]-93)<.001,hp:R.hp[j]};
+  })()`);
   check('Campaign unlocks one world at a time and preserves legacy wins', `(() => {
     const fresh=campaignProgress([],20), first=campaignProgress([3],20), legacy=campaignProgress([0,0,0,2],20);
     return {pass:fresh.unlocked===0 && first.unlocked===1 && legacy.unlocked===4};
