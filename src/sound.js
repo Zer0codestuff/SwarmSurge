@@ -2,7 +2,8 @@
 export class Sound {
   constructor() {
     this.ctx = null;
-    this.muted = localStorage.getItem('swarm-muted') === '1';
+    this.muted = false;
+    try { this.muted = localStorage.getItem('swarm-muted') === '1'; } catch {}
     this.last = {};
     this.paused = false;
   }
@@ -29,7 +30,7 @@ export class Sound {
   }
   toggle() {
     this.muted = !this.muted;
-    localStorage.setItem('swarm-muted', this.muted ? '1' : '0');
+    try { localStorage.setItem('swarm-muted', this.muted ? '1' : '0'); } catch {}
     return this.muted;
   }
   tone(freq, dur, type, vol, slide = 0, delay = 0) {
