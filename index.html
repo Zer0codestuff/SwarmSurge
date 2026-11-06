@@ -37,6 +37,10 @@
   .pop span.c4 { font-size: min(54px, 9.5vw); color: #ff6af0; text-shadow: 0 4px 0 #1b0a33, 0 0 26px rgba(255,80,240,.9); animation: rise 1.4s ease-out forwards, hue .5s linear infinite; }
   .pop span.dmg { font-size: 22px; color: #fff; animation: rise 1.0s ease-out forwards; }
   .pop span.dmg.big { font-size: 34px; color: #ffd23a; }
+  .pop span.dmg.target { font-size: clamp(16px, 3.7vw, 22px); animation: damageRise .85s ease-out forwards; }
+  .pop span.dmg.target.big { font-size: clamp(20px, 4.5vw, 28px); }
+  @keyframes damageRise { 0% { opacity: 0; transform: translate(-50%,-100%) scale(.8); } 15% { opacity: 1; transform: translate(-50%,-105%) scale(1.05); }
+    70% { opacity: .95; } 100% { opacity: 0; transform: translate(-50%,-180%); } }
   @keyframes rise { 0% { opacity: 0; transform: translate(-50%,-100%) scale(.4); } 12% { opacity: 1; transform: translate(-50%,-110%) scale(1.25); }
     25% { transform: translate(-50%,-120%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-260%) scale(1); } }
   @keyframes hue { to { filter: hue-rotate(360deg); } }
@@ -154,7 +158,7 @@
   #target { position: absolute; top: 79px; left: 50%; transform: translateX(-50%); width: min(180px, 37vw); text-align: center; }
   #targettrack { height: 5px; background: #142c4677; border: 1px solid #ffffff88; border-radius: 8px; overflow: hidden; }
   #targetfill { height: 100%; background: #ff7181; transition: width .15s; }
-  #targetname { font-size: 10px; text-shadow: 0 1px 3px #142c46; }
+  #targetname { display: block; min-height: 18px; line-height: 18px; font-size: 10px; text-shadow: 0 1px 3px #142c46; }
   #bottom { width: min(440px, 90vw); bottom: max(10px, env(safe-area-inset-bottom)); }
   #ups { gap: 4px; margin-bottom: 7px; }
   .up { font-family: system-ui, sans-serif; font-weight: 800; border: 1px solid #ffffffbb; font-size: 10px; padding: 2px 7px; border-radius: 6px; box-shadow: 0 2px 0 #142c4633; }
