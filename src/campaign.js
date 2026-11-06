@@ -27,7 +27,7 @@ const LESSONS = {
   rockets: 'Rocket troops deal splash damage. Break up the heavy packs.',
   arc: 'Arc rifles chain lightning through three enemies.',
   scatter: 'Scatterguns hit a close pack in a wide fan.',
-  rail: 'Railguns pierce three enemies at long range.',
+  rail: 'Railguns pierce armor and three enemies at long range.',
   flame: 'Flamethrowers sweep close packs and leave them burning.',
   frost: 'Frost projectors slow enemies and rolling balls.',
   plasma: 'Plasma casters burst across a wide area.',
@@ -50,21 +50,41 @@ export function prepareCampaign(levels) {
       const s = structuredClone(original), route = ROUTES[li];
       s.surge = [1, 8, 9, 16, 19].includes(li) && si === 2 || li === 1;
       s.targetTime = si === 2 ? 32 : s.surge ? 16 : 23;
+      // Equipment stays generous. Defenders become relevant sooner without adding more bodies.
+      s.enemyScale = s.surge ? 1 : li === 0 ? 1.1 : 1.1 + li * 0.01;
+      s.enemyWarmup = s.surge ? 0.35 : li === 0 ? 0.45 : 0.5;
+      // The Moon opening has two investments before its crusher ladder can support a stream.
+      if (li === 7 && si === 0) { s.enemyScale = 1; s.enemyWarmup = 0.35; }
       // Small, announced side attacks break up stationary play. Surge stages keep their free-fire rhythm.
       if (li >= 4 && !s.surge) s.flanks = {
         kind: FLANK_TYPES[level.theme] ?? 4, count: level.theme === 'moon' ? 1 : li >= 10 ? 4 : 3,
-        start: si === 2 ? 10 : 7, every: 10, limit: si === 2 ? 1 : 2, warning: 1.4, firstSide: (li+si)%2,
+        start: si === 2 ? 8 : 8.5, every: 10, limit: si === 2 ? 1 : 2, warning: 1.4, firstSide: (li+si)%2, hpScale: 1.3,
       };
       if (s.tower) s.tower = Math.max(250, Math.round(s.tower * route[3]));
-      if (s.boss) s.boss.hp *= li < 2 ? 0.9 : 0.8;
+      if (s.boss) {
+        const endurance = s.surge ? 1 : li === 0 ? 1.2 : li === 7 ? 1.25 : 1.8;
+        s.boss.hp *= (li < 2 ? 0.9 : 0.8) * endurance;
+        if (!s.surge && li >= 2) {
+          // Moon already alternates crushers across both lanes; another lane wipe stalls its army.
+          if (li !== 7) s.boss.sweep = true;
+          s.boss.cadence = 0.9;
+          s.boss.opening = 2.8;
+        }
+      }
+      const defenseScale = li === 0 ? 1.25 : s.surge ? 1.4 : 1.8 + li * 0.025;
+      const supplyScale = si === 0 ? li === 7 ? 1.1 : 1.25 : 1.35 + si * 0.45;
       for (const g of s.gates) {
+        if (g.hp) g.hp = Math.round(g.hp * defenseScale);
         // Front-line equipment used to cost up to a minute of unmultiplied shots.
-        if (g.t === 'upgrade' || g.t === 'hangar') g.need = Math.min(g.need, 18 + li * 2 + si * 8);
+        if (g.t === 'upgrade' || g.t === 'hangar') g.need = Math.round(Math.min(g.need, 18 + li * 2 + si * 8) * supplyScale);
         if (g.t === 'charge') g.per = Math.max(8, g.per * 0.6);
+      }
+      for (const defender of [...(s.spawners || []), ...(s.turrets || [])]) {
+        defender.hp = Math.round(defender.hp * defenseScale);
       }
       const up = route[si];
       // Supply crates sit before the lane puzzles. Claim one, then choose your route.
-      s.gates.unshift({ t: 'upgrade', up, need: 12 + li + si * 5, x: si % 2 ? 3.4 : -3.4, d: 5.5, w: 4.7 });
+      s.gates.unshift({ t: 'upgrade', up, need: Math.round((12 + li + si * 5) * supplyScale), x: si % 2 ? 3.4 : -3.4, d: 5.5, w: 4.7 });
       s.tip = `${LESSONS[up]} ${original.tip}`;
       // Short stationary routes are intentional. Longer fights gain a moving bonus lane.
       if (li >= 3 && !s.surge && si !== 2 && s.gates.length < 40) {

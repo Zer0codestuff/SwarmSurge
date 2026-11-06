@@ -639,7 +639,7 @@ function buildStage(sd, i, root, theme) {
     }[sd.boss.type];
     const b = {
       type: sd.boss.type, hp: sd.boss.hp, max: sd.boss.hp, speed: sd.boss.speed, push: sd.boss.push ?? 40, startZ: z0 - 60, x: 0, z: z0 - 60,
-      model: m, visualScale: m.group.scale.clone(), visualState: {}, alive: true, every: sd.boss.every ?? every, sweep: !!sd.boss.sweep, atkT: 4, atk: 0, atkN: 0, label: makeLabel('boss'), flash: 0, dead: 0,
+      model: m, visualScale: m.group.scale.clone(), visualState: {}, alive: true, every: (sd.boss.every ?? every) * (sd.boss.cadence ?? 1), sweep: !!sd.boss.sweep, atkT: sd.boss.opening ?? 4, atk: 0, atkN: 0, label: makeLabel('boss'), flash: 0, dead: 0,
     };
     m.group.position.set(0, 0, b.z);
     root.add(m.group);
@@ -779,13 +779,25 @@ function addBall(S, root, x, z, hp, r, speed, def = {}) {
   S.balls.push(b);
   return b;
 }
+function cannonFlux(includeSupport = true) {
+  return G.barrels * G.rate * G.power / BASE_INTERVAL * (includeSupport ? (G.twin ? 2 : 1) + G.squad : 1);
+}
+function priceStageSupplies(S, inheritedFlux) {
+  // Fix prices at entry. A reward never raises other prices midway through the stage.
+  const seconds = S.i === 0 ? 1.6 : S.i === 1 ? 3.2 : 4;
+  for (const g of S.gates) if (g.def.t === 'upgrade' || g.def.t === 'hangar') {
+    g.need = Math.max(g.def.need, Math.ceil(inheritedFlux * seconds));
+    g.dirty = true;
+  }
+}
 function enterStage(i) {
-  G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives, chassis: G.chassis, weapon: G.weapon, weaponMask: G.weaponMask, aircraft: G.aircraft, shield: G.shield };
+  G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives, chassis: G.chassis, weapon: G.weapon, weaponMask: G.weaponMask, aircraft: G.aircraft, shield: G.shield, supplyFlux: cannonFlux(false) };
   G.rad = 0; G.armyAvg = 0; G.overdrive = 0; G.airPass = 0; G.airTier = 0; G.airT = 2;
   for (const zn of G.zones) if (zn.mesh) { G.root.remove(zn.mesh); zn.mesh.geometry.dispose(); }
   G.zones.length = 0;
   G.stageIdx = i;
   G.stage = G.stages[i];
+  priceStageSupplies(G.stage, G.snap.supplyFlux);
   G.shown = false;
   G.z0 = G.cannonZ = G.camZ = G.stage.z0;
   G.camLag = G.cx; G.prevCx = G.cx;
@@ -917,6 +929,9 @@ function nearestVisibleRed(S, x, z, range, excluded = null, forwardOnly = true) 
 }
 function hitArmedRed(j, damage, spec, troopPower) {
   if (R.hp[j] <= 0) return;
+  // Piercing rail shots counter armor. Other weapons must work through the shell.
+  const armor = spec.pierce ? 1 : RED_TYPES[R.kind[j]].armor || 1;
+  damage *= armor;
   let reaction = null;
   if (spec.key === 'rail' && R.chill[j] > 0) {
     damage *= 1.6; R.chill[j] = 0; reaction = 'SHATTER';
@@ -935,7 +950,7 @@ function hitArmedRed(j, damage, spec, troopPower) {
   if (R.hp[j] <= 0) { killRed(j); return; }
   if (spec.burn) {
     R.burn[j] = spec.burn;
-    R.burnDamage[j] = Math.max(R.burnDamage[j], troopPower * .09);
+    R.burnDamage[j] = Math.max(R.burnDamage[j], troopPower * .09 * armor);
   }
   if (spec.chill) R.chill[j] = spec.chill;
 }
@@ -1036,7 +1051,7 @@ function updateArsenal(S, dt) {
     const spec = AIRCRAFT_SPECS[G.airTier || G.aircraft];
     const damage = Math.max(20 * G.power, G.armyAvg * .16) * spec.damage;
     for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.x[j] - G.airX) < spec.width) {
-      R.hp[j] -= damage; if (R.hp[j] <= 0) killRed(j); else R.flash[j] = 1;
+      R.hp[j] -= damage * (RED_TYPES[R.kind[j]].armor || 1); if (R.hp[j] <= 0) killRed(j); else R.flash[j] = 1;
     }
     for (const ball of S.balls) if (ball.alive && Math.abs(ball.x - G.airX) < ball.r + spec.width - 1) {
       rangedHit(ball, damage * 2); if (ball.hp <= 0) ballDies(S, ball, false);
@@ -1647,9 +1662,9 @@ function spawnHordes(S) {
 }
 // enemies get stronger the longer a stage lasts (x2 every 25 s), scaled by the level's threat
 function threat(S) {
-  // red units start soft and harden over the first ~16 s of a stage, then keep doubling every 25 s
-  const soft = Math.min(1, 0.35 + S.time / 25);
-  return (LEVELS[G.levelIdx].threat ?? 1) * soft * 2 ** (S.time / 25) * (S.enraged ? 2 : 1);
+  // Resistance ramps up during the opening, then keeps doubling every 25 seconds.
+  const soft = Math.min(1, (S.def.enemyWarmup ?? 0.35) + S.time / 25);
+  return (LEVELS[G.levelIdx].threat ?? 1) * (S.def.enemyScale ?? 1) * soft * 2 ** (S.time / 25) * (S.enraged ? 2 : 1);
 }
 // boss minions are elite: each one carries a few % of your recent army (capped by a slice of the boss's hp)
 function summon(b, kind, n, frac = 0.0012, spread = 3) {
@@ -1684,7 +1699,7 @@ function scheduleFlank(S, def = S.def.flanks) {
   sound.play('warn');
   addTelegraph('circle',x,z,1.6,0,def.warning,() => {
     if (S !== G.stage || G.phase !== 'play') return;
-    const hp = RED_TYPES[def.kind].hp * threat(S);
+    const hp = RED_TYPES[def.kind].hp * threat(S) * (def.hpScale ?? 1);
     for (let k = 0; k < def.count; k++) {
       spawnRed(x + (k-(def.count-1)/2)*.4,z-(k%2)*.55,def.kind,hp);
     }
@@ -2860,6 +2875,7 @@ $('rretry').addEventListener('click', () => {
   twinCannon.group.visible = G.twin;
   renderUps();
   G.snap = { ...snap, lives: G.lives };
+  priceStageSupplies(G.stage, snap.supplyFlux);
 });
 $('rrestart').addEventListener('click', () => startLevel(G.levelIdx));
 $('rmenu').addEventListener('click', showMenu);
@@ -3052,7 +3068,7 @@ window.__game = {
   // debug only: evaluate an expression inside the engine module (tools/peek, tools/probe)
   dbg(src) { return eval(src); },
   units() { const out = []; for (let i = 0; i < B.n; i += 25) out.push([+B.x[i].toFixed(1), +(G.z0 - B.z[i]).toFixed(1), +B.hp[i].toPrecision(2), +B.vx[i].toFixed(1), +B.vz[i].toFixed(1)]); return { n: B.n, z0: G.z0, towerZ: G.stage.tower?.z, alive: G.stage.tower?.alive, out }; },
-  snapshot() { return { flux: G.barrels * G.rate * G.power / BASE_INTERVAL * ((G.twin ? 2 : 1) + G.squad) }; },
+  snapshot() { return { flux: cannonFlux() }; },
   leaks() {
     let n = 0;
     for (const g of G.stage.gates) {

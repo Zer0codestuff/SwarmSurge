@@ -23,6 +23,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - `?level=12&stage=2` starts a selected stage. `speed=2` accelerates simulation; `turbo=1` skips rendering for bots.
 - Debug through `window.__game.state` and `window.__game.dbg(source)`. Inspect desktop and mobile bounds when changing UI.
 - Install check dependencies with `cd tools && npm ci`. Run `CHROME_PATH=/path/to/chrome node check-game.mjs`. Add `--campaign` for all 20 worlds with the smart policy and seed 42, or `--levels=8,19` for selected worlds. Reports are ignored under `tools/out/`; selected runs preserve the full campaign report.
+- Compare difficulty with `CHROME_PATH=/path/to/chrome GAME_URL=http://127.0.0.1:8000 node tools/balance-checks.mjs --levels=1,4,8,16,19 --policies=smart,naive,center --seeds=42`. Each world resets its seed and policy state. Reports include stage times, attempted cannon damage, boss attacks and sampled aim holds. This tool defaults to port 8001 for isolated tuning.
 - Run tutorial policy checks with `node tools/tutorial-checks.mjs` from the root. Run mobile resolution checks with `CHROME_PATH=/path/to/chrome node tools/mobile-quality-checks.mjs`. No test script is configured in package.json.
 - Run `CHROME_PATH=/path/to/chrome node tools/asset-checks.mjs` for boss geometry, deterministic poses, collision metadata, fort bounds and defense model contracts.
 - Older optional bots hardcode `/usr/bin/chromium`; older screenshot tools assume `/tmp/ss`. Adapt them before use on macOS. The main checker polls readiness on a timer because background headless tabs can throttle animation frames.
@@ -38,6 +39,8 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Heart pickups can raise lives to fifteen. Results show the remaining total rather than dividing bonus hearts by the ten starting lives.
 - Destroyed bunkers are removed before their reinforcement timer is handled, preventing a final wave after a lethal hit.
 - All 60 stages have equipment routes and revised pacing. Normal late stages have limited, announced biome flanks; surge routes retain their overpowered rhythm. Long fights expose armor up to x4 hit damage. Moon Base and the stationary Neon Nights opening were shortened after balance measurements.
+- Difficulty targets moderate pressure, short encounters and rewarding OP routes. Breakable gates and defenses have more HP, with smaller increases in the tutorial and surge stages. Armored enemies resist weapons, burning and aircraft; railguns pierce their armor. Normal bosses endure longer and alternate announced cannon sweeps with their signature attacks. Moon retains its crusher pattern without an extra sweep, and its opening keeps a gentler enemy warmup.
+- Upgrade and hangar costs rise by stage. At entry, costs also account for the main cannon's inherited barrels, rate and power, with minimum investments of 3.2 seconds in stage two and four seconds in stage three before multipliers. Mirrored cannons and escorts are excluded because they cannot all hit one crate. Prices stay fixed during a stage and retries restore the same entry price. New upgrades do not raise other prices midway through a fight.
 - World 2 stage 1's divider starts at distance 14.5, meeting the fence at distance 15. Keep this junction closed so troops must break the fence before entering the multiplier ladder.
 - The island map unlocks worlds progressively and preserves legacy saves. Victories save before result animation. The map can retain one exact in-memory battle until another world starts or the page reloads.
 - Basic tutorials appear only on first introductions in world one. Movement gate variants share one lesson. Replays, retries, existing wins and debug starts skip repeated prose. Opening the map does not consume a lesson.
@@ -62,6 +65,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Tracers use 128 reusable slots; splash rings use 64. Halo and combo effects are capped. Shared geometry/material templates live for the module lifetime. Level cleanup releases instance buffers without disposing borrowed templates, including grouped effects.
 
 ## Latest evidence and next steps
+- Enemy/defense tuning passed 59 focused engine checks and a full seed-42 campaign covering all 20 worlds and 60 stages. Independent-seed policy comparisons exposed Moon's investment bottleneck and excessive boss duration; its warmup and boss pattern were corrected separately. Keep human difficulty feedback as the final balance criterion.
 - Mobile text shadows, landscape HUD overlap and multitouch aiming were corrected; portrait, narrow, landscape and desktop layouts were inspected. The full seed-42 bot campaign cleared 20 worlds and 60 stages; 56 gameplay, 15 tutorial and all boss, fort and defense asset checks passed. Mobile emulation does not measure physical-device performance.
 - World 2's fence bypass was reproduced and fixed by extending the divider. Focused engine checks confirm the side route stays blocked and the broken fence opens the ladder. Desktop and 390 x 844 views were inspected; the seed-42 smart bot clears all three world 2 stages with ten hearts.
 - Fifty-six focused gameplay checks and fifteen tutorial policy checks pass. The latest full seed-42 smart-bot run clears all 20 worlds and 60 stages. Bot success does not replace human balance feedback.
@@ -84,6 +88,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Do not introduce a build system, backend or external asset dependency just to serve the game.
 - Do not restore the flat level grid, erase legacy progress, collapse troop ranks or remove the overpowered multiplier routes.
 - Do not repeat tutorial prose on every stage or place storm clouds above the road.
+- Do not turn normal stages into prolonged stationary HP grinds, use uncapped scaling against the live army, or charge higher upgrade prices after a retry.
 - Do not return forts to one recolored box template or scenery to bare cones, cylinders and floating primitives.
 - Do not build boss anatomy from stacked boxes or replace the sculpted forms with slightly rounded primitives.
 - Do not return troops, enemies, weapons or vehicles to box-built models. The user asked for troops that transform with rank (bot, then soldier, then stronger forms).
