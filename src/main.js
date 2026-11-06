@@ -2452,11 +2452,6 @@ function renderWorld(dt) {
   const t = clamp((aspect - 0.5) / 0.5, 0, 1);
   const vf = clamp(2 * Math.atan(Math.tan((46 * Math.PI) / 360) / aspect) * (180 / Math.PI), 50, 80);
   G.kick = Math.max(0, (G.kick || 0) - dt * 2.5);
-  const fov = vf + (reducedMotion ? 0 : G.kick * 2);
-  if (Math.abs(camera.fov - fov) > 0.01) {
-    camera.fov = fov; camera.updateProjectionMatrix();
-    FX.setGlowScale((innerHeight * renderer.getPixelRatio()) / (2 * Math.tan((fov * Math.PI) / 360)));
-  }
   G.shake = Math.max(0, G.shake - dt * 2.2);
   const sh = reducedMotion ? 0 : Math.min(0.22, G.shake * 0.22);
   // swoop in at the start of every stage, push toward the boss after a win
@@ -2467,6 +2462,20 @@ function renderWorld(dt) {
   G.camLag = (G.camLag ?? G.cx) + (G.cx - (G.camLag ?? G.cx)) * Math.min(1, dt * 4);
   camera.position.set(G.camLag * 0.22 + rand(-sh, sh), 18 + t * 4 + swoop * 9 - push * 0.25 + rand(-sh, sh), G.camZ + 13.5 + t * 6.5 + swoop * 10 - push);
   camera.lookAt(G.camLag * 0.12, 0, G.camZ - 23 + t * 1 - push);
+  let framedFov = vf;
+  const framingBoss = G.stage?.boss;
+  if (framingBoss?.alive) {
+    camera.updateMatrixWorld();
+    // Fit a conservative upper corner below the HUD without moving the road.
+    tmpV.set(framingBoss.x, framingBoss.model.height + .35, framingBoss.z + framingBoss.model.radius).applyMatrix4(camera.matrixWorldInverse);
+    const ceiling = Math.max(.3, 1 - 2 * (labelTop + 12) / innerHeight);
+    if (tmpV.z < -1) framedFov = Math.max(vf, 2 * Math.atan2(Math.max(0, tmpV.y), -tmpV.z * ceiling) * 180 / Math.PI);
+  }
+  const fov = Math.min(88, framedFov) + (reducedMotion ? 0 : G.kick * 2);
+  if (Math.abs(camera.fov - fov) > 0.01) {
+    camera.fov = fov; camera.updateProjectionMatrix();
+    FX.setGlowScale((innerHeight * renderer.getPixelRatio()) / (2 * Math.tan((fov * Math.PI) / 360)));
+  }
   sky.position.copy(camera.position);
   ambient.update(G.t, G.camZ);
   sun.position.set(12, 34, G.camZ + 4);

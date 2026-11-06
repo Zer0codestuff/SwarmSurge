@@ -341,6 +341,13 @@ window.runGameChecks = (g) => {
     G.t+=1; model.animate(G.t,defensePose(tr));
     return {pass:fired && recoil<.37 && model.group.getObjectByName('turret-recoil').position.z===.37 && defenseMuzzle.y>0 && defenseMuzzle.z>-10,fired,recoil};
   })()`);
+  check('Tall bosses fit beneath the HUD at the start of combat', `(() => {
+    startLevel(19,2); G.paused=true; G.phase='play'; G.kick=G.shake=0; renderWorld(0);
+    const b=G.stage.boss;
+    tmpV.set(b.x,b.model.height+.35,b.z+b.model.radius).project(camera);
+    const top=(-tmpV.y*.5+.5)*innerHeight;
+    return {pass:top>=labelTop+11,top,hud:labelTop,fov:camera.fov};
+  })()`);
   check('Pause clears held input and resume preserves the battle', `(() => {
     G.paused=false; keys.left=true; drag={id:1,x:0,aim:0};
     const i=spawn(B,0,-3,10,0); G.time=7; upgradeCannon('tank');
