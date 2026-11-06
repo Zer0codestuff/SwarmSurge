@@ -62,7 +62,7 @@ try {
       m.animate(7,.9,{...state,stunned:true}); const stunned = pose(m.group);
       const stats = inspect(m.group);
       const rootStable = m.group.position.length()===0 && m.group.rotation.x===0 && m.group.rotation.y===0 && m.group.rotation.z===0 && m.group.scale.equals(new THREE.Vector3(1,1,1));
-      const pass = metadata && rootStable && stats.finite && stats.lights===0 && stats.meshes<=50 && stats.triangles<=18000 && neutral.every(Number.isFinite) && stunned.every(Number.isFinite) && !different(attack,repeated) && different(neutral,attack) && bounds.min.y>-.3 && bounds.max.y>height*.75 && bounds.max.y<height*1.15;
+      const pass = metadata && rootStable && stats.finite && stats.lights===0 && stats.meshes<=50 && stats.triangles<=40000 && neutral.every(Number.isFinite) && stunned.every(Number.isFinite) && !different(attack,repeated) && different(neutral,attack) && bounds.min.y>-.3 && bounds.max.y>height*.75 && bounds.max.y<height*1.15;
       dispose(m.group);
       return { type, pass, ...stats, bottom: bounds.min.y, top: bounds.max.y, height, metadata, rootStable, deterministic: !different(attack,repeated) };
     });

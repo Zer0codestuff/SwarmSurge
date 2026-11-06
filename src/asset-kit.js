@@ -32,7 +32,12 @@ export function assetBatch() {
       geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
       const c = new THREE.Color(color), count = geo.attributes.position.count;
       const colors = new Float32Array(count * 3);
-      for (let i = 0; i < count; i++) { colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b; }
+      const tint = geo.attributes.color;
+      for (let i = 0; i < count; i++) {
+        colors[i * 3] = c.r * (tint ? tint.getX(i) : 1);
+        colors[i * 3 + 1] = c.g * (tint ? tint.getY(i) : 1);
+        colors[i * 3 + 2] = c.b * (tint ? tint.getZ(i) : 1);
+      }
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       for (const key of Object.keys(geo.attributes)) if (!['position', 'normal', 'color'].includes(key)) geo.deleteAttribute(key);
       parts.push(geo);
@@ -66,7 +71,7 @@ export function assetBatch() {
       parts.forEach(part => part.dispose()); parts.length = 0;
       geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.name = name; mesh.castShadow = material === assetSurface; mesh.receiveShadow = material === assetSurface;
+      mesh.name = name; mesh.castShadow = !material.isMeshBasicMaterial; mesh.receiveShadow = !material.isMeshBasicMaterial;
       parent.add(mesh);
       return mesh;
     },
