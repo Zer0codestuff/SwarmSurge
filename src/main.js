@@ -75,7 +75,10 @@ const canvas = document.getElementById('c');
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.75 : 2));
+// Reduce mobile resolution only when frame timing shows sustained load.
+const maxPixelRatio = Math.min(devicePixelRatio, isTouch ? 1.75 : 2);
+const minPixelRatio = Math.min(1, maxPixelRatio);
+renderer.setPixelRatio(maxPixelRatio);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -100,11 +103,15 @@ const impactRings = new FX.Rings(scene);
 let sceneReady = false;
 let labelBoundsDirty = true, labelTop = 110, labelBottom = innerHeight - 75;
 
+function updateGlowScale() {
+  FX.setGlowScale((innerHeight * renderer.getPixelRatio()) / (2 * Math.tan((camera.fov * Math.PI) / 360)));
+}
 function resize() {
   labelBoundsDirty = true;
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  updateGlowScale();
   if (sceneReady && G.paused && G.phase !== 'menu') { renderWorld(0); renderer.render(scene,camera); }
 }
 addEventListener('resize', resize);
@@ -2514,7 +2521,7 @@ function renderWorld(dt) {
   const fov = Math.min(88, framedFov) + (reducedMotion ? 0 : G.kick * 2);
   if (Math.abs(camera.fov - fov) > 0.01) {
     camera.fov = fov; camera.updateProjectionMatrix();
-    FX.setGlowScale((innerHeight * renderer.getPixelRatio()) / (2 * Math.tan((fov * Math.PI) / 360)));
+    updateGlowScale();
   }
   sky.position.copy(camera.position);
   ambient.update(G.t, G.camZ);
@@ -2831,7 +2838,11 @@ muteBtn.addEventListener('click', () => { sound.unlock(); muteBtn.textContent = 
 // ---------------------------------------------------------------- input
 let drag = null;
 const keys = { left: false, right: false };
-function resetInput() { drag = null; keys.left = keys.right = false; }
+function resetInput() {
+  const pointerId = drag?.id;
+  drag = null; keys.left = keys.right = false;
+  if (pointerId != null && canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+}
 function pauseGame() {
   if ($('pause').open || !['intro','play','clear','move'].includes(G.phase)) return false;
   resetInput(); G.paused = true; acc = 0; sound.setPaused(true);
@@ -2862,7 +2873,7 @@ $('pause').addEventListener('cancel', event => { event.preventDefault(); resumeG
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 addEventListener('blur', () => { resetInput(); pauseGame(); });
 canvas.addEventListener('pointerdown', (e) => {
-  if (G.paused || !['intro','play'].includes(G.phase)) return;
+  if (drag || G.paused || !['intro','play'].includes(G.phase) || (e.pointerType === 'mouse' && e.button !== 0)) return;
   sound.unlock();
   drag = { id: e.pointerId, x: e.clientX, aim: G.aim };
   try { canvas.setPointerCapture(e.pointerId); } catch {}
@@ -2876,6 +2887,7 @@ addEventListener('pointermove', (e) => {
 const endDrag = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
 addEventListener('pointerup', endDrag);
 addEventListener('pointercancel', endDrag);
+canvas.addEventListener('lostpointercapture', endDrag);
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('pause').open) { if (pauseGame()) e.preventDefault(); return; }
   if ((e.key === 'p' || e.key === 'P') && !e.repeat) { e.preventDefault(); if ($('pause').open) resumeGame(); else pauseGame(); return; }
@@ -2893,15 +2905,45 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // ---------------------------------------------------------------- main loop
 let last = performance.now(), acc = 0, fpsAcc = 0, fpsN = 0;
+let qualityTime = 0, qualityFrames = 0, qualityThirtyFrames = 0, qualityGoodWindows = 0;
+function resetQualitySample() { qualityTime = qualityFrames = qualityThirtyFrames = 0; }
+function updateMobileQuality(dt) {
+  // Ignore suspension and long interruptions rather than treating them as GPU load.
+  if (dt <= 0 || dt > 0.25) { resetQualitySample(); qualityGoodWindows = 0; return; }
+  qualityTime += dt; qualityFrames++;
+  if (dt >= 0.027 && dt <= 0.040) qualityThirtyFrames++;
+  if (qualityTime < 3) return;
+  const fps = qualityFrames / qualityTime;
+  const current = renderer.getPixelRatio();
+  let next = current;
+  // A steady 30 Hz display is indistinguishable from a steady 30 fps workload.
+  // Preserve sharpness in that case; only react to less regular slow frames.
+  const steadyThirty = fps >= 27 && fps <= 33 && qualityThirtyFrames / qualityFrames >= 0.8;
+  if (fps < 45 && !steadyThirty) {
+    next = Math.max(minPixelRatio, current - 0.25);
+    qualityGoodWindows = 0;
+  } else if (fps > 56 || steadyThirty) {
+    if (++qualityGoodWindows >= 4) {
+      next = Math.min(maxPixelRatio, current + 0.25);
+      qualityGoodWindows = 0;
+    }
+  } else qualityGoodWindows = 0;
+  resetQualitySample();
+  if (next !== current) { renderer.setPixelRatio(next); updateGlowScale(); }
+}
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const elapsed = (now - last) / 1000;
+  const dt = Math.min(0.1, elapsed);
   last = now;
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { G.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
   // The map is opaque, so rendering the battlefield behind it only spends GPU time.
-  if (G.phase === 'menu') { acc = 0; return; }
-  if (G.paused) { acc = 0; return; }
+  if (G.phase === 'menu' || G.paused) {
+    acc = 0; resetQualitySample(); qualityGoodWindows = 0;
+    return;
+  }
+  if (isTouch && !TURBO) updateMobileQuality(elapsed);
   if (TURBO) {
     // headless balance testing: burn ~30ms of CPU per frame on simulation, render nothing
     const t0 = performance.now();
