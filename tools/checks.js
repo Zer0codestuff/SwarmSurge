@@ -258,6 +258,20 @@ window.runGameChecks = (g) => {
     R.st[far]=1; R.vz[near]=6; R.age[far]=R.age[near]=1; writeRed();
     return {pass:redMesh.count===1 && redFarMesh.count===1 && overlays[5].instanceMatrix.array[14]===-60 && overlays[2].instanceMatrix.array[14]===-3 && redFarMesh.geometry.attributes.unitMotion.array[1]===0};
   })()`);
+  check('Special enemy kits follow their hovering bodies', `(() => {
+    camera.position.set(0,20,20); troopPixelScale=1000;
+    for(const kind of [7,8,9]) { const i=spawn(R,kind-8,-3,10,kind); R.age[i]=1; R.phase[i]=0; R.vz[i]=3; }
+    halos.begin(); writeRed(); halos.end();
+    const heights=[7,8,9].map(kind=>overlays[kind].instanceMatrix.array[13]);
+    const motion=redMesh.geometry.attributes.unitMotion.array;
+    return {pass:overlays[7].count===1 && overlays[8].count===1 && overlays[9].count===1 && Math.abs(heights[0]-.8)<1e-6 && heights[1]===0 && Math.abs(heights[2]-.22)<1e-6 && motion[1]===0 && motion[5]===0 && redAimY(0)>1.4,heights};
+  })()`);
+  check('Special enemy lights remain bounded in a large horde', `(() => {
+    camera.position.set(0,20,20); troopPixelScale=1000;
+    for(let k=0;k<100;k++){const i=spawn(R,0,-3,10,k%2?7:9);R.age[i]=1;}
+    halos.begin();writeRed();halos.end();
+    return {pass:halos.n<=12 && overlays[7].count===50 && overlays[9].count===50,lights:halos.n};
+  })()`);
   check('World labels leave HUD space and target health stays visible', `(() => {
     renderWorld(0);
     const label=makeLabel('ball'), point=new THREE.Vector3(0,.99,0).unproject(camera);

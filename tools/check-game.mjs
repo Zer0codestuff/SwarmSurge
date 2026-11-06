@@ -15,7 +15,8 @@ try {
   const page = await browser.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`${process.env.GAME_URL || 'http://127.0.0.1:8000'}/index.html?turbo=1`);
-  await page.waitForFunction(() => window.__game);
+  // A background headless tab may throttle animation frames during startup.
+  await page.waitForFunction(() => window.__game, { polling: 100 });
   await page.addScriptTag({ content: fs.readFileSync(new URL('./checks.js', import.meta.url), 'utf8') });
   const results = await page.evaluate(() => window.runGameChecks(window.__game));
   for (const result of results) console.log(`${result.pass ? 'PASS' : 'FAIL'} ${result.name}${result.pass ? '' : ' ' + JSON.stringify(result)}`);
