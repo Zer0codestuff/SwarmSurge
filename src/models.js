@@ -58,8 +58,8 @@ export function merge(parts) {
 // ---------- units (instanced; instance color multiplies the baked vertex colors) ----------
 
 // Separate instanced overlays keep weapons visible without adding a draw call per troop.
-export function troopWeaponGeo(kind) {
-  const geometry = sculptedWeaponGeometry(kind);
+export function troopWeaponGeo(kind, detail = 'high') {
+  const geometry = sculptedWeaponGeometry(kind, detail);
   geometry.userData.shared = false;
   return geometry;
 }

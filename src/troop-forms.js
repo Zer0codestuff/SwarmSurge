@@ -310,10 +310,10 @@ function crabGear(k) {
 
 const GEAR_BUILDERS = { 2: bomb, 3: shield, 5: helmet, 7: droneGear, 8: crabGear };
 /** Fresh static overlay geometry for an enemy kind, or null if it has none here. */
-export function enemyGearGeometry(kind) {
+export function enemyGearGeometry(kind, detail = 'high') {
   const build = GEAR_BUILDERS[kind];
   if (!build) return null;
-  const k = sculptKit(false, false);
+  const k = sculptKit(detail === 'low', false);
   build(k);
   const geometry = k.b.finish();
   geometry.userData.shared = false;
