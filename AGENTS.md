@@ -8,7 +8,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - `src/arsenal.js`: thirteen troop ranks, eight weapons, six vehicle forms, three aircraft grades and swept circle collision.
 - `src/unit-assets.js`, `src/vehicle-assets.js`, `src/air-assets.js`: native procedural models and troop motion shaders.
 - `src/asset-kit.js`, `src/boss-shapes.js`: batched surfaces, continuous anatomical lofts, swept forms, domed armor and folded cloth.
-- `src/boss-sculpted-core.js`, `src/boss-sculpted-royal.js`: sculpted first ten bosses and royal variants. `src/bosses.js` currently adapts the late boss builders in `src/boss-assets-late.js` while their replacements are completed.
+- `src/boss-sculpted-core.js`, `src/boss-sculpted-late.js`, `src/boss-sculpted-royal.js`: the full sculpted boss roster. `src/bosses.js` adapts the late builders.
 - `src/battlefield-assets.js`: biome fort architecture, turret, bunker, divider, hydraulic crusher and falling pillar models.
 - `src/map.js`, `src/map.css`: biome island map and progressive unlocks.
 - `src/tutorials.js`: persisted first-introduction lessons. Other modules build worlds, props, bosses, pooled effects and synthesized audio.
@@ -42,7 +42,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Beveled troops use instanced stride animation with matching shadow shaders. Projected-size detail selection preserves colors, weapon placement and motion phase. Sleeping, flying and airborne units stop walking. Rolling balls use the lighter troop geometry.
 - Drones have jetpacks and winglets, crabs have shell plates and claws, and ghosts have halos and wisps. Floating bodies and weapon aim heights agree; special lights share a twelve-point budget.
 - All twenty bosses have native rigs with separate silhouettes and equipment, including the lunar explorer, candy sovereign, articulated Kraken, lantern Pumpkin King, coil-backed Thunder guardian and armored royal Emperor. Their root transforms stay under engine control; attack poses use the full 1.25-second cycle, and stationary or stunned legs stop walking. Rendering preserves authored boss scale. Boss rig geometry belongs to the level; the asset kit materials are shared. The old primitive boss builders have been removed.
-- The first ten bosses and Emperor now use continuous shaped anatomy, carved faces, curved shells, domed armor and folded cloth. Skin, forged metal and cloth use separate shared materials. The user rejected the previous stacked block construction. Asset batches preserve authored vertex shades. The boss triangle budget is 40,000 per rig, with one boss visible at a time.
+- All twenty bosses use continuous shaped anatomy, carved faces, curved shells, domed armor and folded cloth. Skin, forged metal and cloth use separate shared materials. The user rejected the previous stacked block construction; both obsolete block-model modules have been removed. Asset batches preserve authored vertex shades. The boss triangle budget is 40,000 per rig, with one boss visible at a time.
 - Boss camera framing fits a conservative upper corner below the HUD, widening only when needed. Both desktop and portrait boss openings were checked for obstruction.
 - Forts use eight architecture families across twenty biome palettes. Turrets aim and recoil with beams starting at their muzzle. Bunker doors respond to reinforcement spawns; crusher rods follow the moving ram. Props retain their collision dimensions and add no lights or raster textures.
 - Storm Peaks clouds stay in lateral banks. Open wind spirals leave gate labels visible through tornadoes. HUD panels exclude world health labels; the fixed target bar shows remaining HP and percentage. Future-stage geometry is hidden.
@@ -50,13 +50,12 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 
 ## Latest evidence and next steps
 - Fifty-five focused gameplay checks and fifteen tutorial policy checks pass. The latest full seed-42 smart-bot run clears all 20 worlds and 60 stages. Bot success does not replace human balance feedback.
-- The first ten sculpted bosses and Emperor were inspected in contact sheets, including a royal before/after under identical lighting and camera. All current asset contracts pass. The remaining nine late-boss sculpted replacements are being completed. Forts retain seven meshes and 3,260 to 5,308 triangles.
-- Campaign, defeat/restart and framing checks must be refreshed after the full sculpted roster is integrated. Earlier recorded runs predate this redesign.
+- All twenty sculpted bosses were inspected in contact sheets, including a royal before/after under identical lighting and camera. They use 7 to 23 meshes and 8,454 to 37,280 triangles. Asset contracts pass. Forts retain seven meshes and 3,260 to 5,308 triangles.
+- The refreshed seed-42 bot run clears all twenty worlds and sixty stages with the sculpted roster. All twenty rendered defeats complete, desktop and portrait opening silhouettes clear the HUD, and eight finale restarts after warmup hold at 189 geometries, 24 textures and 32 shader programs. These counts do not establish physical mobile frame rate.
 - Desktop and 390 x 844 scenes were inspected for Storm Peaks, mixed troops, vehicles and aircraft. A short Terra 6.1 medium review identified the tornado obstruction, which was corrected.
 - A rendered 800-troop, two-ball comparison reduced total triangles from 3,624,204 to 1,693,964. Each ball dropped from 276,480 to 92,160 triangles. Six cannons with six barrels each dropped from 441 to 369 draw calls including shadows. These measure workload, not physical mobile frame rate.
 - Ten rendered Coral Coast restarts after aircraft warmup held at 139 geometries, 18 textures and 31 shader programs. A 1,000-impact stress run stayed within 64 rings. All eight weapon sounds produced finite nonzero offline audio.
 - Physical mobile devices, sustained hardware performance and human difficulty remain unvalidated. Keep further checks focused.
-- Overnight work and polish were requested. The morning report is scheduled for 2026-11-06 at 09:00 Europe/Rome. Preserve the full scope and report actual merged work and remaining limitations.
 
 ## Preferences and do not
 - Keep artifacts in English and never use em dashes. Preserve the game's visual identity, biome map, localStorage progress, intermediate ranks and deliberately overpowered routes.
