@@ -2931,8 +2931,12 @@ function updateMobileQuality(dt) {
   resetQualitySample();
   if (next !== current) { renderer.setPixelRatio(next); updateGlowScale(); }
 }
+// The simulation runs at 60 Hz, so drawing faster on 90 to 144 Hz screens mostly repeats
+// the same state. Skipping callbacks under 9 ms renders 120 Hz screens at 60 fps.
+const MIN_FRAME_MS = 9;
 function frame(now) {
   requestAnimationFrame(frame);
+  if (!TURBO && now - last < MIN_FRAME_MS) return;
   const elapsed = (now - last) / 1000;
   const dt = Math.min(0.1, elapsed);
   last = now;
