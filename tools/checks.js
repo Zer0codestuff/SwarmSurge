@@ -331,6 +331,16 @@ window.runGameChecks = (g) => {
     b.stun=1; renderWorld(0);
     return {pass:active && !capture.moving && capture.stunned,active,capture};
   })()`);
+  check('Turrets aim their new barrel and recoil when firing', `(() => {
+    const model=M.buildTurret(); model.group.position.set(2,0,-10); G.root.add(model.group);
+    const tr={def:{every:1},x:2,z:-10,hp:100,max:100,timer:0,model,alive:true,flash:0,label:makeLabel('spawner')};
+    G.stage.turrets.push(tr); const i=spawn(B,0,-5,10,0);
+    updateObstacles(G.stage,.01); model.muzzle.getWorldPosition(defenseMuzzle);
+    const fired=tr.firedAt===G.t && Math.abs(model.head.rotation.y-Math.atan2(-2,5))<1e-8 && B.hp[i]<10;
+    const recoil=model.group.getObjectByName('turret-recoil').position.z;
+    G.t+=1; model.animate(G.t,defensePose(tr));
+    return {pass:fired && recoil<.37 && model.group.getObjectByName('turret-recoil').position.z===.37 && defenseMuzzle.y>0 && defenseMuzzle.z>-10,fired,recoil};
+  })()`);
   check('Pause clears held input and resume preserves the battle', `(() => {
     G.paused=false; keys.left=true; drag={id:1,x:0,aim:0};
     const i=spawn(B,0,-3,10,0); G.time=7; upgradeCannon('tank');

@@ -409,6 +409,7 @@ scene.add(cannon.group, twinCannon.group);
 const weaponMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1), unitMat, MAX_BLUE, false))];
 const weaponCounts = new Uint16Array(WEAPONS.length);
 const cannonMuzzle = new THREE.Vector3();
+const defenseMuzzle = new THREE.Vector3();
 cannon.group.visible = twinCannon.group.visible = false;
 const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
 const buzz = (p) => { if (!TURBO && isTouch && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
@@ -580,7 +581,7 @@ function buildStage(sd, i, root, theme) {
       f.group.rotation.y = 0.35;
       f.group.scale.setScalar(0.8);
       root.add(f.group);
-      st.fort = { hp: sd.fort, x: -21, z: z0 - 92, label: makeLabel('tower') };
+      st.fort = { hp: sd.fort, max: sd.fort, model: f, x: -21, z: z0 - 92, label: makeLabel('tower') };
     }
   } else {
     const m = M.buildTower(theme);
@@ -1927,7 +1928,11 @@ function updateObstacles(S, dt) {
     if (target >= 0) tr.aim = Math.atan2(B.x[target] - tr.x, B.z[target] - tr.z);
     if (tr.timer <= 0 && target >= 0) {
       tr.timer = tr.def.every;
-      addBeam(tr.x, 1.3, tr.z, B.x[target], 0.6, B.z[target], 0xff2a3a);
+      tr.firedAt = G.t;
+      tr.model.head.rotation.y = tr.aim;
+      tr.model.animate?.(G.t, defensePose(tr));
+      tr.model.muzzle.getWorldPosition(defenseMuzzle);
+      addBeam(defenseMuzzle.x, defenseMuzzle.y, defenseMuzzle.z, B.x[target], 0.6, B.z[target], 0xff2a3a);
       burst(B.x[target], 0.6, B.z[target], PCOL.red, 6, 4);
       hurt(target, 3, 0.35);
       sound.play('zap');
@@ -2175,6 +2180,7 @@ function step(dt) {
       // spawners wake up after a few seconds and ramp up, like the waves, so you can get your stream going
       if (s.timer <= 0 && S.time > 4) {
         s.timer = s.def.every;
+        s.spawnedAt = G.t;
         const hp = (s.def.unitHp ?? 3) * threat(S);
         const n = Math.max(1, Math.round(s.def.n * Math.min(1, 0.35 + S.time / 35)));
         for (let k = 0; k < n; k++) {
@@ -2424,6 +2430,15 @@ function writeRed() {
   for (const k in overlays) { overlays[k].count = ovCount[k]; overlays[k].instanceMatrix.needsUpdate = true; }
   for (let k = labels; k < bruteLabels.length; k++) hideLabel(bruteLabels[k]);
 }
+function defensePose(target) {
+  const pose = target.visualState ||= {};
+  pose.health = clamp(target.hp / target.max, 0, 1);
+  pose.hit = target.flash || 0;
+  pose.fire01 = Math.max(0, 1 - (G.t - (target.firedAt ?? -999)) / .18);
+  pose.spawn01 = Math.max(0, 1 - (G.t - (target.spawnedAt ?? -999)) / .65);
+  return pose;
+}
+
 function renderWorld(dt) {
   updateTroopMotion(G.t);
   labelLayer.style.visibility = G.phase === 'menu' || G.shown ? 'hidden' : 'visible';
@@ -2580,6 +2595,7 @@ function renderWorld(dt) {
     }
     for (const c of S.crushers) {
       c.model.block.position.y = c.y ?? 4;
+      c.model.animate?.();
       c.model.shadow.material.opacity = (c.warn || 0) * 0.5 + (c.down ? 0.3 : 0);
     }
     for (const s of [...S.spawners, ...S.turrets]) {
@@ -2587,6 +2603,7 @@ function renderWorld(dt) {
       s.flash = Math.max(0, s.flash - dt * 4);
       s.model.group.scale.setScalar(1 + s.flash * 0.08);
       if (s.model.head && s.aim !== undefined) s.model.head.rotation.y = s.aim;
+      s.model.animate?.(G.t, defensePose(s));
       if (cur) placeLabel(s.label, s.x, s.model.head ? 2.8 : 3.2, s.z, fmtHp(s.hp));
       else hideLabel(s.label);
     }
@@ -2596,11 +2613,15 @@ function renderWorld(dt) {
       if (T.alive) {
         T.model.group.position.x = Math.sin(G.t * 70) * T.flash * 0.06;
         T.model.group.scale.set(1 + T.flash * 0.015, 1 - T.flash * 0.035, 1);
+        T.model.animate?.(G.t, defensePose(T));
         if (cur) placeLabel(T.label, 0, 9.4, T.z - 0.5, fmtHp(T.hp));
         else hideLabel(T.label);
       } else hideLabel(T.label);
     }
-    if (S.fort) { if (cur) placeLabel(S.fort.label, S.fort.x, 5.5, S.fort.z, fmtHp(S.fort.hp)); else hideLabel(S.fort.label); }
+    if (S.fort) {
+      S.fort.model.animate?.(G.t, defensePose(S.fort));
+      if (cur) placeLabel(S.fort.label, S.fort.x, 5.5, S.fort.z, fmtHp(S.fort.hp)); else hideLabel(S.fort.label);
+    }
     if (S.boss) {
       const b = S.boss, grp = b.model.group;
       b.flash = Math.max(0, b.flash - dt * 5);

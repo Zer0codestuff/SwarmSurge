@@ -5,6 +5,7 @@ import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, buildGa
 import { WEAPON_IDS, CHASSIS_IDS } from './arsenal.js';
 import { createVehicleRig } from './vehicle-assets.js';
 import { createSupportAircraft } from './air-assets.js';
+export { buildBattlePillar as buildPillar } from './battlefield-assets.js';
 
 function stripeTexture(a, b, n = 8, w = 128, h = 32) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -132,17 +133,6 @@ export function buildTesla(w) {
 }
 
 // stone pillar: shoot it down and it topples across the road, crushing the horde
-export function buildPillar() {
-  const g = new THREE.Group();
-  const stone = lam(0x9a8f88, { flatShading: true }), dark = lam(0x6a625c, { flatShading: true });
-  const body = new THREE.Group(); g.add(body);
-  body.add(mesh(new THREE.BoxGeometry(1.9, 0.6, 1.9), dark, 0, 0.3, 0));
-  body.add(mesh(new THREE.BoxGeometry(1.5, 9, 1.5), stone, 0, 5.1, 0));
-  body.add(mesh(new THREE.BoxGeometry(1.9, 0.5, 1.9), dark, 0, 9.8, 0));
-  for (let k = 0; k < 5; k++) body.add(mesh(new THREE.BoxGeometry(0.12, 0.9, 0.05), dark, (k % 2 ? 0.3 : -0.35), 2 + k * 1.6, 0.76, false));
-  return { group: g, body, height: 10 };
-}
-
 // Open wind spirals leave the route visible through the moving funnel.
 export function buildTornado(r) {
   const g = new THREE.Group();
