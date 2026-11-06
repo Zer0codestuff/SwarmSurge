@@ -320,13 +320,13 @@ const popups = Array.from({ length: 18 }, () => {
 let popHead = 0;
 let popSerial = 0;
 function clearPopups() {
-  for (const p of popups) { p.life = 0; p.el.style.display = 'none'; }
+  for (const p of popups) { p.life = 0; p.target = null; p.el.style.display = 'none'; }
   popHead = popSerial = 0;
 }
 function popup(text, cls, x, y, z, life = 1.3) {
   if (TURBO) return;
   const p = popups[popHead]; popHead = (popHead + 1) % popups.length;
-  p.x = x; p.y = y; p.z = z; p.life = life;
+  p.x = x; p.y = y; p.z = z; p.life = life; p.target = null;
   // stack combo popups that are still fresh so they don't overlap
   p.combo = cls.startsWith('combo');
   p.serial = ++popSerial;
@@ -341,12 +341,39 @@ function popup(text, cls, x, y, z, life = 1.3) {
   void p.inner.offsetWidth;
   p.inner.className = cls;
   p.el.style.display = '';
+  return p;
+}
+function targetDamagePopup(target, amount) {
+  const p = popup('-' + fmt(amount), amount >= target.max * .05 ? 'dmg target big' : 'dmg target', 0, 0, 0, .85);
+  if (!p) return;
+  target.damageSide = -(target.damageSide || -1);
+  p.target = target; p.side = target.damageSide;
+  p.width = p.inner.offsetWidth; p.height = p.inner.offsetHeight;
+  p.el.style.display = 'none';
+  // One number per flank keeps rapid damage readable without covering the face.
+  for (const q of popups) if (q !== p && q.target === target && q.side === p.side) {
+    q.life = 0; q.target = null; q.el.style.display = 'none';
+  }
 }
 function updatePopups(dt) {
   for (const p of popups) {
     if (p.life <= 0) continue;
     p.life -= dt;
-    if (p.life <= 0 || !project(p.x, p.y, p.z)) { p.el.style.display = 'none'; p.life = 0; continue; }
+    if (p.life <= 0) { p.el.style.display = 'none'; p.target = null; continue; }
+    if (p.target) {
+      const target = p.target, y = target.model.height ? target.model.height * .43 : 2.6;
+      if (!target.alive || !project(target.x || 0, y, target.z)) { p.life = 0; p.target = null; p.el.style.display = 'none'; continue; }
+      const cx = tmpV.x, cy = tmpV.y;
+      project((target.x || 0) + (target.model.radius || 8.4) * 1.25, y, target.z);
+      const radius = Math.abs(tmpV.x - cx), half = p.width * .55;
+      const sx = cx + p.side * (radius + half + 14);
+      if (sx - half < 10 || sx + half > innerWidth - 10) { p.el.style.display = 'none'; continue; }
+      const sy = clamp(cy + 18, labelTop + p.height * 1.9 + 10, labelBottom - 8);
+      p.el.style.display = '';
+      p.el.style.transform = `translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px)`;
+      continue;
+    }
+    if (!project(p.x, p.y, p.z)) { p.el.style.display = 'none'; p.life = 0; p.target = null; continue; }
     let sx = tmpV.x, sy = tmpV.y;
     if (p.combo) { sx = clamp(sx, innerWidth * 0.3, innerWidth * 0.7); sy = Math.max(innerHeight * 0.2, sy) + p.dy * 40; }
     p.el.style.transform = `translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px)`;
@@ -357,6 +384,10 @@ const hud = {
   root: $('hud'), army: $('army'), armybox: $('armybox'), lives: $('lives'), level: $('lvlname'), pips: $('pips'),
   charge: $('chargefill'), ups: $('ups'), banner: $('banner'), tip: $('tip'), hint: $('hint'), flash: $('flash'), white: $('white'),
 };
+if (typeof ResizeObserver !== 'undefined') {
+  const bounds = new ResizeObserver(() => { labelBoundsDirty = true; });
+  for (const id of ['topbar', 'target', 'bottom']) bounds.observe($(id));
+}
 let bannerTimer = 0, tipTimer = 0;
 function banner(text, cls = '', dur = 1.6) {
   if (TURBO) return;
@@ -581,7 +612,7 @@ function buildStage(sd, i, root, theme) {
       f.group.rotation.y = 0.35;
       f.group.scale.setScalar(0.8);
       root.add(f.group);
-      st.fort = { hp: sd.fort, max: sd.fort, model: f, x: -21, z: z0 - 92, label: makeLabel('tower') };
+      st.fort = { model: f };
     }
   } else {
     const m = M.buildTower(theme);
@@ -615,7 +646,6 @@ function disposeLevel() {
     for (const s of [...st.spawners, ...st.turrets, ...st.pillars, ...st.balls]) s.label.el.remove();
     if (st.tower) st.tower.label.el.remove();
     if (st.boss) st.boss.label.el.remove();
-    if (st.fort) st.fort.label.el.remove();
   }
   G.stages = [];
 }
@@ -2623,13 +2653,11 @@ function renderWorld(dt) {
         T.model.group.position.x = Math.sin(G.t * 70) * T.flash * 0.06;
         T.model.group.scale.set(1 + T.flash * 0.015, 1 - T.flash * 0.035, 1);
         T.model.animate?.(G.t, defensePose(T));
-        if (cur) placeLabel(T.label, 0, 9.4, T.z - 0.5, fmtHp(T.hp));
-        else hideLabel(T.label);
+        hideLabel(T.label);
       } else hideLabel(T.label);
     }
     if (S.fort) {
-      S.fort.model.animate?.(G.t, defensePose(S.fort));
-      if (cur) placeLabel(S.fort.label, S.fort.x, 5.5, S.fort.z, fmtHp(S.fort.hp)); else hideLabel(S.fort.label);
+      S.fort.model.animate?.(G.t);
     }
     if (S.boss) {
       const b = S.boss, grp = b.model.group;
@@ -2646,8 +2674,7 @@ function renderWorld(dt) {
         const attack = b.atk > 0 ? Math.min(1, b.atk / (b.model.normalizedAttack ? 1.25 : 1)) : 0;
         b.model.animate(G.t, attack, pose);
         grp.scale.copy(b.visualScale).multiplyScalar(1 + b.flash * 0.025);
-        if (cur) placeLabel(b.label, b.x, b.model.height + 1.6, b.z, fmtHp(b.hp));
-        else hideLabel(b.label);
+        hideLabel(b.label);
       }
     }
   }
@@ -2676,7 +2703,7 @@ function renderWorld(dt) {
     G.dmgT = 0;
     const S = G.stage;
     const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
-    if (T && G.dmgAcc >= 1) popup('-' + fmt(G.dmgAcc), G.dmgAcc >= T.max * 0.05 ? 'dmg big' : 'dmg', (T.x ?? 0) + rand(-4, 4), T.model.height ? T.model.height * 0.45 : 3, T.z + 2);
+    if (T && G.dmgAcc >= 1) targetDamagePopup(T, G.dmgAcc);
     G.dmgAcc = 0;
   }
 
@@ -2733,7 +2760,6 @@ function showMenu(preserveRun = false) {
   for (const S of G.stages) {
     if (S.tower) hideLabel(S.tower.label);
     if (S.boss) hideLabel(S.boss.label);
-    if (S.fort) hideLabel(S.fort.label);
     for (const s of [...S.spawners, ...S.turrets, ...S.pillars, ...S.balls]) hideLabel(s.label);
   }
 }
