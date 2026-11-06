@@ -320,6 +320,16 @@ window.runGameChecks = (g) => {
     const paused=G.paused && $('pause').open && !keys.right;
     resumeGame(); return {pass:paused};
   })()`);
+  check('Audio preferences remain usable when browser storage is blocked', `(() => {
+    const original=Object.getOwnPropertyDescriptor(window,'localStorage');
+    try {
+      Object.defineProperty(window,'localStorage',{configurable:true,get(){throw new DOMException('Storage is disabled','SecurityError');}});
+      const unavailable=new Sound(); const memory=!unavailable.muted && unavailable.toggle() && !unavailable.toggle();
+      Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:()=> '1',setItem(){throw new DOMException('Storage is full','QuotaExceededError');}}});
+      const full=new Sound(); const toggles=full.muted && !full.toggle() && full.toggle();
+      return {pass:memory && toggles};
+    } finally { Object.defineProperty(window,'localStorage',original); }
+  })()`);
   check('Flanking reinforcements wait for their warning and use bounded power', `(() => {
     G.armyAvg=1e30;
     scheduleFlank(G.stage,{kind:4,count:3,warning:1.4,firstSide:0});

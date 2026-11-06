@@ -14,9 +14,10 @@ const browser = await puppeteer.launch({ executablePath, headless: true });
 try {
   const page = await browser.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(`${process.env.GAME_URL || 'http://127.0.0.1:8000'}/index.html?turbo=1`);
-  // A background headless tab may throttle animation frames during startup.
-  await page.waitForFunction(() => window.__game, { polling: 100 });
+  await page.goto(`${process.env.GAME_URL || 'http://127.0.0.1:8000'}/index.html?turbo=1`, { waitUntil: 'domcontentloaded' });
+  // Engine readiness is independent of animation-frame scheduling and later page loads.
+  try { await page.waitForFunction(() => window.__game, { polling: 100 }); }
+  catch (error) { if (errors.length) error.message += '\n' + errors.join('\n'); throw error; }
   await page.addScriptTag({ content: fs.readFileSync(new URL('./checks.js', import.meta.url), 'utf8') });
   const results = await page.evaluate(() => window.runGameChecks(window.__game));
   for (const result of results) console.log(`${result.pass ? 'PASS' : 'FAIL'} ${result.name}${result.pass ? '' : ' ' + JSON.stringify(result)}`);

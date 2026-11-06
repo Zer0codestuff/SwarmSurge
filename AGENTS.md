@@ -29,7 +29,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - All 60 stages have equipment routes and revised pacing. Normal late stages have limited, announced biome flanks; surge routes retain their overpowered rhythm. Long fights expose armor up to x4 hit damage. Moon Base and the stationary Neon Nights opening were shortened after balance measurements.
 - The island map unlocks worlds progressively and preserves legacy saves. Victories save before result animation. The map can retain one exact in-memory battle until another world starts or the page reloads.
 - Basic tutorials appear only on first introductions in world one. Movement gate variants share one lesson. Replays, retries, existing wins and debug starts skip repeated prose. Opening the map does not consume a lesson.
-- Focus loss clears held input and pauses simulation, audio, HUD animation and rendering. Resize redraws a frozen scene once. Progress, mute and tutorial settings use separate localStorage keys.
+- Focus loss clears held input and pauses simulation, audio, HUD animation and rendering. Resize redraws a frozen scene once. Progress, mute and tutorials use separate localStorage keys. Blocked or full storage does not prevent startup or mute changes; unavailable persistence falls back to session memory.
 
 ## Visuals and resource ownership
 - Beveled troops use instanced stride animation with matching shadow shaders. Projected-size detail selection preserves colors, weapon placement and motion phase. Sleeping, flying and airborne units stop walking. Rolling balls use the lighter troop geometry.
@@ -38,7 +38,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Tracers use 128 reusable slots; splash rings use 64. Halo and combo effects are capped. Shared geometry/material templates live for the module lifetime. Level cleanup releases instance buffers without disposing borrowed templates, including grouped effects.
 
 ## Latest evidence and next steps
-- Forty-eight focused gameplay checks and fifteen tutorial policy checks pass. The latest full seed-42 smart-bot run clears all 20 worlds and 60 stages. Bot success does not replace human balance feedback.
+- Forty-nine focused gameplay checks and fifteen tutorial policy checks pass. The latest full seed-42 smart-bot run clears all 20 worlds and 60 stages. Bot success does not replace human balance feedback.
 - Desktop and 390 x 844 scenes were inspected for Storm Peaks, mixed troops, vehicles and aircraft. A short Terra 6.1 medium review identified the tornado obstruction, which was corrected.
 - A rendered 800-troop, two-ball comparison reduced total triangles from 3,624,204 to 1,693,964. Each ball dropped from 276,480 to 92,160 triangles. Six cannons with six barrels each dropped from 441 to 369 draw calls including shadows. These measure workload, not physical mobile frame rate.
 - Ten rendered Coral Coast restarts after aircraft warmup held at 139 geometries, 18 textures and 31 shader programs. A 1,000-impact stress run stayed within 64 rings. All eight weapon sounds produced finite nonzero offline audio.
