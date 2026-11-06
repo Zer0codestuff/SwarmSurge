@@ -53,7 +53,7 @@ export class Sound {
   play(name, p = 1) {
     if (this.muted || this.paused || !this.ctx) return;
     const now = performance.now();
-    const gap = { pop: 45, shoot: 90, weapon: 110, shield: 110, gate: 70, hit: 150, boom: 120, warp: 90, zap: 80, crush: 150, combo: 120 }[name] || 0;
+    const gap = { pop: 45, shoot: 90, weapon: 110, shield: 110, flyby: 800, gate: 70, hit: 150, boom: 120, warp: 90, zap: 80, crush: 150, combo: 120 }[name] || 0;
     if (now - (this.last[name] || 0) < gap) return;
     this.last[name] = now;
     switch (name) {
@@ -72,6 +72,7 @@ export class Sound {
         break;
       case 'heavy': this.tone(110,.09,'sine',.13,-45); break;
       case 'shield': this.tone(950,.08,'triangle',.07,550); this.tone(470,.05,'sine',.05); break;
+      case 'flyby': this.burst(.4,.09,1000); this.tone(160+p*20,.32,'sine',.04,180); break;
       case 'pop': this.tone(420 + Math.random() * 380, 0.06, 'triangle', 0.09, -200); break;
       case 'gate': this.tone(700 + Math.random() * 200, 0.08, 'square', 0.04, 500); break;
       case 'hit': this.tone(140, 0.25, 'sawtooth', 0.2, -80); break;

@@ -189,6 +189,26 @@ window.runGameChecks = (g) => {
     startLevel(0);
     return {pass:retry && G.chassis===0 && cannon.rig.formId===0 && G.weaponMask===0 && cannon.group.getObjectByName('base-cannon').visible};
   })()`);
+  check('Air upgrades select distinct models without changing an ongoing pass', `(() => {
+    const models=[];
+    for(let tier=1;tier<=3;tier++) {
+      upgradeCannon('air'); G.airTier=tier; G.airPass=1.5; renderWorld(0);
+      models.push(supportAircraft(tier).group.name==='support-aircraft-'+tier && [...airWings.values()].filter(model=>model.group.visible).length===1);
+    }
+    G.aircraft=1; G.airT=0; G.airPass=0; updateArsenal(G.stage,STEP);
+    upgradeCannon('air'); updateArsenal(G.stage,STEP);
+    const stable=G.airTier===1 && G.aircraft===2;
+    G.airT=0; G.airPass=0; updateArsenal(G.stage,STEP);
+    return {pass:models.every(Boolean) && stable && G.airTier===2,models};
+  })()`);
+  check('Higher aircraft grades widen coverage and each pass hits only once', `(() => {
+    for(const x of [0,3.8,5.2]) spawn(R,x,-12,200,0);
+    G.aircraft=1; G.airTier=1; G.airX=0; G.airPass=.86; G.airT=100; G.airHit=false;
+    updateArsenal(G.stage,.02); const scout=R.hp[0]===180 && R.hp[1]===200 && R.hp[2]===200;
+    updateArsenal(G.stage,.1); const once=R.hp[0]===180;
+    G.aircraft=3; G.airTier=3; G.airPass=.86; G.airHit=false; updateArsenal(G.stage,.02);
+    return {pass:scout && once && R.hp[0]===150 && R.hp[1]===170 && R.hp[2]===200,hp:Array.from(R.hp.slice(0,3))};
+  })()`);
   check('Equipment survives stage retry', `(() => {
     upgradeCannon('tank'); upgradeCannon('arc'); upgradeCannon('air'); upgradeCannon('rapid');
     enterStage(1); G.power=1; G.weapon=0; G.aircraft=0; G.chassis=0;
