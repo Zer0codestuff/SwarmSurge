@@ -3,7 +3,8 @@ import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
 import { troopGeometry, weaponGeometry } from './unit-assets.js';
 import { createVehicleRig, cannonBarrelGeometry } from './vehicle-assets.js';
-import { buildCoreBoss } from './boss-assets-core.js';
+import { buildSculptedCore } from './boss-sculpted-core.js';
+import { buildSculptedRoyal } from './boss-sculpted-royal.js';
 export { buildBattleTower as buildTower, buildBattleTurret as buildTurret, buildBattleSpawner as buildSpawner, buildBattleWall as buildWall, buildBattleCrusher as buildCrusher } from './battlefield-assets.js';
 
 // ---------- helpers ----------
@@ -380,7 +381,7 @@ export function buildSaw(r) {
 }
 // ---------- bosses ----------
 export function buildBoss(type) {
-  const model = buildCoreBoss(type) ?? buildCoreBoss('robot');
+  const model = buildSculptedRoyal(type) ?? buildSculptedCore(type) ?? buildSculptedCore('robot');
   model.normalizedAttack = true;
   return model;
 }
