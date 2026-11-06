@@ -6,7 +6,7 @@ import * as FX from './fx.js';
 import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
-import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, sweptCircle } from './arsenal.js';
+import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { installTroopMotion, updateTroopMotion, enemyKitGeometry } from './unit-assets.js';
@@ -388,14 +388,20 @@ const G = {
   shake: 0, recoil: 0, kills: 0, time: 0, explosions: [], splits: [], revives: [], effects: [], army: 0, maxArmy: 0, bestCombo: 1, fps: 60,
   moveFrom: 0, moveTo: 0, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, armyPrev: 0, pumpT: 0,
   squad: 0, rad: 0, zones: [], nextMile: 1000, armyAvg: 0,
-  chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
+  chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
 };
 const cannon = M.buildCannon();
 const twinCannon = M.buildCannon(0xff4fd8);
 const squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.group.scale.setScalar(0.85); c.group.visible = false; scene.add(c.group); return c; });
-const airWing = P.buildSupportPlane();
-airWing.group.visible = false;
-scene.add(cannon.group, twinCannon.group, airWing.group);
+const airWings = new Map();
+function supportAircraft(tier) {
+  if (!airWings.has(tier)) {
+    const model = P.buildSupportPlane(tier); model.group.visible = false;
+    airWings.set(tier, model); scene.add(model.group);
+  }
+  return airWings.get(tier);
+}
+scene.add(cannon.group, twinCannon.group);
 const weaponMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1), unitMat, MAX_BLUE, false))];
 const weaponCounts = new Uint16Array(WEAPONS.length);
 const cannonMuzzle = new THREE.Vector3();
@@ -669,7 +675,7 @@ function startLevel(idx, stageIdx = 0) {
     paused: false, resumePhase: null, weaponCursor: 0, t: 0,
     log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgTotal: 0, army: 0, squad: 0, nextMile: 1000, armyAvg: 0,
-    chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
+    chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
   });
   setBarrels(1);
   cannon.setChassis(0); twinCannon.setChassis(0);
@@ -697,7 +703,7 @@ function addBall(S, root, x, z, hp, r, speed, def = {}) {
 }
 function enterStage(i) {
   G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives, chassis: G.chassis, weapon: G.weapon, weaponMask: G.weaponMask, aircraft: G.aircraft, shield: G.shield };
-  G.rad = 0; G.armyAvg = 0; G.overdrive = 0; G.airPass = 0; G.airT = 2;
+  G.rad = 0; G.armyAvg = 0; G.overdrive = 0; G.airPass = 0; G.airTier = 0; G.airT = 2;
   for (const zn of G.zones) if (zn.mesh) { G.root.remove(zn.mesh); zn.mesh.geometry.dispose(); }
   G.zones.length = 0;
   G.stageIdx = i;
@@ -739,7 +745,7 @@ function renderUps() {
     const count = WEAPON_SPECS.slice(1).filter((_, i) => G.weaponMask & (1 << (i + 1))).length;
     html += `<span class="up tw">${count > 1 ? 'ARSENAL ×' + count : WEAPONS[G.weapon]}</span>`;
   }
-  if (G.aircraft) html += `<span class="up sq">Air wing ${G.aircraft > 1 ? 'x' + G.aircraft : ''}</span>`;
+  if (G.aircraft) html += `<span class="up sq">${AIRCRAFT_SPECS[G.aircraft].label}</span>`;
   hud.ups.innerHTML = html;
 }
 
@@ -926,27 +932,30 @@ function updateArsenal(S, dt) {
   if (!G.aircraft) return;
   G.airT -= dt;
   if (G.airT <= 0 && G.airPass <= 0) {
-    G.airT = 7 / Math.sqrt(G.aircraft); G.airPass = 2.2; G.airHit = false; G.airX = G.cx;
-    popup('AIR SUPPORT', 'combo c1', G.cx, 4, G.z0 - 12, 0.9);
+    G.airTier = G.aircraft;
+    G.airT = 7 / Math.sqrt(G.airTier); G.airPass = 2.2; G.airHit = false; G.airX = G.cx;
+    popup(AIRCRAFT_SPECS[G.airTier].label.toUpperCase(), 'combo c1', G.cx, 4, G.z0 - 12, .9);
+    if (!TURBO) sound.play('flyby', G.airTier);
   }
   if (G.airPass <= 0) return;
   G.airPass -= dt;
   if (G.airPass < 0.85 && !G.airHit) {
     G.airHit = true;
-    const damage = Math.max(20 * G.power, G.armyAvg * 0.16);
-    for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.x[j] - G.airX) < 3) {
+    const spec = AIRCRAFT_SPECS[G.airTier || G.aircraft];
+    const damage = Math.max(20 * G.power, G.armyAvg * .16) * spec.damage;
+    for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.x[j] - G.airX) < spec.width) {
       R.hp[j] -= damage; if (R.hp[j] <= 0) killRed(j); else R.flash[j] = 1;
     }
-    for (const ball of S.balls) if (ball.alive && Math.abs(ball.x - G.airX) < ball.r + 2) {
+    for (const ball of S.balls) if (ball.alive && Math.abs(ball.x - G.airX) < ball.r + spec.width - 1) {
       rangedHit(ball, damage * 2); if (ball.hp <= 0) ballDies(S, ball, false);
     }
     const target = S.tower?.alive ? S.tower : S.boss;
-    if (target?.alive) rangedHit(target, Math.min(target.max * 0.065, damage * 2));
-    for (const t of [...S.spawners, ...S.turrets]) if (Math.abs(t.x - G.airX) < 3) rangedHit(t, damage);
+    if (target?.alive) rangedHit(target, Math.min(target.max * spec.fortCap, damage * 2));
+    for (const t of [...S.spawners, ...S.turrets]) if (Math.abs(t.x - G.airX) < spec.width) rangedHit(t, damage);
     for (let k = 0; k < 5; k++) {
       const z = G.z0 - 17 - k * 8;
       addBeam(G.airX, 7, z, G.airX, 0.3, z, 0xffcf65, 0.16);
-      addRing(G.airX, z, 2.5, 0xffb34a, 0.45);
+      addRing(G.airX, z, spec.radius, 0xffb34a, .45);
       burst(G.airX, 0.5, z, PCOL.orange, 12, 4);
     }
     G.shake = Math.max(G.shake, 0.2); sound.play('boom');
@@ -1058,7 +1067,7 @@ function upgradeCannon(up) {
     addRing(G.cx, G.cannonZ, 3.5, 0x8beaff, .5);
     burst(G.cx, .6, G.cannonZ, PCOL.gold, 16, 3);
     banner(CHASSIS[G.chassis].toUpperCase() + '!', 'gold');
-  } else if (up === 'air') { G.aircraft = Math.min(3, G.aircraft + 1); G.airT = 0.2; banner('AIR WING INBOUND!', 'gold'); }
+  } else if (up === 'air') { G.aircraft = Math.min(3, G.aircraft + 1); G.airT = .2; banner(AIRCRAFT_SPECS[G.aircraft].label.toUpperCase() + ' ONLINE!', 'gold'); }
   else {
     const weapon = WEAPON_IDS[up];
     if (!weapon) return;
@@ -2465,12 +2474,14 @@ function renderWorld(dt) {
     twinCannon.glowMat.color.copy(cannon.glowMat.color);
   }
 
-  airWing.group.visible = G.airPass > 0 && G.phase !== 'menu';
-  if (airWing.group.visible) {
+  for (const model of airWings.values()) model.group.visible = false;
+  if (G.airPass > 0 && G.aircraft && G.phase !== 'menu') {
+    const airWing = supportAircraft(G.airTier || G.aircraft);
+    airWing.group.visible = true;
     const p = 1 - G.airPass / 2.2;
     airWing.group.position.set((G.airX ?? 0) + Math.sin(p * Math.PI * 2) * 1.1, 6.5 + Math.sin(p * Math.PI) * 2, G.cannonZ + 5 - p * 79);
     airWing.group.rotation.z = Math.sin(p * Math.PI * 2) * 0.25;
-    airWing.engines.forEach(e => e.scale.setScalar(0.8 + Math.sin(G.t * 40) * 0.2));
+    airWing.engines.forEach(e => e.scale.set(1, 1, .8 + Math.sin(G.t * 40) * .2));
   }
   // stage objects
   for (const S of G.stages) {

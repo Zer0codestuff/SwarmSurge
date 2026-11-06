@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, buildGate, troopWeaponGeo } from './models.js';
 import { WEAPON_IDS, CHASSIS_IDS } from './arsenal.js';
 import { createVehicleRig } from './vehicle-assets.js';
+import { createSupportAircraft } from './air-assets.js';
 
 function stripeTexture(a, b, n = 8, w = 128, h = 32) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -65,23 +66,8 @@ export function buildJumpPad(w) {
   return { group: g, panelMat, ...L, top, setColor() {} };
 }
 
-export function buildSupportPlane() {
-  const plane = new THREE.Group(), hull = lam(0xe3f3ff), dark = lam(0x28436a), amber = lam(0xffc54a);
-  const body = new THREE.CapsuleGeometry(0.24, 1.9, 4, 10); body.rotateX(Math.PI / 2);
-  plane.add(mesh(body, hull));
-  const wings = new THREE.Shape(); wings.moveTo(0, -0.45); wings.lineTo(1.7, 0.5); wings.lineTo(1.6, 0.85); wings.lineTo(0, 0.35); wings.lineTo(-1.6, 0.85); wings.lineTo(-1.7, 0.5);
-  const geo = new THREE.ExtrudeGeometry(wings, { depth: 0.09, bevelEnabled: false }); geo.rotateX(Math.PI / 2);
-  plane.add(mesh(geo, hull));
-  plane.add(mesh(new THREE.BoxGeometry(1.1, 0.08, 0.38), amber, 0, 0.12, 0.8));
-  plane.add(mesh(new THREE.BoxGeometry(0.07, 0.55, 0.5), dark, 0, 0.25, 0.85));
-  plane.add(mesh(new THREE.SphereGeometry(0.22, 10, 8), lam(0x45c7ed), 0, 0.18, -0.4));
-  const engines = [];
-  for (const side of [-1, 1]) {
-    plane.add(mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.9, 8).rotateX(Math.PI / 2), dark, side * 0.65, -0.12, 0.2));
-    const flame = mesh(new THREE.ConeGeometry(0.12, 0.65, 8).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x75e7ff }), side * 0.65, -0.12, 0.95, false);
-    plane.add(flame); engines.push(flame);
-  }
-  return { group: plane, engines };
+export function buildSupportPlane(tier = 1) {
+  return createSupportAircraft(tier);
 }
 
 export function buildArmory(w, upgrade) {
@@ -115,21 +101,12 @@ export function buildArmory(w, upgrade) {
 // Fill the hangar to unlock repeated bombing runs.
 export function buildHangar(w) {
   const g = new THREE.Group();
-  const crate = lam(0x2a4aa8), crateDark = lam(0x1a2a6a), gold = lam(0xffc21a, { emissive: 0x553300 });
+  const crate = lam(0x2a4aa8), crateDark = lam(0x1a2a6a);
   g.add(mesh(new THREE.BoxGeometry(w, 1.5, 1.8), crate, 0, 0.75, 0));
   for (const x of [-w / 2 + 0.25, w / 2 - 0.25]) g.add(mesh(new THREE.BoxGeometry(0.2, 1.55, 1.85), crateDark, x, 0.77, 0, false));
   g.add(mesh(new THREE.BoxGeometry(w + 0.1, 0.2, 1.9), crateDark, 0, 1.55, 0, false));
-  const plane = new THREE.Group(); plane.position.set(0, 2.2, 0); g.add(plane);
-  const body = new THREE.CapsuleGeometry(0.28, 1.6, 4, 10); body.rotateX(Math.PI / 2);
-  plane.add(mesh(body, gold));
-  const wing = new THREE.Shape(); wing.moveTo(0, 0.5); wing.lineTo(1.5, -0.3); wing.lineTo(1.4, -0.55); wing.lineTo(0, -0.25); wing.lineTo(-1.4, -0.55); wing.lineTo(-1.5, -0.3);
-  const wg = new THREE.ExtrudeGeometry(wing, { depth: 0.08, bevelEnabled: false }); wg.rotateX(-Math.PI / 2); wg.translate(0, 0, 0.1);
-  plane.add(mesh(wg, gold));
-  const tail = new THREE.Shape(); tail.moveTo(0, 0); tail.lineTo(0.15, 0.6); tail.lineTo(-0.05, 0.6); tail.lineTo(-0.3, 0);
-  const tg = new THREE.ExtrudeGeometry(tail, { depth: 0.06, bevelEnabled: false }); tg.rotateY(Math.PI / 2); tg.translate(0, 0.1, 0.95);
-  plane.add(mesh(tg, gold));
-  plane.add(mesh(new THREE.SphereGeometry(0.22, 10, 8), lam(0x6ad0ff), 0, 0.15, -0.45));
-  plane.scale.setScalar(Math.min(1.3, w / 3));
+  const plane = buildSupportPlane().group; plane.position.set(0, 2.2, 0); g.add(plane);
+  plane.scale.setScalar(Math.min(.75, w / 5));
   const panelMat = new THREE.MeshBasicMaterial({ color: 0xffc21a, transparent: true, opacity: 0.0 });
   const L = label(g, w, 3.6, 0.6);
   return { group: g, plane, panelMat, ...L, setColor() {} };

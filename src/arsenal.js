@@ -43,6 +43,12 @@ export const CHASSIS_SPECS = [
 ];
 export const CHASSIS = ['Cannon', ...CHASSIS_SPECS.slice(1).map(spec => spec.name)];
 export const CHASSIS_IDS = Object.fromEntries(CHASSIS_SPECS.slice(1).map((spec, i) => [spec.key, i + 1]));
+export const AIRCRAFT_SPECS = [
+  null,
+  { name: 'Scout interceptor', label: 'Interceptor', damage: 1, width: 3, fortCap: .065, radius: 2.5 },
+  { name: 'Strike jet', label: 'Strike jet', damage: 1.25, width: 3.6, fortCap: .07, radius: 2.85 },
+  { name: 'Stealth bomber', label: 'Stealth bomber', damage: 1.5, width: 4.2, fortCap: .08, radius: 3.2 },
+];
 
 // Test relative motion, so a rolling ball and a fast troop cannot tunnel through each other.
 export function sweptCircle(ax0, az0, ax1, az1, bx0, bz0, bx1, bz1, radius) {
