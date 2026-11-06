@@ -299,13 +299,13 @@ window.runGameChecks = (g) => {
     const bot=blueForms[0].far, ascended=blueForms[3].near;
     const motion=bot.geometry.attributes.unitMotion.array;
     const others=blueForms.flatMap(f=>[f.near,f.far]).filter(m=>m!==bot&&m!==ascended).every(m=>m.count===0&&!m.visible);
-    return {pass:bot.count===1 && ascended.count===1 && others && bot.instanceMatrix.array[14]===-60 && ascended.instanceMatrix.array[14]===-3 && weaponMeshes[8].instanceMatrix.array[14]===-60 && weaponMeshes[1].instanceMatrix.array[14]===-3 && Math.abs(motion[0]-.9)<1e-6 && motion[1]===1};
+    return {pass:bot.count===1 && ascended.count===1 && others && bot.instanceMatrix.array[14]===-60 && ascended.instanceMatrix.array[14]===-3 && weaponFarMeshes[8].instanceMatrix.array[14]===-60 && weaponMeshes[1].instanceMatrix.array[14]===-3 && Math.abs(motion[0]-.9)<1e-6 && motion[1]===1};
   })()`);
   check('Distant enemy overlays and sleeping motion stay aligned', `(() => {
     camera.position.set(0,20,20); troopPixelScale=1000;
     const far=spawn(R,-2,-60,4,5), near=spawn(R,2,-3,4,2);
     R.st[far]=1; R.vz[near]=6; R.age[far]=R.age[near]=1; writeRed();
-    return {pass:redMesh.count===1 && redFarMesh.count===1 && overlays[5].instanceMatrix.array[14]===-60 && overlays[2].instanceMatrix.array[14]===-3 && redFarMesh.geometry.attributes.unitMotion.array[1]===0};
+    return {pass:redMesh.count===1 && redFarMesh.count===1 && overlaysFar[5].instanceMatrix.array[14]===-60 && overlays[2].instanceMatrix.array[14]===-3 && redFarMesh.geometry.attributes.unitMotion.array[1]===0};
   })()`);
   check('Special enemy kits follow their hovering bodies', `(() => {
     camera.position.set(0,20,20); troopPixelScale=1000;

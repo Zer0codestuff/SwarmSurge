@@ -146,15 +146,38 @@ for (const mesh of troopMeshes) {
   mesh.customDepthMaterial = mesh.material.userData.troopMotion.depthMaterial;
   mesh.customDistanceMaterial = mesh.material.userData.troopMotion.distanceMaterial;
 }
-const overlays = {
-  2: instanced(enemyGearGeometry(2).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  3: instanced(enemyGearGeometry(3).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  5: instanced(enemyGearGeometry(5).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  6: instanced(M.spikesGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  7: instanced(enemyGearGeometry(7).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  8: instanced(enemyGearGeometry(8).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  9: instanced(ghostKitGeometry().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-};
+// Near troops cast their shadow with the far geometry: a third of the triangles and the
+// same silhouette. The proxy shares the near instances and lives on a layer that only
+// the shadow camera renders.
+const SHADOW_ONLY_LAYER = 1;
+sun.shadow.camera.layers.enable(SHADOW_ONLY_LAYER);
+function addShadowProxy(near, far) {
+  const geometry = new THREE.BufferGeometry();
+  for (const [name, attribute] of Object.entries(far.geometry.attributes)) geometry.setAttribute(name, attribute);
+  geometry.setAttribute('unitMotion', near.geometry.attributes.unitMotion);
+  geometry.setIndex(far.geometry.index);
+  const proxy = new THREE.InstancedMesh(geometry, near.material, 0);
+  proxy.instanceMatrix = near.instanceMatrix;
+  proxy.customDepthMaterial = near.customDepthMaterial;
+  proxy.customDistanceMaterial = near.customDistanceMaterial;
+  proxy.castShadow = true; proxy.frustumCulled = false; proxy.visible = false;
+  proxy.layers.set(SHADOW_ONLY_LAYER);
+  near.castShadow = false;
+  near.userData.shadowProxy = proxy;
+  scene.add(proxy);
+}
+for (const form of blueForms) addShadowProxy(form.near, form.far);
+addShadowProxy(redMesh, redFarMesh);
+// Enemy kits follow their body's detail level; spikes and ghost kits are already light.
+const gearMesh = (geometry) => instanced(geometry.scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false);
+const overlays = {}, overlaysFar = {};
+for (const kind of [2, 3, 5, 7, 8]) {
+  overlays[kind] = gearMesh(enemyGearGeometry(kind));
+  overlaysFar[kind] = gearMesh(enemyGearGeometry(kind, 'low'));
+}
+overlays[6] = overlaysFar[6] = gearMesh(M.spikesGeo());
+overlays[9] = overlaysFar[9] = gearMesh(ghostKitGeometry());
+const overlayMeshes = [...new Set([...Object.values(overlays), ...Object.values(overlaysFar)])];
 const partMesh = instanced(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), MAX_PART, false);
 partMesh.count = MAX_PART;
 
@@ -451,7 +474,7 @@ function supportAircraft(tier) {
 }
 scene.add(cannon.group, twinCannon.group);
 const weaponMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1), unitMat, MAX_BLUE, false))];
-const weaponCounts = new Uint16Array(WEAPONS.length);
+const weaponFarMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1, 'low'), unitMat, MAX_BLUE, false))];
 const cannonMuzzle = new THREE.Vector3();
 const defenseMuzzle = new THREE.Vector3();
 cannon.group.visible = twinCannon.group.visible = false;
@@ -2386,10 +2409,12 @@ function finishTroopMeshes(near, far) {
     mesh.instanceMatrix.needsUpdate = mesh.instanceColor.needsUpdate = true;
     mesh.geometry.attributes.unitMotion.needsUpdate = true;
   }
+  const proxy = near.userData.shadowProxy;
+  proxy.count = near.count; proxy.visible = near.visible;
 }
 function writeBlue() {
   for (const form of blueForms) form.near.count = form.far.count = 0;
-  const counts = weaponCounts; counts.fill(0);
+  for (let k = 1; k < weaponMeshes.length; k++) weaponMeshes[k].count = weaponFarMeshes[k].count = 0;
   const rb = ((G.t * 5) | 0) % 32;
   let haloCount = 0, topRank = 0;
   for (let i = 0; i < B.n; i++) {
@@ -2405,14 +2430,17 @@ function writeBlue() {
     }
     const weapon = B.weapon[i];
     if (weapon) {
-      const mesh = weaponMeshes[weapon], at = counts[weapon]++;
+      const mesh = (B.detail[i] ? weaponMeshes : weaponFarMeshes)[weapon], at = mesh.count++;
       mesh.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), at * 16);
     }
     const f = Math.max(0, B.flash[i]) * 0.45;
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
   }
   G.rank = topRank;
-  for (let k = 1; k < weaponMeshes.length; k++) { weaponMeshes[k].count = counts[k]; weaponMeshes[k].instanceMatrix.needsUpdate = true; }
+  for (let k = 1; k < weaponMeshes.length; k++) for (const mesh of [weaponMeshes[k], weaponFarMeshes[k]]) {
+    mesh.visible = mesh.count > 0;
+    if (mesh.visible) mesh.instanceMatrix.needsUpdate = true;
+  }
   for (const form of blueForms) finishTroopMeshes(form.near, form.far);
 }
 // unit matrix: heading + forward lean while running, squash & stretch on each step, pop-in when spawned
@@ -2436,7 +2464,6 @@ function writeMatrix(m, i, P, s, lean, instance = i) {
   m[o + 8] = si * cp * sxz; m[o + 9] = -sp * sxz; m[o + 10] = c * cp * sxz; m[o + 11] = 0;
   m[o + 12] = P.x[i]; m[o + 13] = y; m[o + 14] = P.z[i]; m[o + 15] = 1;
 }
-const ovCount = Object.fromEntries(Object.keys(overlays).map(kind => [kind, 0]));
 function addUnitGlow(matrix, index, x, y, z, color, size, alpha) {
   const o = index * 16;
   halos.add(
@@ -2448,7 +2475,7 @@ function addUnitGlow(matrix, index, x, y, z, color, size, alpha) {
 }
 function writeRed() {
   redMesh.count = redFarMesh.count = 0;
-  for (const k in ovCount) ovCount[k] = 0;
+  for (const mesh of overlayMeshes) mesh.count = 0;
   let labels = 0, specialGlow = 0;
   for (let i = 0; i < R.n; i++) {
     const kind = R.kind[i], col = R.chill[i] > 0 ? TIER_RGB[1] : R.burn[i] > 0 ? TIER_RGB[6] : RED_RGB[kind];
@@ -2458,8 +2485,8 @@ function writeRed() {
     writeMatrix(m, i, R, R.sc[i], R.st[i] ? 0 : 0.8, index);
     const f = Math.max(0, R.flash[i]) * 0.75;
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
-    const ov = overlays[kind];
-    if (ov) { ov.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), ovCount[kind] * 16); ovCount[kind]++; }
+    const ov = (body === redMesh ? overlays : overlaysFar)[kind];
+    if (ov) ov.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), ov.count++ * 16);
     if (body === redMesh && specialGlow < 12) {
       if (kind === 7 && specialGlow <= 10) {
         for (const side of [-1, 1]) {
@@ -2474,7 +2501,10 @@ function writeRed() {
     if ((kind === 1 || kind === 5) && labels < bruteLabels.length) placeLabel(bruteLabels[labels++], R.x[i], 1.2 + R.sc[i] * 0.9, R.z[i], fmtHp(R.hp[i]));
   }
   finishTroopMeshes(redMesh, redFarMesh);
-  for (const k in overlays) { overlays[k].count = ovCount[k]; overlays[k].instanceMatrix.needsUpdate = true; }
+  for (const mesh of overlayMeshes) {
+    mesh.visible = mesh.count > 0;
+    if (mesh.visible) mesh.instanceMatrix.needsUpdate = true;
+  }
   for (let k = labels; k < bruteLabels.length; k++) hideLabel(bruteLabels[k]);
 }
 function defensePose(target) {

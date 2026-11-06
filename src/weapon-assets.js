@@ -138,12 +138,12 @@ function plasmaCaster(k) {
 const WEAPONS = [null, blaster, rocketLauncher, arcRifle, scattergun, railgun, flamethrower, frostProjector, plasmaCaster];
 const NAMES = [null, 'Blaster', 'Rocket launcher', 'Arc rifle', 'Scattergun', 'Railgun', 'Flamethrower', 'Frost projector', 'Plasma caster'];
 
-/** Includes the overlay's 1.2 scale and right-hand placement. */
-export function sculptedWeaponGeometry(id) {
+/** Includes the overlay's 1.2 scale and right-hand placement. 'low' halves the segment counts for distant troops. */
+export function sculptedWeaponGeometry(id, detail = 'high') {
   const kind = Number.isInteger(id) && WEAPONS[id] ? id : 1;
-  const k = sculptKit(false, false);
+  const k = sculptKit(detail === 'low', false);
   WEAPONS[kind](k);
   const geometry = k.b.finish().scale(1.2, 1.2, 1.2);
-  geometry.name = NAMES[kind];
+  geometry.name = NAMES[kind] + (detail === 'low' ? ' low' : '');
   return geometry;
 }
