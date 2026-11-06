@@ -319,6 +319,10 @@ const popups = Array.from({ length: 18 }, () => {
 });
 let popHead = 0;
 let popSerial = 0;
+function clearPopups() {
+  for (const p of popups) { p.life = 0; p.el.style.display = 'none'; }
+  popHead = popSerial = 0;
+}
 function popup(text, cls, x, y, z, life = 1.3) {
   if (TURBO) return;
   const p = popups[popHead]; popHead = (popHead + 1) % popups.length;
@@ -669,12 +673,16 @@ function startLevel(idx, stageIdx = 0) {
   G.explosions.length = 0;
   G.splits.length = 0;
   G.revives = [];
+  clearPopups();
+  hud.white.classList.remove('on'); hud.flash.classList.remove('on');
+  hud.armybox.classList.remove('pump'); hud.lives.classList.remove('hit');
   // disposeLevel traverses effects too, including mushroom clouds made of nested groups.
   G.effects.length = 0;
   Object.assign(G, {
     paused: false, resumePhase: null, weaponCursor: 0, t: 0,
     log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
-    maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgTotal: 0, army: 0, squad: 0, nextMile: 1000, armyAvg: 0,
+    maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, army: 0, armyShown: 0, armyPrev: 0, pumpT: 0, squad: 0, nextMile: 1000, armyAvg: 0,
+    recoil: 0, cannonPulse: 0, kick: 0,
     chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, overdrive: 0, rank: 0,
   });
   setBarrels(1);
@@ -2671,7 +2679,7 @@ function showMenu(preserveRun = false) {
     else $('menu').scrollTop = 0;
   });
   for (const L of bruteLabels) hideLabel(L);
-  for (const p of popups) { p.life = 0; p.el.style.display = 'none'; }
+  clearPopups();
   for (const S of G.stages) {
     if (S.tower) hideLabel(S.tower.label);
     if (S.boss) hideLabel(S.boss.label);
