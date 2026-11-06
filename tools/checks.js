@@ -291,14 +291,15 @@ window.runGameChecks = (g) => {
     impactRings.emit(0,0,2,0xffffff,.2); impactRings.update(.01); startLevel(0);
     return {pass:bounded && expired && impactRings.mesh.count===0};
   })()`);
-  check('Troop detail packing preserves units, weapons and motion', `(() => {
+  check('Troop detail and rank forms preserve units, weapons and motion', `(() => {
     camera.position.set(0,20,20); troopPixelScale=1000;
-    const far=spawn(B,-2,-60,4,0), near=spawn(B,2,-3,16,0);
+    const far=spawn(B,-2,-60,4,0), near=spawn(B,2,-3,1e14,0);
     B.weapon[far]=8; B.weapon[near]=1; B.phase[far]=.9; B.phase[near]=1.4;
     B.vz[far]=B.vz[near]=-6; B.age[far]=B.age[near]=1; writeBlue();
-    const farMatrix=blueFarMesh.instanceMatrix.array, nearMatrix=blueMesh.instanceMatrix.array;
-    const motion=blueFarMesh.geometry.attributes.unitMotion.array;
-    return {pass:blueMesh.count===1 && blueFarMesh.count===1 && farMatrix[14]===-60 && nearMatrix[14]===-3 && weaponMeshes[8].instanceMatrix.array[14]===-60 && weaponMeshes[1].instanceMatrix.array[14]===-3 && Math.abs(motion[0]-.9)<1e-6 && motion[1]===1};
+    const bot=blueForms[0].far, ascended=blueForms[3].near;
+    const motion=bot.geometry.attributes.unitMotion.array;
+    const others=blueForms.flatMap(f=>[f.near,f.far]).filter(m=>m!==bot&&m!==ascended).every(m=>m.count===0&&!m.visible);
+    return {pass:bot.count===1 && ascended.count===1 && others && bot.instanceMatrix.array[14]===-60 && ascended.instanceMatrix.array[14]===-3 && weaponMeshes[8].instanceMatrix.array[14]===-60 && weaponMeshes[1].instanceMatrix.array[14]===-3 && Math.abs(motion[0]-.9)<1e-6 && motion[1]===1};
   })()`);
   check('Distant enemy overlays and sleeping motion stay aligned', `(() => {
     camera.position.set(0,20,20); troopPixelScale=1000;

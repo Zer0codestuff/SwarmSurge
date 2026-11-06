@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
-import { troopGeometry, weaponGeometry } from './unit-assets.js';
+import { raiderGeometry } from './troop-forms.js';
+import { sculptedWeaponGeometry } from './weapon-assets.js';
 import { createVehicleRig, cannonBarrelGeometry } from './vehicle-assets.js';
 import { buildSculptedCore } from './boss-sculpted-core.js';
 import { buildSculptedRoyal } from './boss-sculpted-royal.js';
@@ -54,38 +55,17 @@ export function merge(parts) {
 }
 
 // ---------- units (instanced; instance color multiplies the baked vertex colors) ----------
-export function blueUnitGeo(detail = 'high') {
-  return troopGeometry(false, detail);
-}
 
 // Separate instanced overlays keep weapons visible without adding a draw call per troop.
 export function troopWeaponGeo(kind) {
-  const geometry = weaponGeometry(kind);
+  const geometry = sculptedWeaponGeometry(kind);
   geometry.userData.shared = false;
   return geometry;
 }
 export function redUnitGeo(detail = 'high') {
-  return troopGeometry(true, detail);
+  return raiderGeometry(detail);
 }
-export function bombGeo() {
-  const b = new THREE.SphereGeometry(0.2, 10, 8); b.translate(0, 1.18, 0); paint(b, 0x222222);
-  const f = new THREE.CylinderGeometry(0.03, 0.03, 0.18, 5); f.translate(0, 1.44, 0); paint(f, 0xffaa22);
-  const s = new THREE.SphereGeometry(0.06, 6, 4); s.translate(0, 1.55, 0); paint(s, 0xffee55);
-  return merge([b, f, s]);
-}
-export function shieldGeo() {
-  const s = new THREE.CylinderGeometry(0.42, 0.42, 0.08, 14); s.rotateX(Math.PI / 2); s.translate(0, 0.48, 0.36); paint(s, 0xc9d3e0);
-  const r = new THREE.TorusGeometry(0.42, 0.05, 6, 16); r.translate(0, 0.48, 0.4); paint(r, 0x8a6a2a);
-  const b = new THREE.SphereGeometry(0.1, 8, 6); b.translate(0, 0.48, 0.42); paint(b, 0xffcc33);
-  return merge([s, r, b]);
-}
-// tank helmet / splitter spikes ride on top of the red body like the bomb does
-export function helmetGeo() {
-  const h = new THREE.SphereGeometry(0.33, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2); h.translate(0, 0.84, 0); paint(h, 0x4a4f5a);
-  const v = new THREE.BoxGeometry(0.5, 0.08, 0.12); v.translate(0, 0.84, 0.27); paint(v, 0x22252c);
-  const s = new THREE.ConeGeometry(0.07, 0.25, 6); s.translate(0, 1.22, 0); paint(s, 0x9aa0aa);
-  return merge([h, v, s]);
-}
+// Splitter spikes ride on top of the red body.
 export function spikesGeo() {
   const parts = [];
   for (let k = 0; k < 5; k++) {

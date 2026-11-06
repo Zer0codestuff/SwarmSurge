@@ -9,7 +9,8 @@ import * as W from './worlds.js';
 import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
-import { installTroopMotion, updateTroopMotion, enemyKitGeometry } from './unit-assets.js';
+import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
+import { TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -122,11 +123,16 @@ function instanced(geo, mat, n, shadow = true) {
   return m;
 }
 const unitMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-const blueMesh = instanced(M.blueUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x0c3060, gradientMap: M.toonGradient() }), MAX_BLUE);
+// Allied bodies change form with rank: bot, trooper, paladin, ascended.
+const blueMat = new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x0c3060, gradientMap: M.toonGradient() });
+const blueForms = TROOP_FORMS.map((_, form) => ({
+  near: instanced(troopFormGeometry(form).scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
+  far: instanced(troopFormGeometry(form, 'low').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
+}));
+const FORM_BY_RANK = RANKS.map((_, rank) => blueForms[troopForm(rank)]);
 const redMesh = instanced(M.redUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x400808, gradientMap: M.toonGradient() }), MAX_RED);
-const blueFarMesh = instanced(M.blueUnitGeo('low').scale(1.2, 1.2, 1.2), blueMesh.material, MAX_BLUE);
 const redFarMesh = instanced(M.redUnitGeo('low').scale(1.2, 1.2, 1.2), redMesh.material, MAX_RED);
-const troopMeshes = [blueMesh, redMesh, blueFarMesh, redFarMesh];
+const troopMeshes = [...blueForms.flatMap(form => [form.near, form.far]), redMesh, redFarMesh];
 for (const mesh of troopMeshes) {
   mesh.geometry.setAttribute('unitMotion', new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count * 2), 2).setUsage(THREE.DynamicDrawUsage));
   installTroopMotion(mesh.material);
@@ -134,13 +140,13 @@ for (const mesh of troopMeshes) {
   mesh.customDistanceMaterial = mesh.material.userData.troopMotion.distanceMaterial;
 }
 const overlays = {
-  2: instanced(M.bombGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  3: instanced(M.shieldGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  5: instanced(M.helmetGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  2: instanced(enemyGearGeometry(2).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  3: instanced(enemyGearGeometry(3).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  5: instanced(enemyGearGeometry(5).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
   6: instanced(M.spikesGeo().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  7: instanced(enemyKitGeometry(7).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  8: instanced(enemyKitGeometry(8).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
-  9: instanced(enemyKitGeometry(9).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  7: instanced(enemyGearGeometry(7).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  8: instanced(enemyGearGeometry(8).scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
+  9: instanced(ghostKitGeometry().scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false),
 };
 const partMesh = instanced(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), MAX_PART, false);
 partMesh.count = MAX_PART;
@@ -2368,12 +2374,14 @@ function troopInstance(P, i, near, far) {
 }
 function finishTroopMeshes(near, far) {
   for (const mesh of [near, far]) {
+    mesh.visible = mesh.count > 0;
+    if (!mesh.visible) continue;
     mesh.instanceMatrix.needsUpdate = mesh.instanceColor.needsUpdate = true;
     mesh.geometry.attributes.unitMotion.needsUpdate = true;
   }
 }
 function writeBlue() {
-  blueMesh.count = blueFarMesh.count = 0;
+  for (const form of blueForms) form.near.count = form.far.count = 0;
   const counts = weaponCounts; counts.fill(0);
   const rb = ((G.t * 5) | 0) % 32;
   let haloCount = 0, topRank = 0;
@@ -2381,7 +2389,8 @@ function writeBlue() {
     const hp = B.hp[i], s = B.sc[i], tier = rankOf(hp);
     topRank = Math.max(topRank, tier);
     const col = tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : B.kind[i] && tier < 2 ? GIANT_RGB : TIER_RGB[tier];
-    const body = troopInstance(B, i, blueMesh, blueFarMesh), index = body.count - 1;
+    const form = FORM_BY_RANK[tier];
+    const body = troopInstance(B, i, form.near, form.far), index = body.count - 1;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
     writeMatrix(m, i, B, s, 1, index);
     if (tier >= 5 && haloCount < 24 && i % 7 === 0) {
@@ -2397,7 +2406,7 @@ function writeBlue() {
   }
   G.rank = topRank;
   for (let k = 1; k < weaponMeshes.length; k++) { weaponMeshes[k].count = counts[k]; weaponMeshes[k].instanceMatrix.needsUpdate = true; }
-  finishTroopMeshes(blueMesh, blueFarMesh);
+  for (const form of blueForms) finishTroopMeshes(form.near, form.far);
 }
 // unit matrix: heading + forward lean while running, squash & stretch on each step, pop-in when spawned
 function writeMatrix(m, i, P, s, lean, instance = i) {
