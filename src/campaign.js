@@ -1,3 +1,9 @@
+// Boss HP multipliers per world. Armies grow exponentially, so each extra second of a boss fight
+// costs a large HP factor. Measured with seed-42 and seed-7 bots: normal bosses aim for about 24 s
+// of smart play, capped so the naive policy still wins where it already won. Worlds 9, 10 and 19
+// end in OP bursts that ignore boss HP, so their values only protect players without that route.
+const BOSS_HP = [24, 1, 27, 18, 11, 1.6, 28, 3, 4, 6, 2.5, 50, 17, 15, 27, 7, 3.2, 20, 30, 1.5];
+
 // A deliberate equipment route for each world. Original obstacles and signature routes stay intact.
 // Each entry is [first-stage equipment, second-stage equipment, boss-stage equipment, fort HP scale].
 const ROUTES = [
@@ -84,7 +90,7 @@ export function prepareCampaign(levels) {
       if (s.tower) s.tower = Math.max(250, Math.round(s.tower * route[3]));
       if (s.boss) {
         const endurance = s.surge ? 1 : li === 0 ? 1.2 : li === 7 ? 1.25 : 1.8;
-        s.boss.hp *= (li < 2 ? 0.9 : 0.8) * endurance;
+        s.boss.hp *= (li < 2 ? 0.9 : 0.8) * endurance * BOSS_HP[li];
         if (!s.surge && li >= 2) {
           // Moon already alternates crushers across both lanes; another lane wipe stalls its army.
           if (li !== 7) s.boss.sweep = true;

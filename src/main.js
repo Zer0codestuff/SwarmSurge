@@ -2777,7 +2777,7 @@ function renderWorld(dt) {
   for (let k = G.shatters.length - 1; k >= 0; k--) {
     const sh = G.shatters[k];
     sh.t += dt;
-    if (!FX.updateShatter(sh.parts, dt, sh.t)) { for (const p of sh.parts) p.m.visible = false; G.shatters.splice(k, 1); }
+    if (!FX.updateShatter(sh.parts, dt, sh.t)) { FX.disposeShatter(sh.parts); G.shatters.splice(k, 1); }
   }
 
   // damage numbers over the current target
