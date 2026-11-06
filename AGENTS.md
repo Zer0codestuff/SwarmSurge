@@ -10,7 +10,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - `src/unit-assets.js`: troop geometry builder, ghost overlay and stride shaders. `src/vehicle-assets.js`, `src/air-assets.js`: vehicle and aircraft models.
 - `src/asset-kit.js`, `src/boss-shapes.js`: batched surfaces, continuous anatomical lofts, swept forms, domed armor and folded cloth.
 - `src/boss-sculpted-core.js`, `src/boss-sculpted-late.js`, `src/boss-sculpted-royal.js`: the full sculpted boss roster. `src/bosses.js` adapts the late builders.
-- `src/battlefield-assets.js`: biome fort architecture, turret, bunker, divider, hydraulic crusher and falling pillar models.
+- `src/fort-assets.js`: sculpted biome forts (curved curtain wall, pillowed stone courses, arched gatehouse, one tower design per family). `src/battlefield-assets.js` re-exports it and builds turret, bunker, divider, hydraulic crusher and falling pillar models.
 - `src/map.js`, `src/map.css`: biome island map and progressive unlocks.
 - `src/tutorials.js`: persisted first-introduction lessons. Other modules build worlds, props, bosses, pooled effects and synthesized audio.
 
@@ -48,13 +48,13 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - All twenty bosses use continuous shaped anatomy, carved faces, curved shells, domed armor and folded cloth. Skin, forged metal and cloth use separate shared materials. The user rejected the previous stacked block construction; both obsolete block-model modules have been removed. Asset batches preserve authored vertex shades. The boss triangle budget is 40,000 per rig, with one boss visible at a time.
 - Boss camera framing fits a conservative upper corner below the HUD, widening only when needed. Both desktop and portrait boss openings were checked for obstruction.
 - Primary boss and fort health stays in the fixed target bar. Damage numbers alternate beside the target with one active number per flank, expire cleanly and hide when no side space remains. Decorative forts carry no misleading HP label. HUD size observation and a reserved target text row keep framing current as content changes.
-- Forts use eight architecture families across twenty biome palettes. Turrets aim and recoil with beams starting at their muzzle. Bunker doors respond to reinforcement spawns; crusher rods follow the moving ram. Props retain their collision dimensions and add no lights or raster textures.
+- Forts use eight architecture families across twenty biome palettes: bastion (machicolated round towers, conical roofs), temple (stepped tiers, shrine, carved mask), crown (onion domes with icicles, clouds or candy bands), station (modules with observatory, mast or chimneys), gothic (buttressed spires, lancet windows), reef (turret-shell spire, coral), prism (hex column, crystal cluster) and casino (gold dome, chip, marquee bulbs). The curtain wall bends back toward the towers; stone courses frame windows and the gate. Banner and gate groups keep their names and animation. Turrets aim and recoil with beams starting at their muzzle. Bunker doors respond to reinforcement spawns; crusher rods follow the moving ram. Props retain their collision dimensions and add no lights or raster textures.
 - Storm Peaks clouds stay in lateral banks. Open wind spirals leave gate labels visible through tornadoes. HUD panels exclude world health labels; the fixed target bar shows remaining HP and percentage. Future-stage geometry is hidden.
 - Tracers use 128 reusable slots; splash rings use 64. Halo and combo effects are capped. Shared geometry/material templates live for the module lifetime. Level cleanup releases instance buffers without disposing borrowed templates, including grouped effects.
 
 ## Latest evidence and next steps
 - Fifty-six focused gameplay checks and fifteen tutorial policy checks pass. The latest full seed-42 smart-bot run clears all 20 worlds and 60 stages. Bot success does not replace human balance feedback.
-- All twenty sculpted bosses were inspected in contact sheets, including a royal before/after under identical lighting and camera. They use 7 to 23 meshes and 8,454 to 37,280 triangles. Asset contracts pass. Forts retain seven meshes and 3,260 to 5,308 triangles.
+- All twenty sculpted bosses were inspected in contact sheets, including a royal before/after under identical lighting and camera. They use 7 to 23 meshes and 8,454 to 37,280 triangles. Asset contracts pass. Sculpted forts keep seven meshes and use 5,480 to 12,264 triangles (previously 3,260 to 5,308).
 - The refreshed seed-42 bot run clears all twenty worlds and sixty stages with the sculpted roster. All twenty rendered defeats complete, desktop and portrait opening silhouettes clear the HUD, and eight finale restarts after warmup hold at 189 geometries, 24 textures and 32 shader programs. These counts do not establish physical mobile frame rate.
 - Desktop and 390 x 844 scenes were inspected for Storm Peaks, mixed troops, vehicles and aircraft. A short Terra 6.1 medium review identified the tornado obstruction, which was corrected.
 - A rendered 800-troop, two-ball comparison reduced total triangles from 3,624,204 to 1,693,964. Each ball dropped from 276,480 to 92,160 triangles. Six cannons with six barrels each dropped from 441 to 369 draw calls including shadows. These measure workload, not physical mobile frame rate.
@@ -69,6 +69,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Do not introduce a build system, backend or external asset dependency just to serve the game.
 - Do not restore the flat level grid, erase legacy progress, collapse troop ranks or remove the overpowered multiplier routes.
 - Do not repeat tutorial prose on every stage or place storm clouds above the road.
+- Do not return forts to one recolored box template.
 - Do not build boss anatomy from stacked boxes or replace the sculpted forms with slightly rounded primitives.
 - Do not return troops, enemies or weapons to box-built models. The user asked for troops that transform with rank (bot, then soldier, then stronger forms).
 - Do not spend excessive time on UI testing or commit screenshots, node_modules or generated reports.
