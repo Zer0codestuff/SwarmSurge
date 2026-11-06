@@ -6,7 +6,8 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - `src/main.js`: rendering, simulation, input, saved progress and debug hooks.
 - `src/levels.js`, `src/levels2.js`, `src/campaign.js`: stage definitions, equipment routes, pacing and announced flanks.
 - `src/arsenal.js`: thirteen troop ranks, eight weapons, six vehicle forms, three aircraft grades and swept circle collision.
-- `src/unit-assets.js`, `src/vehicle-assets.js`, `src/air-assets.js`: native procedural models and troop motion shaders.
+- `src/troop-forms.js`: sculpted allied rank forms, the enemy raider and enemy gear overlays. `src/weapon-assets.js`: the eight sculpted troop weapons.
+- `src/unit-assets.js`: troop geometry builder, ghost overlay and stride shaders. `src/vehicle-assets.js`, `src/air-assets.js`: vehicle and aircraft models.
 - `src/asset-kit.js`, `src/boss-shapes.js`: batched surfaces, continuous anatomical lofts, swept forms, domed armor and folded cloth.
 - `src/boss-sculpted-core.js`, `src/boss-sculpted-late.js`, `src/boss-sculpted-royal.js`: the full sculpted boss roster. `src/bosses.js` adapts the late builders.
 - `src/battlefield-assets.js`: biome fort architecture, turret, bunker, divider, hydraulic crusher and falling pillar models.
@@ -40,7 +41,8 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - New runs clear smoothed army counters, popups, recoil, camera kick and damage or nuke flashes. Resuming the in-memory battle retains its simulation state.
 
 ## Visuals and resource ownership
-- Beveled troops use instanced stride animation with matching shadow shaders. Projected-size detail selection preserves colors, weapon placement and motion phase. Sleeping, flying and airborne units stop walking. Rolling balls use the lighter troop geometry.
+- Allied troops change body form with rank: Surge bot (ranks 1 to 3), Trooper (4 to 6), Paladin (7 to 9) and Ascended (10 to 13). Each form has near and far instanced meshes; empty meshes are hidden. All forms share the hip pivot, hand anchors and footprint, so weapons, stride and collision are unchanged. Enemies use a horned raider with sculpted bomb, shield, tank helmet, drone jetpack and crab carapace overlays.
+- Troops use instanced stride animation with matching shadow shaders. Projected-size detail selection preserves colors, weapon placement and motion phase. Sleeping, flying and airborne units stop walking. Rolling balls use the lighter troop geometry.
 - Drones have jetpacks and winglets, crabs have shell plates and claws, and ghosts have halos and wisps. Floating bodies and weapon aim heights agree; special lights share a twelve-point budget.
 - All twenty bosses have native rigs with separate silhouettes and equipment, including the lunar explorer, candy sovereign, articulated Kraken, lantern Pumpkin King, coil-backed Thunder guardian and armored royal Emperor. Their root transforms stay under engine control; attack poses use the full 1.25-second cycle, and stationary or stunned legs stop walking. Rendering preserves authored boss scale. Boss rig geometry belongs to the level; the asset kit materials are shared. The old primitive boss builders have been removed.
 - All twenty bosses use continuous shaped anatomy, carved faces, curved shells, domed armor and folded cloth. Skin, forged metal and cloth use separate shared materials. The user rejected the previous stacked block construction; both obsolete block-model modules have been removed. Asset batches preserve authored vertex shades. The boss triangle budget is 40,000 per rig, with one boss visible at a time.
@@ -57,6 +59,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Desktop and 390 x 844 scenes were inspected for Storm Peaks, mixed troops, vehicles and aircraft. A short Terra 6.1 medium review identified the tornado obstruction, which was corrected.
 - A rendered 800-troop, two-ball comparison reduced total triangles from 3,624,204 to 1,693,964. Each ball dropped from 276,480 to 92,160 triangles. Six cannons with six barrels each dropped from 441 to 369 draw calls including shadows. These measure workload, not physical mobile frame rate.
 - Ten rendered Coral Coast restarts after aircraft warmup held at 139 geometries, 18 textures and 31 shader programs. A 1,000-impact stress run stayed within 64 rings. All eight weapon sounds produced finite nonzero offline audio.
+- Rank forms and sculpted weapons cost +2% to +7% rendered triangles against the box-built troops in the same seeded scenes (for example 1.21M to 1.29M at world 20 stage 2). Draw calls rose by at most six.
 - Physical mobile devices, sustained hardware performance and human difficulty remain unvalidated. Keep further checks focused.
 
 ## Preferences and do not
@@ -67,4 +70,5 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Do not restore the flat level grid, erase legacy progress, collapse troop ranks or remove the overpowered multiplier routes.
 - Do not repeat tutorial prose on every stage or place storm clouds above the road.
 - Do not build boss anatomy from stacked boxes or replace the sculpted forms with slightly rounded primitives.
+- Do not return troops, enemies or weapons to box-built models. The user asked for troops that transform with rank (bot, then soldier, then stronger forms).
 - Do not spend excessive time on UI testing or commit screenshots, node_modules or generated reports.
