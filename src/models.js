@@ -4,7 +4,7 @@ import { THEMES } from './levels.js';
 import * as S from './scenery-assets.js';
 import { raiderGeometry } from './troop-forms.js';
 import { sculptedWeaponGeometry } from './weapon-assets.js';
-import { createVehicleRig, cannonBarrelGeometry } from './vehicle-assets.js';
+import { createVehicleRig, cannonBarrelGeometry, buildCarriage, orbSocketGeometry } from './vehicle-assets.js';
 import { buildSculptedCore } from './boss-sculpted-core.js';
 import { buildSculptedRoyal } from './boss-sculpted-royal.js';
 export { buildBattleTower as buildTower, buildBattleTurret as buildTurret, buildBattleSpawner as buildSpawner, buildBattleWall as buildWall, buildBattleCrusher as buildCrusher } from './battlefield-assets.js';
@@ -135,20 +135,8 @@ export function textPlane(L, w, h, depthTest = true) {
 export function buildCannon(tint = 0x2f8bff) {
   const g = new THREE.Group();
   const base = new THREE.Group(); base.name = 'base-cannon'; g.add(base);
-  const dark = lam(0x2b2f3a), blue = lam(tint), black = lam(0x15161a), red = lam(0xe8333a);
-  base.add(mesh(new THREE.BoxGeometry(1.5, 0.38, 1.7), dark, 0, 0.42, 0));
-  base.add(mesh(new THREE.BoxGeometry(1.56, 0.12, 1.76), red, 0, 0.6, 0));
-  const wheelGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.3, 12); wheelGeo.rotateZ(Math.PI / 2);
-  const hubGeo = new THREE.BoxGeometry(0.32, 0.5, 0.12);
-  const wheels = [];
-  for (const x of [-0.82, 0.82]) for (const z of [-0.55, 0.55]) {
-    const w = mesh(wheelGeo, black, x, 0.33, z);
-    w.add(mesh(hubGeo, red, 0, 0, 0, false));
-    base.add(w); wheels.push(w);
-  }
-  const body = mesh(new THREE.SphereGeometry(0.66, 20, 14), blue, 0, 1.1, 0.1);
-  body.scale.set(1, 0.9, 1.05);
-  base.add(body);
+  const carriage = buildCarriage(tint); base.add(carriage.group);
+  const body = carriage.body, wheels = carriage.wheels;
   const barrels = new THREE.Group(); barrels.position.set(0, 1.1, -0.2); g.add(barrels);
   const barrelGeo = cannonBarrelGeometry(tint), barrelMaterial = lam(0xffffff, { vertexColors: true });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -157,6 +145,7 @@ export function buildCannon(tint = 0x2f8bff) {
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xaef6ff });
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), glowMat);
   glow.position.set(0, 1.6, 0.2); g.add(glow);
+  const socket = new THREE.Mesh(orbSocketGeometry(), body.material); socket.visible = false; g.add(socket);
   const rig = createVehicleRig(tint); g.add(rig.group);
   const shield = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2),
     new THREE.MeshPhongMaterial({ color: 0x75ebff, emissive: 0x124762, transparent: true, opacity: 0.1, depthWrite: false, shininess: 90 }));
@@ -168,6 +157,8 @@ export function buildCannon(tint = 0x2f8bff) {
     wheels.forEach(w => { w.visible = base.visible; });
     barrels.position.copy(rig.barrelAnchor);
     glow.position.copy(rig.glowAnchor);
+    socket.visible = !base.visible;
+    socket.position.copy(rig.glowAnchor); socket.position.y -= 0.2;
   }
   function animateVehicle(time, dt, recoil, speed, charge) {
     rig.animate(time, dt, recoil, speed, charge);
@@ -183,7 +174,7 @@ export function buildCannon(tint = 0x2f8bff) {
     }
   }
   setBarrels(1);
-  return { group: g, setBarrels, setChassis, animateVehicle, rig, barrels, glow, glowMat, bodyMat: blue, wheels, shield };
+  return { group: g, setBarrels, setChassis, animateVehicle, rig, barrels, glow, glowMat, bodyMat: body.material, wheels, shield };
 }
 
 // ---------- gates ----------
