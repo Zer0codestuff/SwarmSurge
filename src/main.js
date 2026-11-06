@@ -2206,6 +2206,10 @@ function step(dt) {
     }
     for (const s of S.spawners) {
       if (!s.alive) continue;
+      if (s.hp <= 0) {
+        s.alive = false; burst(s.x, 1, s.z, s.def.style === 'dome' ? PCOL.gold : PCOL.ice, 40, 7); s.model.group.visible = false; hideLabel(s.label); sound.play('boom');
+        continue;
+      }
       s.timer -= dt;
       // spawners wake up after a few seconds and ramp up, like the waves, so you can get your stream going
       if (s.timer <= 0 && S.time > 4) {
@@ -2219,9 +2223,6 @@ function step(dt) {
         }
         spark(s.x, 1.5, s.z + 1.2, PCOL.red, 4, 3, 1, 0.4);
         if (s.def.style === 'rival') { s.flash = 1; sound.play('shoot'); }
-      }
-      if (s.hp <= 0) {
-        s.alive = false; burst(s.x, 1, s.z, s.def.style === 'dome' ? PCOL.gold : PCOL.ice, 40, 7); s.model.group.visible = false; hideLabel(s.label); sound.play('boom');
       }
     }
   }

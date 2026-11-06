@@ -29,6 +29,13 @@ window.runGameChecks = (g) => {
     const i=spawn(B,0,-2,100,0); launch(i,0,-8,.7); moveBlue(G.stage,.3);
     return {pass:b.hp===20 && B.hp[i]===100};
   })()`);
+  check('Destroyed spawners cannot emit a final reinforcement wave', `(() => {
+    const S=G.stage,model=M.buildSpawner('dome'); G.root.add(model.group);
+    const s={def:{every:1,n:3,kind:0,unitHp:1,style:'dome'},x:0,z:-20,hp:0,max:10,timer:0,model,alive:true,label:makeLabel('spawner'),flash:0};
+    S.spawners.push(s); S.time=10; S.waveT=Infinity; G.fireT=Infinity;
+    step(STEP);
+    return {pass:!s.alive && !model.group.visible && R.n===0,red:R.n};
+  })()`);
   check('Blasters respect barriers and damage enemies after the barrier opens', `(() => {
     const j=spawn(R,0,-7,100,0), i=spawn(B,0,-3,10,0);
     B.weapon[i]=1; B.shot[i]=0;

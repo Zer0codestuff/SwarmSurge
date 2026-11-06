@@ -32,6 +32,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Air upgrades progress through Scout interceptor, Strike jet and Stealth bomber. Higher grades strike more frequently, deal more damage and cover a wider lane. Each pass keeps its captured grade until it finishes. Models are cached lazily; hangars use the same aircraft assets.
 - Armor absorbs each cannon hit before hearts. Full blocks use a shield response without false heart-loss feedback. Only overflow damages hearts, including when healing occurs in the same update.
 - Heart pickups can raise lives to fifteen. Results show the remaining total rather than dividing bonus hearts by the ten starting lives.
+- Destroyed bunkers are removed before their reinforcement timer is handled, preventing a final wave after a lethal hit.
 - All 60 stages have equipment routes and revised pacing. Normal late stages have limited, announced biome flanks; surge routes retain their overpowered rhythm. Long fights expose armor up to x4 hit damage. Moon Base and the stationary Neon Nights opening were shortened after balance measurements.
 - The island map unlocks worlds progressively and preserves legacy saves. Victories save before result animation. The map can retain one exact in-memory battle until another world starts or the page reloads.
 - Basic tutorials appear only on first introductions in world one. Movement gate variants share one lesson. Replays, retries, existing wins and debug starts skip repeated prose. Opening the map does not consume a lesson.
@@ -50,7 +51,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Tracers use 128 reusable slots; splash rings use 64. Halo and combo effects are capped. Shared geometry/material templates live for the module lifetime. Level cleanup releases instance buffers without disposing borrowed templates, including grouped effects.
 
 ## Latest evidence and next steps
-- Fifty-five focused gameplay checks and fifteen tutorial policy checks pass. The latest full seed-42 smart-bot run clears all 20 worlds and 60 stages. Bot success does not replace human balance feedback.
+- Fifty-six focused gameplay checks and fifteen tutorial policy checks pass. The latest full seed-42 smart-bot run clears all 20 worlds and 60 stages. Bot success does not replace human balance feedback.
 - All twenty sculpted bosses were inspected in contact sheets, including a royal before/after under identical lighting and camera. They use 7 to 23 meshes and 8,454 to 37,280 triangles. Asset contracts pass. Forts retain seven meshes and 3,260 to 5,308 triangles.
 - The refreshed seed-42 bot run clears all twenty worlds and sixty stages with the sculpted roster. All twenty rendered defeats complete, desktop and portrait opening silhouettes clear the HUD, and eight finale restarts after warmup hold at 189 geometries, 24 textures and 32 shader programs. These counts do not establish physical mobile frame rate.
 - Desktop and 390 x 844 scenes were inspected for Storm Peaks, mixed troops, vehicles and aircraft. A short Terra 6.1 medium review identified the tornado obstruction, which was corrected.
