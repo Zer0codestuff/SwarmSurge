@@ -10,7 +10,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - `src/unit-assets.js`: troop geometry builder, ghost overlay and stride shaders. `src/vehicle-assets.js`: lofted vehicle hulls, the starting carriage, the lathe barrel and the charge-orb socket. `src/air-assets.js`: lofted aircraft with airfoil wings, canopies and lathe nacelles.
 - `src/asset-kit.js`, `src/boss-shapes.js`: batched surfaces, continuous anatomical lofts, swept forms, domed armor and folded cloth.
 - `src/boss-sculpted-core.js`, `src/boss-sculpted-late.js`, `src/boss-sculpted-royal.js`: the full sculpted boss roster. `src/bosses.js` adapts the late builders.
-- `src/fort-assets.js`: sculpted biome forts (curved curtain wall, pillowed stone courses, arched gatehouse, one tower design per family). `src/battlefield-assets.js` re-exports it and builds turret, bunker, divider, hydraulic crusher and falling pillar models.
+- `src/fort-assets.js`: sculpted biome forts (curved curtain wall, pillowed stone courses, arched gatehouse, one tower design per family). `src/battlefield-assets.js` re-exports it and builds the lathe-and-loft turret, vaulted igloo and ribbed dome bunkers, jersey-barrier divider, toothed hydraulic crusher and fluted falling pillar.
 - `src/scenery-assets.js`: sculpted roadside props (saguaros, rock clusters, pines, palms, coral, lollipops, columns, gears, crates, mountains, crystals and more) used by `models.buildWorld` and `src/worlds.js`.
 - `src/map.js`, `src/map.css`: biome island map and progressive unlocks.
 - `src/tutorials.js`: persisted first-introduction lessons. Other modules build worlds, props, bosses, pooled effects and synthesized audio.
@@ -64,6 +64,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Ten rendered Coral Coast restarts after aircraft warmup held at 139 geometries, 18 textures and 31 shader programs. A 1,000-impact stress run stayed within 64 rings. All eight weapon sounds produced finite nonzero offline audio.
 - Rank forms and sculpted weapons cost +2% to +7% rendered triangles against the box-built troops in the same seeded scenes (for example 1.21M to 1.29M at world 20 stage 2). Draw calls rose by at most six.
 - Sculpted vehicles cost 8.7k to 13.5k triangles per cannon with one barrel (previously 2.3k to 6.2k). Same seeded scenes: world 1 opening 216k to 227k rendered triangles, world 16 with two Titans and eight barrels 403k to 455k; draw calls within two.
+- Sculpted defenses: turret 5.3k, igloo 3.4k, dome 4.7k, crusher 3.2k, pillar 4.4k and a 12-unit divider 1.0k triangles (previously 0.7k to 2.4k). `assetBatch().add` accepts a color function of the placed vertex.
 - Physical mobile devices, sustained hardware performance and human difficulty remain unvalidated. Keep further checks focused.
 
 ## Preferences and do not

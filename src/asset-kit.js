@@ -30,10 +30,13 @@ export function assetBatch() {
       const geo = g.index ? g.toNonIndexed() : g;
       if (geo !== g) g.dispose();
       geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
-      const c = new THREE.Color(color), count = geo.attributes.position.count;
+      // A color function receives the placed vertex position.
+      const pos = geo.attributes.position, count = pos.count, paint = typeof color === 'function';
+      const c = new THREE.Color(paint ? 0xffffff : color);
       const colors = new Float32Array(count * 3);
       const tint = geo.attributes.color;
       for (let i = 0; i < count; i++) {
+        if (paint) c.set(color(pos.getX(i), pos.getY(i), pos.getZ(i)));
         colors[i * 3] = c.r * (tint ? tint.getX(i) : 1);
         colors[i * 3 + 1] = c.g * (tint ? tint.getY(i) : 1);
         colors[i * 3 + 2] = c.b * (tint ? tint.getZ(i) : 1);
