@@ -86,7 +86,7 @@ export const LEVELS = prepareCampaign([
         tip: 'Go through x2 x3 x4 AND hit the fence at the same time, then climb the ladder!',
         tower: 60000,
         waves: { every: 3.6, swarm: 5, ramp: 0.3 },
-        walls: [{ x: 1.75, d1: 17, d2: 52 }],
+        walls: [{ x: 1.75, d1: 14.5, d2: 52 }],
         gates: [
           ...stack('add', 1, -5.25, 8, 8, 1.7, 2.2),
           { t: 'mul', v: 2, x: 0, d: 9, w: 5.6 },
