@@ -2714,7 +2714,7 @@ function showResult(win) {
     : 'Tip: gates in a row multiply each other. Break fences, ice and barriers to reach the big ones!';
   const stats = `<div class="stats"><span>MAX ARMY<b data-v="${G.maxArmy}">0</b></span><span>BEST COMBO<b data-v="${G.bestCombo}" data-p="x">x1</b></span><span>CRUSHED<b data-v="${G.kills}">0</b></span></div>`;
   $('rmsg').innerHTML = win
-    ? stats + `Hearts left: ${G.lives}/${BASE_LIVES}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
+    ? stats + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
       (last ? `<br><b class="champ">ALL ${LEVELS.length} LEVELS CLEARED! You are the Swarm Master!</b>` : '')
     : stats + `${G.loseMsg}<br><small>${tip}</small>`;
   $('rretry').classList.toggle('hidden', win);
