@@ -9,7 +9,7 @@ const TIPS = {
 const MECHANICS = [
   { id: 'bumper', world: 20, text: 'Bumpers double each troop once, then bounce it to the side it touched.', has: def => def.bumpers?.length },
   { id: 'hypno', world: 25, text: 'Fill the hypno gate. While it glows, enemies crossing it join your army.', has: (def, gates) => gates.some(gate => gate?.t === 'hypno') },
-  { id: 'cart', world: 30, text: 'Shoot the mine cart to push it up its rail. A full cart blasts the target.', has: def => def.carts?.length },
+  { id: 'cart', world: 30, text: 'Troops that reach the mine cart push it up its rail. A full cart blasts the target.', has: def => def.carts?.length },
   { id: 'bank', world: 35, text: 'Troops planted in a harvest field return multiplied when the timer ends.', has: (def, gates) => gates.some(gate => gate?.t === 'bank') },
   { id: 'egg', world: 40, text: 'Smash eggs before they hatch. Broken eggs release hatchlings for your army.', has: def => def.eggs?.length },
   { id: 'fusion', world: 45, text: 'Charge both fusion cores in time. Their beam multiplies every troop crossing it.', has: def => def.fusion?.length },
