@@ -2454,6 +2454,7 @@ function smashEgg(S, e) {
   const share = Math.min(MAX_POWER, e.max * 0.4);
   for (let k = 0; k < (e.def.n ?? 4) && B.n < B.N - RESERVE; k++) {
     const j = spawn(B, clamp(e.x + rand(-0.8, 0.8), -XLIM, XLIM), e.z - 1 - rand(0, 0.8), share, 0);
+    if (j < 0) break;
     B.vz[j] = -BLUE_SPEED; B.flash[j] = 1;
   }
   popup('HATCHLINGS JOIN!', 'combo c2', e.x, 3, e.z, 1.1);
@@ -2463,8 +2464,8 @@ function smashEgg(S, e) {
 function hatchEgg(S, e) {
   e.alive = false; e.model.group.visible = false;
   // A missed egg releases a pack of light raiders unless the stage asks for something heavier.
-  const kind = e.def.kind ?? 0, hp = (e.def.unitHp ?? 2) * threat(S);
-  for (let k = 0; k < (e.def.n ?? 4) * (kind ? 1 : 2); k++) spawnRed(e.x + rand(-1, 1), e.z + 0.8 + rand(0, 0.8), kind, hp);
+  const kind = e.def.kind ?? 0, hp = (e.def.unitHp ?? 1) * threat(S);
+  for (let k = 0; k < (e.def.n ?? 4); k++) spawnRed(e.x + rand(-1, 1), e.z + 0.8 + rand(0, 0.8), kind, hp);
   burst(e.x, 1, e.z, PCOL.red, 24, 6);
   popup('HATCHED!', 'combo c1', e.x, 3, e.z, 1.0);
   sound.play('warn');
@@ -2649,7 +2650,7 @@ function attackEggs(S, b, n) {
     const hp = Math.max(30 * threat(S), Math.min(b.max * 0.004, G.armyAvg * 0.35));
     addTelegraph('circle', x, z, 1.4, 0, 0.8, () => {
       if (S !== G.stage) return;
-      addEgg(S, S.group, x, z, { hp, hatch: 6, kind: 1, n: 3, unitHp: 10, scale: 0.8, spots: 0xc0603a });
+      addEgg(S, S.group, x, z, { hp, hatch: 6, kind: 1, n: 2, unitHp: 8, scale: 0.8, spots: 0xc0603a });
       burst(x, 0.6, z, PCOL.sand, 12, 4); sound.play('crush');
     });
   }

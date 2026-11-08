@@ -50,6 +50,8 @@ const LESSONS = {
 import { LATE_FLANKS } from './biomes-late.js';
 
 const FLANK_TYPES = { ...LATE_FLANKS, jungle:4, neon:7, candy:6, moon:5, sky:7, void:9, factory:8, casino:2, coral:4, spooky:9, arena:3, crystal:6, volcano:12, tomb:10, storm:7, blackhole:9 };
+// Base HP of each enemy kind (RED_TYPES in main.js), used to size late flanks.
+const RED_HP = [1, 12, 1, 6, 1, 40, 4, 2, 10, 3, 5, 5, 2];
 const VAULTS = [
   { world: 4, stage: 1, x: 5.65, d: 30.5, hp: 1000, t: 'ice', prizes: [34, 37, 40] },
   { world: 6, stage: 2, x: 5.65, d: 31, hp: 8000, t: 'fence', prizes: [34.5, 37.5, 40.5] },
@@ -93,10 +95,15 @@ function prepareLate(level, li, original, si) {
   s.targetTime = si === 2 ? 32 : 23;
   s.enemyScale = 1.15;
   s.enemyWarmup = si === 0 ? 0.3 : 0.4;
-  if (!s.surge) s.flanks = {
-    kind: FLANK_TYPES[level.theme] ?? 4, count: 4,
-    start: si === 2 ? 8 : 8.5, every: 10, limit: si === 2 ? 1 : 2, warning: 1.4, firstSide: (li + si) % 2, hpScale: 1.3,
-  };
+  if (!s.surge) {
+    // Late worlds restart from one barrel, so a flank carries a fixed toughness budget: heavy kinds
+    // arrive as a weakened pair instead of a full pack that the raw cannon stream cannot stop.
+    const kind = FLANK_TYPES[level.theme] ?? 4, base = RED_HP[kind] ?? 1, count = base >= 5 ? 2 : 3;
+    s.flanks = {
+      kind, count, start: si === 2 ? 8 : 8.5, every: 10, limit: si === 2 ? 1 : 2, warning: 1.4,
+      firstSide: (li + si) % 2, hpScale: Math.min(1, 9 / (count * base)),
+    };
+  }
   const target = s.boss ? s.boss.hp : s.tower;
   resolveFractions(s, target);
   if (s.boss && !s.surge) { s.boss.sweep = true; s.boss.cadence = 0.9; s.boss.opening = 2.8; }

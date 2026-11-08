@@ -98,6 +98,32 @@ check('Old saves past movement gates do not receive that lesson again', () => {
   }
 });
 
+check('Late mechanics each teach one lesson at their first appearance', () => {
+  const storage = fakeStorage(), tutorials = createTutorials(storage);
+  const stages = [
+    [20, 'bumper', { bumpers: [{ x: 0, d: 15 }], gates: [] }],
+    [25, 'hypno', { gates: [{ t: 'hypno' }] }],
+    [30, 'cart', { carts: [{ x: 0, d1: 10, d2: 30 }], gates: [] }],
+    [35, 'bank', { gates: [{ t: 'bank' }] }],
+    [40, 'egg', { eggs: [{ x: 0, d: 20 }], gates: [] }],
+    [45, 'fusion', { fusion: [{ d: 20, x1: -3, x2: 3 }], gates: [] }],
+  ];
+  for (const [level, id, stage] of stages) {
+    assert.equal(select(tutorials, level, 0, stage)?.id, id);
+    assert.equal(select(tutorials, level, 1, stage), null);
+  }
+  const reloaded = createTutorials(storage);
+  for (const [level, , stage] of stages) assert.equal(select(reloaded, level + 1, 0, stage), null);
+});
+
+check('Saves past a late mechanic skip its lesson but keep later ones', () => {
+  const tutorials = createTutorials(fakeStorage());
+  const progress = { stars: [...Array(21).fill(3)] };
+  assert.equal(select(tutorials, 21, 0, { bumpers: [{ x: 0, d: 15 }], gates: [] }, { progress }), null);
+  assert.equal(tutorials.hasSeen('bumper'), false);
+  assert.equal(select(tutorials, 25, 0, { gates: [{ t: 'hypno' }] }, { progress })?.id, 'hypno');
+});
+
 check('Debug stage selection neither shows nor consumes a tutorial', () => {
   const storage = fakeStorage(), tutorials = createTutorials(storage);
   assert.equal(select(tutorials, 0, 0, firstStage, { debug: true }), null);
