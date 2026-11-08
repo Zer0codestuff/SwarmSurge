@@ -72,10 +72,52 @@ function addVault(s, world, stage) {
   }));
 }
 
+// Worlds 21-50 store their target HP directly (calibrated per stage), and write breakable HP and
+// charge costs as fractions of it so a recalibration keeps every obstacle proportional.
+function resolveFractions(s, target) {
+  const scaled = (f, floor) => Math.max(floor, Math.round(f * target));
+  const each = (list, key) => {
+    for (const o of list || []) {
+      if (o[key + 'F'] != null) { o[key] = scaled(o[key + 'F'], key === 'hp' ? 30 : 20); delete o[key + 'F']; }
+    }
+  };
+  for (const key of ['hp', 'need']) {
+    each(s.gates, key);
+    for (const list of [s.spawners, s.turrets, s.balls, s.pillars, s.eggs, s.carts, s.holes, s.fusion]) each(list, key);
+  }
+}
+
+function prepareLate(level, li, original, si) {
+  const s = structuredClone(original), route = level.route;
+  s.surge = !!original.surge;
+  s.targetTime = si === 2 ? 32 : 23;
+  s.enemyScale = 1.15;
+  s.enemyWarmup = si === 0 ? 0.3 : 0.4;
+  if (!s.surge) s.flanks = {
+    kind: FLANK_TYPES[level.theme] ?? 4, count: 4,
+    start: si === 2 ? 8 : 8.5, every: 10, limit: si === 2 ? 1 : 2, warning: 1.4, firstSide: (li + si) % 2, hpScale: 1.3,
+  };
+  const target = s.boss ? s.boss.hp : s.tower;
+  resolveFractions(s, target);
+  if (s.boss && !s.surge) { s.boss.sweep = true; s.boss.cadence = 0.9; s.boss.opening = 2.8; }
+  // Every world starts from a single barrel, so equipment costs stop rising after world 20.
+  const supplyScale = si === 0 ? 1.25 : 1.35 + si * 0.45, ci = Math.min(li, 19);
+  for (const g of s.gates) {
+    if (g.t === 'upgrade' || g.t === 'hangar') g.need = Math.round(Math.min(g.need, 18 + ci * 2 + si * 8) * supplyScale);
+    if (g.t === 'charge') g.per = Math.max(8, g.per * 0.6);
+  }
+  const up = route[si];
+  s.gates.unshift({ t: 'upgrade', up, need: Math.round((12 + ci + si * 5) * supplyScale), x: si % 2 ? 3.4 : -3.4, d: 5.5, w: 4.7 });
+  s.tip = `${LESSONS[up]} ${original.tip}`;
+  for (const b of s.balls || []) b.delay = Math.min(b.delay ?? 0, 5);
+  return s;
+}
+
 export function prepareCampaign(levels) {
   return levels.map((level, li) => ({
     ...level,
     stages: level.stages.map((original, si) => {
+      if (level.calibrated) return prepareLate(level, li, original, si);
       const s = structuredClone(original), route = level.route ?? ROUTES[li];
       s.surge = [1, 8, 9, 16, 19].includes(li) && si === 2 || li === 1;
       s.targetTime = si === 2 ? 32 : s.surge ? 16 : 23;

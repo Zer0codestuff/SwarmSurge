@@ -1,7 +1,7 @@
 // Bot policies, injected into the page. They run inside the simulation (every 0.1 s of game time).
 window.__policies = (() => {
-  const ABS = new Set(['upgrade', 'nuke', 'star', 'hangar', 'heart', 'tesla']);
-  const BLK = new Set(['barrier', 'ice', 'fence', 'statue', 'redmul', 'redadd']);
+  const ABS = new Set(['upgrade', 'nuke', 'star', 'hangar', 'heart', 'tesla', 'hypno', 'cart', 'core']);
+  const BLK = new Set(['barrier', 'ice', 'fence', 'statue', 'redmul', 'redadd', 'egg']);
   const BLUE_SPEED = 9;
   function hazardAt(hz, x) {
     let p = 1;
@@ -12,6 +12,19 @@ window.__policies = (() => {
     for (const t of hz.tornados || []) if (Math.abs(x - t.x) < t.r + 0.8) p *= 0.8;
     for (const z of hz.zones || []) if (Math.abs(x - z.x) < z.w / 2 + 0.4) p *= 0.6;
     return p;
+  }
+  // World 21-50 objects as pseudo-gates: bumpers bounce, carts and cores absorb, eggs block,
+  // and an active fusion beam multiplies like a gate.
+  function lateGates(hz) {
+    const out = [];
+    for (const b of hz.bumpers || []) out.push({ t: 'bumper', x: b.x, d: b.d, w: 2 * b.r + 0.7, v: b.v, kick: b.kick, r: b.r });
+    for (const c of hz.carts || []) if (c.prog < c.need) out.push({ t: 'cart', x: c.x, d: c.d, w: 2.0, need: c.need, prog: c.prog });
+    for (const e of hz.eggs || []) out.push({ t: 'egg', x: e.x, d: e.d, w: e.w + 0.5, hp: e.hp });
+    for (const f of hz.fusion || []) {
+      if (f.active > 0) out.push({ t: 'mul', v: f.v, x: (f.lo + f.hi) / 2, d: f.d, w: f.hi - f.lo - 1.2 });
+      else for (const c of f.cores) if (!c.full) out.push({ t: 'core', x: c.x, d: f.d, w: 2.0, need: f.need, prog: c.prog, partner: f.cores.some((o) => o !== c && o.full) });
+    }
+    return out;
   }
   const faceF = (o) => (o.t === 'mul' ? o.v : o.t === 'add' ? o.v + 1 : 1 / o.v);
   let BELTS = [];
@@ -25,7 +38,14 @@ window.__policies = (() => {
         const seal = gates.find(g => g.id === q.requires);
         if (!seal || seal.d > d0 && Math.abs(x - seal.x) > seal.w / 2 - 0.15) continue;
       }
-      if (q.t === 'tesla' && q.active) continue;
+      if ((q.t === 'tesla' || q.t === 'hypno') && q.active) continue;
+      if (q.t === 'bank') { if (!q.cooling) m *= (q.max || 5) * 0.5; continue; }
+      if (q.t === 'bumper') {
+        if (depth > 3) return { m, stop: null, pre: m };
+        const side = x >= q.x ? 1 : -1, nx = Math.max(-6.3, Math.min(6.3, q.x + side * (q.r + q.kick)));
+        const r = walk(nx, q.d + q.r + 1.6, gates.filter((o) => o !== q), depth + 1);
+        return { m: m * q.v * r.m, stop: r.stop, pre: m * q.v * (r.stop ? r.pre : r.m), after: r.after, x2: nx };
+      }
       const on = q.phase ? q.phase.on / q.phase.period : 1;
       if (on < 1 && !BLK.has(q.t)) {
         const f = q.t === 'mul' ? q.v : q.t === 'add' ? q.v + 1 : q.t === 'div' ? 1 / q.v : 1;
@@ -63,7 +83,7 @@ window.__policies = (() => {
     starHit = false;
     const st = g.state;
     if (st.phase !== 'play' && st.phase !== 'intro') return;
-    const gates = g.gates(), hz = g.hazards();
+    const hz = g.hazards(), gates = g.gates().concat(lateGates(hz));
     BELTS = hz.belts || [];
     const flux = g.snapshot().flux;
     // a rolling ball close to the cannon costs lives: shoot it down first
@@ -95,6 +115,9 @@ window.__policies = (() => {
         const fill = (q.need - q.prog) / (flux * r.pre);
         score = fill < 10 ? 1e30 * r.pre : r.pre * 0.05;
       }
+      else if (q.t === 'cart') score = (q.need - q.prog) / (flux * r.pre) < 10 ? 1e29 * r.pre : r.pre * 0.05;
+      else if (q.t === 'core') score = (q.need - q.prog) / (flux * r.pre) < 8 ? (q.partner ? 1e29 : 1e28) * r.pre : r.pre * 0.05;
+      else if (q.t === 'hypno') score = (q.need - q.prog) / (flux * r.pre) < 8 && st.redUnits > 12 ? 1e28 * r.pre : r.pre * 0.05;
       else if (q.t === 'tesla') score = (q.need - q.prog) / (flux * r.pre) < 12 ? 1e29 * r.pre : r.pre * 0.05;
       else if (q.t === 'heart') {
         const fill = (q.need - q.prog) / (flux * r.pre);
@@ -115,7 +138,6 @@ window.__policies = (() => {
       if (score > best * 1.0001) { best = score; bx = x; }
     }
     // hysteresis so the stream doesn't jitter between equal options
-    const rc = walk(cur, 0, gates, 0);
     if (hold > 0) hold--;
     if (starHit) { starRun++; if (starRun > 60) { starRun = 0; starT = 80; } } else starRun = 0;
     if (danger(cur)) { cur = bx; hold = 3; }

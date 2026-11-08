@@ -2,15 +2,16 @@
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 const levelSelection = process.argv.find(arg => arg.startsWith('--levels='));
-const campaignLevels = levelSelection ? [...new Set(levelSelection.slice(9).split(',').map(Number))] : Array.from({length:20},(_,i)=>i+1);
-if (!campaignLevels.length || campaignLevels.some(level => !Number.isInteger(level) || level < 1 || level > 20)) throw new Error('--levels must contain world numbers from 1 to 20.');
+const WORLDS = 50;
+const campaignLevels = levelSelection ? [...new Set(levelSelection.slice(9).split(',').map(Number))] : Array.from({length:WORLDS},(_,i)=>i+1);
+if (!campaignLevels.length || campaignLevels.some(level => !Number.isInteger(level) || level < 1 || level > WORLDS)) throw new Error(`--levels must contain world numbers from 1 to ${WORLDS}.`);
 const executablePath = process.env.CHROME_PATH || [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
   '/usr/bin/chromium', '/usr/bin/chromium-browser',
 ].find(path => fs.existsSync(path));
 if (!executablePath) throw new Error('Set CHROME_PATH to a Chrome or Chromium executable.');
-const browser = await puppeteer.launch({ executablePath, headless: true });
+const browser = await puppeteer.launch({ executablePath, headless: true, protocolTimeout: 900000, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
   const page = await browser.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -39,7 +40,7 @@ try {
     },campaignLevels);
     for (const run of campaign) console.log(`L${run.level} ${run.result} stages=${run.times.join('/')}s hearts=${run.lives}`);
     fs.mkdirSync(new URL('./out/', import.meta.url), { recursive: true });
-    const report = campaignLevels.length === 20 && campaignLevels.every((level,i)=>level===i+1) ? 'campaign.json' : `campaign-${campaignLevels.join('-')}.json`;
+    const report = campaignLevels.length === WORLDS && campaignLevels.every((level,i)=>level===i+1) ? 'campaign.json' : `campaign-${campaignLevels.join('-')}.json`;
     fs.writeFileSync(new URL('./out/'+report, import.meta.url), JSON.stringify(campaign, null, 2));
     if (campaign.some(run => run.result !== 'won') || errors.length) process.exitCode = 1;
   }
