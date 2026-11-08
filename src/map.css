@@ -2,6 +2,7 @@
 .campaign-head { width: min(880px, 100%); display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 4px 20px 12px; }
 #menu #title { font-size: clamp(30px, 5vw, 46px); text-align: left; letter-spacing: -1.5px; line-height: 1; margin: 0; -webkit-text-stroke: 0; text-shadow: 0 4px 0 #0a2034; white-space: nowrap; }
 #menu #title b { margin-left: 0; color: #ffa47d; }
+#menu #title i { font-style: normal; color: #f2fbff; }
 #menu #sub { margin: 9px 0 0; text-align: left; color: #c4d9e6; font-size: 12px; }
 .campaign-route { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 #mapcount { font-family: system-ui, sans-serif; font-size: 11px; color: #c4d9e6; }

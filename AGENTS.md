@@ -1,4 +1,4 @@
-# Swarm Surge
+# ThatAdGame
 
 ## Purpose and architecture
 Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScript ES modules and vendored Three.js, with no build step or backend.
@@ -90,6 +90,7 @@ Browser crowd shooter with 20 worlds and three stages per world. Plain JavaScrip
 - Physical mobile devices, sustained hardware performance and human difficulty remain unvalidated. Keep further checks focused.
 
 ## Preferences and do not
+- The product name is ThatAdGame (title, title screen, map header, README). The `swarm-*` localStorage keys and the Railway project name SwarmSurge are identifiers, not branding: keep them so saves and deployment survive. Gameplay uses of "swarm" (enemy swarms, Swarm Master) are thematic and stay.
 - Keep artifacts in English and never use em dashes. Preserve the game's visual identity, biome map, localStorage progress, intermediate ranks and deliberately overpowered routes.
 - Make frequent logical commits. Push each change on its own branch, then use a PR and `gh pr merge --squash --delete-branch` immediately. The user authorized this workflow without another confirmation. Keep Zer0codestuff as sole author.
 - Do not push directly to main, add agent signatures or include unrelated user changes.
