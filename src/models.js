@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
+import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
 import * as S from './scenery-assets.js';
 import { raiderGeometry } from './troop-forms.js';
 import { sculptedWeaponGeometry } from './weapon-assets.js';
@@ -440,14 +441,14 @@ export function buildWorld(theme, len) {
     markings.setMatrixAt(i * 2 + side, matrix);
   }
   g.add(markings);
-  const glowRoad = ['neon', 'void', 'casino', 'crystal', 'blackhole'].includes(theme);
+  const glowRoad = ['neon', 'void', 'casino', 'crystal', 'blackhole'].includes(theme) || LATE_GLOW_ROAD.has(theme);
   const lineMat = new THREE.MeshBasicMaterial({ color: glowRoad ? T.rail : 0xf4f4f4 });
   for (const x of [-6.7, 6.7]) {
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.2, total), lineMat); l.rotation.x = -Math.PI / 2; l.position.set(x, 0.01, zc); g.add(l);
   }
   // rails + posts on both sides
   const railMat = glowRoad ? new THREE.MeshBasicMaterial({ color: T.rail }) : lam(T.rail);
-  const postColor = theme === 'mob' ? 0x8a8f99 : theme === 'candy' ? 0xff6ab0 : theme === 'sky' ? 0xe0c070 : 0x8a6a4a;
+  const postColor = LATE_POSTS[theme] ?? (theme === 'mob' ? 0x8a8f99 : theme === 'candy' ? 0xff6ab0 : theme === 'sky' ? 0xe0c070 : 0x8a6a4a);
   for (const sx of [-1, 1]) {
     const r = mesh(new THREE.BoxGeometry(0.4, 0.75, total), railMat, sx * 7.6, 0.37, zc); r.receiveShadow = true; g.add(r);
     g.add(mesh(new THREE.BoxGeometry(0.14, 0.14, total), lam(postColor), sx * 8.2, 1.0, zc, false));

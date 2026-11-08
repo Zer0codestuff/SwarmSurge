@@ -21,6 +21,8 @@
 import { prepareCampaign } from './campaign.js';
 import { ladder, stack } from './levelkit.js';
 import { MORE_LEVELS } from './levels2.js';
+import { LATE_LEVELS } from './levels3.js';
+import { LATE_PALETTES } from './biomes-late.js';
 
 export const LEVELS = prepareCampaign([
   // ------------------------------------------------------------------ 1
@@ -612,6 +614,7 @@ export const LEVELS = prepareCampaign([
     ],
   },
   ...MORE_LEVELS,
+  ...LATE_LEVELS,
 ]);
 
 export const THEMES = {
@@ -635,4 +638,5 @@ export const THEMES = {
   tomb: { sky: 0xffc880, fog: 0xf0c080, ground: 0xe0b070, road: 0xb09060, rail: 0xd8a040, tower: 0xc89a50, roof: 0x2a5aa0 },
   storm: { sky: 0x3a4a5a, fog: 0x5a6a7a, ground: 0x5a6a5a, road: 0x5a5e66, rail: 0xfff06a, tower: 0x3a4a6a, roof: 0xfff06a },
   blackhole: { sky: 0x02010a, fog: 0x0a0520, ground: 0x100818, road: 0x1a1430, rail: 0xff9a3a, tower: 0x1a0a2a, roof: 0xff9a3a },
+  ...LATE_PALETTES,
 };

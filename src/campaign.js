@@ -47,7 +47,9 @@ const LESSONS = {
   rapid: 'Rapid doubles your firing rate. Stack it to reach x8.',
   squad: 'Deploy an escort cannon. It mirrors your guns and adds two armor points.',
 };
-const FLANK_TYPES = { jungle:4, neon:7, candy:6, moon:5, sky:7, void:9, factory:8, casino:2, coral:4, spooky:9, arena:3, crystal:6, volcano:12, tomb:10, storm:7, blackhole:9 };
+import { LATE_FLANKS } from './biomes-late.js';
+
+const FLANK_TYPES = { ...LATE_FLANKS, jungle:4, neon:7, candy:6, moon:5, sky:7, void:9, factory:8, casino:2, coral:4, spooky:9, arena:3, crystal:6, volcano:12, tomb:10, storm:7, blackhole:9 };
 const VAULTS = [
   { world: 4, stage: 1, x: 5.65, d: 30.5, hp: 1000, t: 'ice', prizes: [34, 37, 40] },
   { world: 6, stage: 2, x: 5.65, d: 31, hp: 8000, t: 'fence', prizes: [34.5, 37.5, 40.5] },
@@ -74,7 +76,7 @@ export function prepareCampaign(levels) {
   return levels.map((level, li) => ({
     ...level,
     stages: level.stages.map((original, si) => {
-      const s = structuredClone(original), route = ROUTES[li];
+      const s = structuredClone(original), route = level.route ?? ROUTES[li];
       s.surge = [1, 8, 9, 16, 19].includes(li) && si === 2 || li === 1;
       s.targetTime = si === 2 ? 32 : s.surge ? 16 : 23;
       // Equipment stays generous. Defenders become relevant sooner without adding more bodies.
@@ -90,7 +92,7 @@ export function prepareCampaign(levels) {
       if (s.tower) s.tower = Math.max(250, Math.round(s.tower * route[3]));
       if (s.boss) {
         const endurance = s.surge ? 1 : li === 0 ? 1.2 : li === 7 ? 1.25 : 1.8;
-        s.boss.hp *= (li < 2 ? 0.9 : 0.8) * endurance * BOSS_HP[li];
+        s.boss.hp *= (li < 2 ? 0.9 : 0.8) * endurance * (BOSS_HP[li] ?? 1);
         if (!s.surge && li >= 2) {
           // Moon already alternates crushers across both lanes; another lane wipe stalls its army.
           if (li !== 7) s.boss.sweep = true;

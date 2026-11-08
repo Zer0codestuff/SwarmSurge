@@ -12,6 +12,7 @@ import { createTutorials } from './tutorials.js';
 import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
 import { TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
+import { LATE_LIGHTS } from './biomes-late.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -648,7 +649,7 @@ function buildStage(sd, i, root, theme) {
     const every = {
       king: 5.2, jelly: 4.6, skeleton: 4.6, titan: 3.3, golem: 3.8, moon: 3.4, dragon: 4.2, storm: 3.8, brute: 4.4, robot: 4.0,
       drill: 4.2, dice: 4.4, kraken: 4.0, pumpkin: 4.2, commander: 3.8, spider: 4.0, magma: 3.8, pharaoh: 4.0, thunder: 3.4, emperor: 3.2,
-    }[sd.boss.type];
+    }[sd.boss.type] ?? 3.6;
     const b = {
       type: sd.boss.type, hp: sd.boss.hp, max: sd.boss.hp, speed: sd.boss.speed, push: sd.boss.push ?? 40, startZ: z0 - 60, x: 0, z: z0 - 60,
       model: m, visualScale: m.group.scale.clone(), visualState: {}, alive: true, every: (sd.boss.every ?? every) * (sd.boss.cadence ?? 1), sweep: !!sd.boss.sweep, atkT: sd.boss.opening ?? 4, atk: 0, atkN: 0, label: makeLabel('boss'), flash: 0, dead: 0,
@@ -722,6 +723,7 @@ const LIGHTS = {
   tomb: [0xffffff, 0xb08a5a, 1.75, 0xfff0c8, 2.3],
   storm: [0xd0e0ff, 0x404a50, 1.5, 0xe0e8ff, 1.9],
   blackhole: [0xd0b0ff, 0x201030, 1.45, 0xffd0a0, 1.9],
+  ...LATE_LIGHTS,
 };
 function applyTheme(theme) {
   const T = THEMES[theme];
