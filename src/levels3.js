@@ -1319,7 +1319,7 @@ const WORLDS = [
   },
 ];
 
-// Fort and boss HP per stage, calibrated with the seed-42 smart bot (tools/calibrate-late.mjs).
+// Fort and boss HP per stage, hand-tuned from smart-bot balance runs over five seeds.
 const HP = [
   [6.65e3, 2.72e3, 6.76e5], // 21
   [1.08e5, 1.2e5, 5.65e5], // 22
