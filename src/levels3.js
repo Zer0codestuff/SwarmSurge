@@ -543,7 +543,7 @@ const WORLDS = [
     stages: [
       {
         tip: 'The fading x8 only exists while it glows. Push the cart in between.',
-        waves: { every: 2.8, swarm: 10, ghost: 2, ramp: 0.45 },
+        waves: { every: 3.0, swarm: 10, ghost: 1, ramp: 0.4 },
         carts: [{ x: 4.6, d1: 14, d2: 54, needF: 0.05, dmg: 0.18 }],
         gates: [
           { t: 'mul', v: 2, x: -3.3, d: 9, w: 5.6 },
@@ -554,7 +554,7 @@ const WORLDS = [
       },
       {
         tip: 'Fade gates on every lane. Spook the cart into the saloon.',
-        waves: { every: 2.7, swarm: 11, ghost: 3, ramp: 0.45 },
+        waves: { every: 2.8, swarm: 11, ghost: 2, ramp: 0.4 },
         walls: [{ x: 0, d1: 12, d2: 40 }],
         carts: [{ x: -3.3, d1: 30, d2: 54, needF: 0.04, dmg: 0.16 }],
         gates: [
@@ -568,7 +568,7 @@ const WORLDS = [
       {
         tip: 'THE SKELETON SHERIFF! Bone bands sweep the street. Light the cart!',
         boss: { type: 'skeleton', speed: 0.5 },
-        waves: { every: 2.7, swarm: 12, ghost: 3, ramp: 0.45 },
+        waves: { every: 2.8, swarm: 12, ghost: 2, ramp: 0.4 },
         carts: [{ x: 0, d1: 24, d2: 56, needF: 0.03, dmg: 0.12 }],
         gates: [
           ...ladder(0, 9, 2, 4, 2.6, 12.9),
@@ -1323,10 +1323,10 @@ const WORLDS = [
 const HP = [
   [6.65e3, 2.72e3, 6.76e5], // 21
   [1.08e5, 1.2e5, 5.65e5], // 22
-  [2e3, 3.8e4, 3.22e6], // 23
+  [1.4e3, 3.8e4, 3.22e6], // 23
   [9.32e3, 3.73e4, 1.13e6], // 24
   [9.79e3, 4.62e4, 1.62e5], // 25
-  [5.19e3, 1.5e4, 6.48e6], // 26
+  [4.2e3, 1.5e4, 6.48e6], // 26
   [2e3, 7.14e4, 1.89e5], // 27
   [1.14e4, 2.89e4, 7.93e5], // 28
   [2e3, 7e5, 1.18e6], // 29

@@ -98,10 +98,13 @@ function prepareLate(level, li, original, si) {
   if (!s.surge) {
     // Late worlds restart from one barrel, so a flank carries a fixed toughness budget: heavy kinds
     // arrive as a weakened pair instead of a full pack that the raw cannon stream cannot stop.
-    const kind = FLANK_TYPES[level.theme] ?? 4, base = RED_HP[kind] ?? 1, count = base >= 5 ? 2 : 3;
+    // Openers get one flank: a second one landing on a slow first stage snowballed into losses.
+    // Ghosts phase past troops and cover, so they come as a pair with a smaller budget.
+    const kind = FLANK_TYPES[level.theme] ?? 4, base = RED_HP[kind] ?? 1, ghost = kind === 9;
+    const count = base >= 5 || ghost ? 2 : 3;
     s.flanks = {
-      kind, count, start: si === 2 ? 8 : 8.5, every: 10, limit: si === 2 ? 1 : 2, warning: 1.4,
-      firstSide: (li + si) % 2, hpScale: Math.min(1, 9 / (count * base)),
+      kind, count, start: si === 2 ? 8 : 8.5, every: 10, limit: si === 1 ? 2 : 1, warning: 1.4,
+      firstSide: (li + si) % 2, hpScale: Math.min(1, (ghost ? 4 : 9) / (count * base)),
     };
   }
   const target = s.boss ? s.boss.hp : s.tower;
