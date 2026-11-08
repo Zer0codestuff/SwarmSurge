@@ -12,6 +12,8 @@ import { createTutorials } from './tutorials.js';
 import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
 import { TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
+import { LATE_LIGHTS } from './biomes-late.js';
+import * as PL from './props-late.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -43,10 +45,10 @@ const WAVE_KINDS = { bomber: 2, shielder: 3, runner: 4, splitter: 6, drone: 7, c
 const GATE_COLORS = {
   mul: 0xa13cff, add: 0x22a6ff, div: 0xff2a3a, barrier: 0xe0202c, upgrade: 0xffc21a, mega: 0xff9a1a,
   charge: 0x18c87a, nuke: 0x3a3f4a, star: 0xff3fd0, gold: 0xffc21a, blue: 0x22a6ff,
-  heart: 0xff3a7a, redmul: 0xffd21a, redadd: 0xffd21a,
+  heart: 0xff3a7a, redmul: 0xffd21a, redadd: 0xffd21a, hypno: 0x9a3aff, bank: 0xffb02a,
 };
 const BLOCKERS = new Set(['barrier', 'ice', 'fence', 'statue']);
-const ABSORBERS = new Set(['upgrade', 'nuke', 'star', 'heart', 'hangar', 'tesla']);
+const ABSORBERS = new Set(['upgrade', 'nuke', 'star', 'heart', 'hangar', 'tesla', 'hypno']);
 const REDGATES = new Set(['redmul', 'redadd']); // enemy gates: multiply red units, blue units smash them
 const SQUAD_OFF = [-1.8, 1.8, -3.6, 3.6];
 const MAX_LIVES = 15;
@@ -193,7 +195,9 @@ function makePool(N) {
   P.st = new Uint8Array(N);
   P.weapon = new Uint8Array(N);
   P.detail = new Uint8Array(N);
-  P.arrs = [P.x, P.z, P.px, P.pz, P.vx, P.vz, P.hp, P.phase, P.flash, P.cm, P.sc, P.rad, P.wake, P.age, P.mx, P.stk, P.air, P.adur, P.ax0, P.az0, P.ax1, P.az1, P.mask, P.mask2, P.kind, P.st, P.shot, P.weapon, P.burn, P.burnDamage, P.chill, P.detail];
+  P.bump = new Uint8Array(N);
+  P.fuse = new Uint8Array(N);
+  P.arrs = [P.x, P.z, P.px, P.pz, P.vx, P.vz, P.hp, P.phase, P.flash, P.cm, P.sc, P.rad, P.wake, P.age, P.mx, P.stk, P.air, P.adur, P.ax0, P.az0, P.ax1, P.az1, P.mask, P.mask2, P.kind, P.st, P.shot, P.weapon, P.burn, P.burnDamage, P.chill, P.detail, P.bump, P.fuse];
   return P;
 }
 const B = makePool(MAX_BLUE), R = makePool(MAX_RED);
@@ -212,7 +216,7 @@ function spawn(P, x, z, hp, kind, mask = 0, mask2 = 0) {
   P.vx[i] = P.vz[i] = 0; P.hp[i] = hp; P.kind[i] = kind; P.mask[i] = mask; P.mask2[i] = mask2;
   P.phase[i] = Math.random() * 6.28; P.flash[i] = 0; P.cm[i] = 1; P.sc[i] = 1; P.rad[i] = 0.3; P.st[i] = 0; P.wake[i] = 0; P.age[i] = 0; P.mx[i] = hp; P.stk[i] = 0; P.air[i] = 0; P.adur[i] = 0; P.shot[i] = Math.random() * 0.9; P.weapon[i] = P === B ? nextTroopWeapon() : 0;
   P.burn[i] = P.burnDamage[i] = P.chill[i] = 0;
-  P.detail[i] = 0;
+  P.detail[i] = P.bump[i] = P.fuse[i] = 0;
   return i;
 }
 function compact(P) {
@@ -540,6 +544,14 @@ function refreshGate(g) {
   } else if (t === 'heart') M.drawLabel(L, '+' + (g.def.v ?? 1) + ' ♥', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffd0e0');
   else if (t === 'hangar') M.drawLabel(L, 'AIR WING', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
   else if (t === 'tesla') M.drawLabel(L, g.active ? 'ZAP!' : 'TESLA', g.active ? 'ONLINE' : `${fmt(g.prog)}/${fmt(g.need)}`, g.active ? 1 : g.prog / g.need, '#bff6ff');
+  else if (t === 'hypno') {
+    if (g.active) M.drawLabel(L, 'HYPNO!', `ENEMIES JOIN ${Math.ceil(g.activeT)}s`, g.activeT / (g.def.dur ?? 6), '#c8ffe8');
+    else M.drawLabel(L, 'HYPNO', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#e4c8ff');
+  } else if (t === 'bank') {
+    const ripe = g.def.ripe ?? 7, max = g.def.max ?? 5;
+    if (g.bankT >= 0) M.drawLabel(L, 'HARVEST x' + fmt(max), `${fmtHp(g.stored)} · ${Math.ceil(ripe - g.bankT)}s`, g.bankT / ripe, '#fff0a0');
+    else M.drawLabel(L, 'HARVEST x' + fmt(max), g.coolUntil > (G.stage?.time ?? 0) ? 'REGROWING' : 'PLANT TROOPS', -1, '#fff0a0');
+  }
   else if (REDGATES.has(t)) M.drawLabel(L, (t === 'redmul' ? 'x' : '+') + g.def.v, 'SMASH ' + fmtHp(g.hp), -1, '#c81020');
 }
 function buildGateModel(gd, cur) {
@@ -552,6 +564,8 @@ function buildGateModel(gd, cur) {
   if (gd.t === 'jump') return P.buildJumpPad(gd.w);
   if (gd.t === 'hangar') return P.buildHangar(gd.w);
   if (gd.t === 'tesla') return P.buildTesla(gd.w);
+  if (gd.t === 'hypno') return PL.buildHypnoGate(gd.w);
+  if (gd.t === 'bank') return PL.buildBank(gd.w);
   return M.buildGate(gd.w, gateColor(gd, cur), gd.mega);
 }
 function buildStage(sd, i, root, theme) {
@@ -559,7 +573,7 @@ function buildStage(sd, i, root, theme) {
   const z0 = -i * STAGE_GAP;
   const st = {
     def: sd, i, z0, group, gates: [], walls: [], saws: [], spawners: [], crushers: [], turrets: [], exits: [],
-    belts: [], pillars: [], tornados: [], holes: [], balls: [], metT: sd.meteors?.every ?? 0,
+    belts: [], pillars: [], tornados: [], holes: [], balls: [], bumpers: [], carts: [], eggs: [], fusions: [], metT: sd.meteors?.every ?? 0,
     tower: null, boss: null, fort: null, waveT: 2.0, waveN: 0, flankT: sd.flanks?.start ?? Infinity, flankN: 0, time: 0, enraged: false, comboNext: 10,
   };
   sd.gates?.forEach((gd, k) => {
@@ -569,6 +583,7 @@ function buildStage(sd, i, root, theme) {
       def: gd, cur, bit: (1 << (k & 31)) >>> 0, hi: k >= 32, baseX: gd.x, x: gd.x, z: z0 - gd.d, w: gd.w, alive: true,
       hp: gd.hp || 0, prog: 0, need: gd.need || 0, val: gd.v || 1, fed: 0, flipT: 0, flipIdx: 0, flash: 0, model,
       ph: gd.slide?.ph ?? Math.random() * 6.28, dying: 0, dirty: true, refT: 0, boost: 1, on: !gd.requires, locked: !!gd.requires, spin: 0, active: false, zapT: 0,
+      activeT: 0, uses: 0, stored: 0, bankT: -1, coolUntil: 0, cm: 1,
     };
     g.textScale = gd.requires ? 3.4 / model.text.geometry.parameters.width : gd.vault ? 4.8 / model.text.geometry.parameters.width : 1;
     if (gd.requires || gd.vault) {
@@ -619,6 +634,7 @@ function buildStage(sd, i, root, theme) {
     st.holes.push({ def: hd, x: hd.x, z: z0 - hd.d, r: hd.r, prog: 0, need: hd.need, alive: true, model: m, dying: 0 });
   });
   sd.balls?.forEach((bd) => addBall(st, root, bd.x, z0 - bd.d, bd.hp, bd.r ?? 2.4, bd.speed ?? 1.6, bd));
+  buildLateMechanics(sd, st, root, z0);
   sd.saws?.forEach((sw) => {
     const m = M.buildSaw(sw.r);
     m.group.position.set(sw.x, 0, z0 - sw.d);
@@ -648,7 +664,8 @@ function buildStage(sd, i, root, theme) {
     const every = {
       king: 5.2, jelly: 4.6, skeleton: 4.6, titan: 3.3, golem: 3.8, moon: 3.4, dragon: 4.2, storm: 3.8, brute: 4.4, robot: 4.0,
       drill: 4.2, dice: 4.4, kraken: 4.0, pumpkin: 4.2, commander: 3.8, spider: 4.0, magma: 3.8, pharaoh: 4.0, thunder: 3.4, emperor: 3.2,
-    }[sd.boss.type];
+      jack: 4.2, flipper: 4.0, ringmaster: 4.0, mesmer: 4.4, locomotive: 3.8, scarecrow: 4.0, panda: 4.2, shogun: 3.6, trex: 4.0, roc: 4.0, clockwork: 3.6, overlord: 3.2,
+    }[sd.boss.type] ?? 3.6;
     const b = {
       type: sd.boss.type, hp: sd.boss.hp, max: sd.boss.hp, speed: sd.boss.speed, push: sd.boss.push ?? 40, startZ: z0 - 60, x: 0, z: z0 - 60,
       model: m, visualScale: m.group.scale.clone(), visualState: {}, alive: true, every: (sd.boss.every ?? every) * (sd.boss.cadence ?? 1), sweep: !!sd.boss.sweep, atkT: sd.boss.opening ?? 4, atk: 0, atkN: 0, label: makeLabel('boss'), flash: 0, dead: 0,
@@ -722,6 +739,7 @@ const LIGHTS = {
   tomb: [0xffffff, 0xb08a5a, 1.75, 0xfff0c8, 2.3],
   storm: [0xd0e0ff, 0x404a50, 1.5, 0xe0e8ff, 1.9],
   blackhole: [0xd0b0ff, 0x201030, 1.45, 0xffd0a0, 1.9],
+  ...LATE_LIGHTS,
 };
 function applyTheme(theme) {
   const T = THEMES[theme];
@@ -1207,6 +1225,7 @@ function detonateNuke(S, g, mult = 5, label = 'NUKE! ARMY x5') {
   for (const s of [...S.spawners, ...S.turrets]) if (s.alive) { s.hp = 0; s.flash = 1; }
   for (const q of S.gates) if (q.alive && REDGATES.has(q.def.t)) { q.alive = false; q.dying = 1; burst(q.x, 1, q.z, PCOL.gold, 20, 6); }
   for (const b of S.balls) if (b.alive) b.hp = 0;
+  for (const e of S.eggs) if (e.alive) smashEgg(S, e);
   for (const e of G.effects) if (e.kind === 'tele') { e.life = Math.min(e.life, 0.01); e.onHit = () => {}; }
   const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
   // only the first blast of each nuke hits the fort/boss (refills still pump the army and clear the field)
@@ -1288,6 +1307,10 @@ function absorb(S, g, i) {
         if (!TURBO) { sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.pink, 50, 0.5, 1.2); hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit'); }
         sound.play('upgrade');
         g.need = Math.round(g.need * 2.5); g.prog = 0;
+      } else if (t === 'hypno') {
+        g.active = true; g.activeT = g.def.dur ?? 6; g.uses++;
+        banner('HYPNO ONLINE! ENEMIES JOIN YOU', 'pink', 1.3);
+        sound.play('warp');
       } else if (t === 'tesla') {
         g.active = true; g.zapT = 0.2;
         banner('TESLA ONLINE!', 'gold', 1.2);
@@ -1371,6 +1394,7 @@ function collideBalls(S, i) {
 function moveBlue(S, dt) {
   const boss = S.boss && S.boss.alive ? S.boss : null;
   const tower = S.tower && S.tower.alive ? S.tower : null;
+  const late = S.bumpers.length + S.carts.length + S.eggs.length + S.fusions.length > 0;
   const k = Math.min(1, dt * 5);
   for (let i = 0; i < B.n; i++) {
     if (B.hp[i] <= 0) continue;
@@ -1434,7 +1458,8 @@ function moveBlue(S, dt) {
     for (const g of S.gates) {
       if (!g.alive || !g.on || !(pz > g.z && z <= g.z) || Math.abs(x - g.x) > g.w / 2 + 0.05) continue;
       const t = g.def.t;
-      if (t === 'tesla' && g.active) continue;
+      if ((t === 'tesla' || t === 'hypno') && g.active) continue;
+      if (t === 'bank') { if (S.time < g.coolUntil) continue; bankDeposit(g, i); break; }
       if (BLOCKERS.has(t) || ABSORBERS.has(t) || REDGATES.has(t)) { absorb(S, g, i); if (B.hp[i] <= 0) break; continue; }
       if (t === 'portal') { teleport(S, g, i); break; }
       if (t === 'loop') { if (loop(S, g, i)) break; continue; }
@@ -1449,6 +1474,7 @@ function moveBlue(S, dt) {
     if (S.saws.length && sawHit(S, x, z)) { hurt(i, 4, 0.12); if (B.hp[i] <= 0) continue; }
     for (const p of S.pillars) if (p.alive && Math.abs(x - p.x) < 1.05 && Math.abs(z - p.z) < 1.05) { hitThing(p, i, PCOL.sand); break; }
     if (B.hp[i] <= 0) continue;
+    if (late) { lateContacts(S, i); if (B.hp[i] <= 0 || B.adur[i] > 0) continue; }
     // targets
     if (tower && z <= tower.z + 1.1) { damageTarget(tower, i, PCOL.red); continue; }
     for (const s of S.spawners) {
@@ -1525,12 +1551,15 @@ function moveRed(S, dt) {
     if (!T.fly) for (const bt of S.belts) if (z > bt.zTop && z < bt.zBot && Math.abs(x - bt.x) < bt.w / 2) x += bt.v * dt;
     x = clamp(x, -XLIM, XLIM);
     for (const g of S.gates) {
-      if (!g.alive || !g.on || !REDGATES.has(g.def.t) || !(R.pz[i] < g.z && z >= g.z) || Math.abs(x - g.x) > g.w / 2) continue;
+      if (!g.alive || !g.on || !(R.pz[i] < g.z && z >= g.z) || Math.abs(x - g.x) > g.w / 2) continue;
+      if (g.def.t === 'hypno') { if (g.active) { hypnotize(g, i, x, z); break; } continue; }
+      if (!REDGATES.has(g.def.t)) continue;
       const m = g.hi ? R.mask2 : R.mask;
       if (m[i] & g.bit) continue;
       m[i] |= g.bit;
       redGate(g, i, x, z);
     }
+    if (R.hp[i] <= 0) continue;
     for (const p of S.pillars) {
       if (!p.alive || Math.abs(z - p.z) > 1.0) continue;
       const hw = 0.95 + R.rad[i];
@@ -1835,13 +1864,14 @@ function attackSweep(b) {
   }, true);
 }
 // spider web: a sticky band where your units crawl at 30% speed
-function attackWeb(b, x) {
+function attackWeb(b, x, tint = 0xffffff) {
   const z1 = b.z + 3, len = 18;
   addTelegraph('band', x, z1 + len / 2, 3.6, len, 1.0, () => {
     let mesh = null;
     if (!TURBO) {
       mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.6, len), P.webMaterial());
       mesh.material.map.repeat.set(1, len / 3.6);
+      mesh.material.color.setHex(tint);
       mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, 0.06, z1 + len / 2);
       G.root.add(mesh);
     }
@@ -1898,6 +1928,28 @@ function bossAttack(S, b) {
     case 'magma': attackBreath(b, PCOL.orange); for (let k = 0; k < 2; k++) meteorStrike(S, 2.2, b); break;
     case 'pharaoh': attackBand(b, pickX(), 22, PCOL.sand, 10); summon(b, 10, 3); break;
     case 'thunder': attackLightning(b, 5); if (b.atkN % 2 === 0) summon(b, 7, 4); break;
+    case 'jack': attackBoulders(b, 3, 0xff5a8a); summon(b, 4, 5); break;
+    case 'flipper': if (b.atkN % 2 === 0) attackTilt(b); else attackBand(b, pickX(), 22, PCOL.pink, 6); break;
+    case 'ringmaster': summon(b, 6, 5); if (b.atkN % 3 === 0) attackBall(S, b, 0.006, 1.8); else attackBand(b, pickX(), 20, PCOL.gold, -1); break;
+    case 'mesmer': attackMesmer(b, pickX()); if (b.atkN % 2 === 0) summon(b, 9, 4); break;
+    case 'locomotive': attackBand(b, pickX(), 28, PCOL.metal, 5); if (b.atkN % 2 === 0) attackBoulders(b, 2, 0x2a2a30); break;
+    case 'scarecrow': summon(b, 7, 6); attackBand(b, pickX(), 20, PCOL.sand, -1); break;
+    case 'panda': attackBoulders(b, 3, 0x6ab04a); if (b.atkN % 2 === 0) attackSlam(b, false); break;
+    case 'shogun': { const x = pickX(); attackBand(b, x, 22, PCOL.red, -1); attackBand(b, clamp(-x, -5, 5), 22, PCOL.red, 3); break; }
+    case 'trex': attackShockwave(b); if (b.atkN % 2 === 0) attackEggs(S, b, 2); break;
+    case 'roc': attackBreath(b, PCOL.ice); attackEggs(S, b, b.atkN % 2 ? 1 : 2); break;
+    case 'clockwork': attackLightning(b, 4); if (b.atkN % 2 === 0) attackWeb(b, pickX(), 0xffd27a); break;
+    case 'overlord': {
+      const m = b.atkN % 7;
+      if (m === 0) attackMesmer(b, pickX());
+      else if (m === 1) { attackBoulders(b, 3, 0x7a4aff); summon(b, 9, 3); }
+      else if (m === 2) attackTilt(b);
+      else if (m === 3) attackLightning(b, 6);
+      else if (m === 4) attackEggs(S, b, 2);
+      else if (m === 5) attackBall(S, b, 0.006);
+      else { attackBreath(b, PCOL.pink); summon(b, 12, 4); }
+      break;
+    }
     case 'emperor': {
       const m = b.atkN % 6;
       if (m === 0) attackBand(b, pickX(), 22, PCOL.purple, 6);
@@ -2150,6 +2202,17 @@ function updateMechanics(S, dt) {
         g.cur = d.opts[k];
       }
     }
+    if (d.t === 'hypno' && g.active && G.phase === 'play') {
+      g.activeT -= dt; g.dirty = true;
+      if (g.activeT <= 0) {
+        g.active = false; g.prog = 0; g.need = Math.round(g.need * 1.8);
+        if (g.uses >= (d.uses ?? 3)) { g.alive = false; g.dying = 1; burst(g.x, 1.5, g.z, PCOL.purple, 30, 6); }
+      }
+    }
+    if (d.t === 'bank' && g.bankT >= 0 && G.phase === 'play') {
+      g.bankT += dt; g.dirty = true;
+      if (g.bankT >= (d.ripe ?? 7)) harvest(S, g);
+    } else if (d.t === 'bank' && g.coolUntil > 0) g.dirty = true;
     if (d.t === 'tesla' && g.active && G.phase === 'play') {
       g.zapT -= dt;
       if (g.zapT <= 0) {
@@ -2245,6 +2308,7 @@ function updateMechanics(S, dt) {
     S.metT -= dt;
     if (S.metT <= 0) { S.metT = S.def.meteors.every * (S.enraged ? 0.6 : 1); for (let k = 0; k < (S.def.meteors.n ?? 1); k++) meteorStrike(S, S.def.meteors.r ?? 2.2); }
   }
+  updateLate(S, dt);
   for (let k = G.zones.length - 1; k >= 0; k--) {
     const zn = G.zones[k];
     zn.life -= dt;
@@ -2253,6 +2317,344 @@ function updateMechanics(S, dt) {
   }
 }
 
+// ---------------------------------------------------------------- world 21-50 mechanics
+//   bumpers: { x, d, r, v, kick, slide }      pinball bumper: multiplies each troop once by v, then bounces it sideways
+//   hypno:   gate { need, dur, v, uses }       fill it, then for dur s every enemy crossing it joins your army
+//   carts:   { x, d1, d2, need, dmg, uses }    push a dynamite cart up its rail with troops; it blasts the target
+//   bank:    gate { max, ripe, cool }          troops planted inside return x max after ripe seconds
+//   eggs:    { x, d, hp, hatch, kind, n, unitHp, relay, scale } smash before the timer or a pack hatches
+//   fusion:  { d, x1, x2, need, hold, dur, v, dmg, uses } charge both cores within hold s: the beam multiplies by v
+function buildLateMechanics(sd, st, root, z0) {
+  sd.bumpers?.forEach((bd, k) => {
+    const m = PL.buildBumper(bd.r ?? 0.9, bd.color ?? 0xff3fae);
+    m.group.position.set(bd.x, 0, z0 - bd.d); root.add(m.group);
+    st.bumpers.push({ def: bd, bit: 1 << (k & 7), x: bd.x, z: z0 - bd.d, r: bd.r ?? 0.9, v: bd.v ?? 2, kick: bd.kick ?? 2.4, ph: bd.slide?.ph ?? k * 1.7, flash: 0, sfxT: 0, model: m, shown: '' });
+  });
+  sd.carts?.forEach((cd) => {
+    const rails = PL.buildRails(cd.d2 - cd.d1 + 0.8);
+    rails.position.set(cd.x, 0, z0 - cd.d1 + 0.6); root.add(rails);
+    const m = PL.buildCart();
+    m.group.position.set(cd.x, 0, z0 - cd.d1); root.add(m.group);
+    st.carts.push({ def: cd, x: cd.x, d: cd.d1, z: z0 - cd.d1, prog: 0, need: cd.need, uses: cd.uses ?? 3, cool: 0, alive: true, speed: 0, flash: 0, model: m });
+  });
+  sd.eggs?.forEach((ed) => addEgg(st, root, ed.x, z0 - ed.d, ed));
+  sd.fusion?.forEach((fd, k) => {
+    const z = z0 - fd.d;
+    const cores = [fd.x1, fd.x2].map((x) => {
+      const m = PL.buildFusionCore();
+      m.group.position.set(x, 0, z); root.add(m.group);
+      return { x, prog: 0, full: false, holdT: 0, flash: 0, model: m };
+    });
+    const beam = PL.buildFusionBeam(), lo = Math.min(fd.x1, fd.x2), hi = Math.max(fd.x1, fd.x2);
+    beam.group.position.set((lo + hi) / 2, 0, z); root.add(beam.group);
+    beam.outer.scale.x = beam.inner.scale.x = beam.floor.scale.x = hi - lo;
+    st.fusions.push({ def: fd, bit: 1 << (k & 7), z, cores, need: fd.need, uses: fd.uses ?? 3, active: 0, alive: true, beam, lo, hi });
+  });
+}
+function addEgg(S, root, x, z, def) {
+  const s = def.scale ?? 1, m = PL.buildEgg(s, def.spots ?? 0x7ab84a);
+  m.group.position.set(x, 0, z); root.add(m.group);
+  const e = { def, x, z, s, hp: def.hp, max: def.hp, t: def.hatch ?? 10, alive: true, relayT: 0, flash: 0, model: m };
+  S.eggs.push(e);
+  return e;
+}
+function bankDeposit(g, i) {
+  g.stored = Math.min(1e36, g.stored + B.hp[i]);
+  g.cm = Math.max(g.cm, B.cm[i]);
+  if (g.bankT < 0) { g.bankT = 0; sound.play('gate'); }
+  g.flash = 1; g.dirty = true;
+  if (i % 4 === 0) burst(B.x[i], 0.8, g.z, PCOL.gold, 2, 2.5);
+  B.hp[i] = 0;
+}
+function harvest(S, g) {
+  const mult = g.def.max ?? 5, total = g.stored * mult;
+  const room = Math.max(1, Math.min(24, B.N - RESERVE - B.n));
+  const share = Math.min(MAX_POWER, total / room), cm = Math.min(1e37, g.cm * mult);
+  let first = -1;
+  for (let k = 0; k < room; k++) {
+    const j = spawn(B, clamp(g.x + rand(-g.w / 2 + 0.3, g.w / 2 - 0.3), -XLIM, XLIM), g.z - 0.6 - rand(0, 1.6), share, 0);
+    if (j < 0) break;
+    B.vz[j] = -BLUE_SPEED; B.flash[j] = 1; B.cm[j] = cm;
+    if (first < 0) first = j;
+  }
+  if (first >= 0) comboCheck(S, first, g.x, g.z);
+  burst(g.x, 1.4, g.z, PCOL.gold, 30, 6);
+  spark(g.x, 2, g.z, PCOL.gold, 14, 6, 1.1, 0.6);
+  popup(`HARVEST x${fmt(mult)}!`, 'combo c3', g.x, 3, g.z, 1.2);
+  sound.play('upgrade');
+  g.stored = 0; g.bankT = -1; g.cm = 1; g.coolUntil = S.time + (g.def.cool ?? 2.5); g.dirty = true; g.flash = 1;
+}
+function hypnotize(g, i, x, z) {
+  const T = RED_TYPES[R.kind[i]];
+  const power = Math.min(MAX_POWER, R.mx[i] * T.atk * (g.def.v ?? 2));
+  R.hp[i] = 0; G.kills++;
+  if (B.n < B.N - RESERVE) {
+    const j = spawn(B, x, z - 0.2, power, T.big ? 1 : 0);
+    if (j >= 0) { B.vz[j] = -BLUE_SPEED; B.flash[j] = 1; }
+  }
+  burst(x, 0.8, z, PCOL.purple, 4, 3);
+  if (g.flash < 0.5) sound.play('warp');
+  g.flash = 1;
+}
+function lateContacts(S, i) {
+  const x = B.x[i], z = B.z[i], ri = B.rad[i];
+  for (const f of S.fusions) {
+    if (f.active > 0 && B.pz[i] > f.z && z <= f.z && x > f.lo + 0.6 && x < f.hi - 0.6 && !(B.fuse[i] & f.bit)) {
+      const v = f.def.v ?? 3;
+      B.fuse[i] |= f.bit;
+      B.hp[i] = Math.min(MAX_POWER, B.hp[i] * v); B.cm[i] = Math.min(1e37, B.cm[i] * v); B.flash[i] = 1;
+      comboCheck(S, i, x, f.z);
+    }
+  }
+  for (const b of S.bumpers) {
+    const dx = x - b.x, dz = z - b.z, rr = b.r + ri;
+    if (dx * dx + dz * dz >= rr * rr) continue;
+    if (!(B.bump[i] & b.bit)) {
+      B.bump[i] |= b.bit;
+      B.hp[i] = Math.min(MAX_POWER, B.hp[i] * b.v); B.cm[i] = Math.min(1e37, B.cm[i] * b.v); B.flash[i] = 1;
+      comboCheck(S, i, b.x, b.z);
+    }
+    const side = dx > 0.05 ? 1 : dx < -0.05 ? -1 : (i & 1 ? 1 : -1);
+    launch(i, b.x + side * (b.r + b.kick), b.z - b.r - 1.6, 0.32);
+    b.flash = 1;
+    if (G.t - b.sfxT > 0.12) { b.sfxT = G.t; sound.play('gate'); spark(b.x, 1.3, b.z, PCOL.pink, 4, 4, 0.9, 0.35); }
+    return;
+  }
+  for (const c of S.carts) {
+    if (!c.alive || c.cool > 0 || c.prog >= c.need || Math.abs(x - c.x) > 1.0 + ri || Math.abs(z - c.z) > 0.9) continue;
+    const d = Math.min(B.hp[i], c.need - c.prog);
+    B.hp[i] -= d; c.prog += d; c.flash = 1;
+    if (B.hp[i] <= 0) { if (i % 3 === 0) burst(x, 0.8, z, PCOL.gold, 2, 2.5); return; }
+  }
+  for (const e of S.eggs) {
+    if (!e.alive || Math.abs(x - e.x) > 0.85 * e.s + ri || Math.abs(z - e.z) > 0.85 * e.s) continue;
+    hitThing(e, i, PCOL.white);
+    if (e.hp <= 0) smashEgg(S, e);
+    if (B.hp[i] <= 0) return;
+  }
+  for (const f of S.fusions) {
+    if (!f.alive || f.active > 0 || Math.abs(z - f.z) > 0.9) continue;
+    for (const c of f.cores) {
+      if (c.full || Math.abs(x - c.x) > 0.9 + ri) continue;
+      const d = Math.min(B.hp[i], f.need - c.prog);
+      B.hp[i] -= d; c.prog += d; c.flash = 1;
+      if (c.prog >= f.need) {
+        c.full = true; c.holdT = f.def.hold ?? 5;
+        popup('CORE CHARGED!', 'combo c2', c.x, 4.4, f.z, 1.0);
+        sound.play('upgrade');
+      }
+      if (B.hp[i] <= 0) return;
+    }
+  }
+}
+function smashEgg(S, e) {
+  e.alive = false; e.model.group.visible = false;
+  burst(e.x, 1, e.z, PCOL.white, 30, 6); burst(e.x, 1, e.z, PCOL.gold, 14, 5);
+  if (!TURBO) debris.burst(e.x, 0.8, e.z, [PCOL.white, PCOL.sand, PCOL.gold], 16, 1.6, 1.4, 6, 0.3);
+  const share = Math.min(MAX_POWER, e.max * 0.4);
+  for (let k = 0; k < (e.def.n ?? 4) && B.n < B.N - RESERVE; k++) {
+    const j = spawn(B, clamp(e.x + rand(-0.8, 0.8), -XLIM, XLIM), e.z - 1 - rand(0, 0.8), share, 0);
+    if (j < 0) break;
+    B.vz[j] = -BLUE_SPEED; B.flash[j] = 1;
+  }
+  popup('HATCHLINGS JOIN!', 'combo c2', e.x, 3, e.z, 1.1);
+  sound.play('boom');
+  if (e.def.relay) e.relayT = e.def.relay;
+}
+function hatchEgg(S, e) {
+  e.alive = false; e.model.group.visible = false;
+  // A missed egg releases a pack of light raiders unless the stage asks for something heavier.
+  const kind = e.def.kind ?? 0, hp = (e.def.unitHp ?? 1) * threat(S);
+  for (let k = 0; k < (e.def.n ?? 4); k++) spawnRed(e.x + rand(-1, 1), e.z + 0.8 + rand(0, 0.8), kind, hp);
+  burst(e.x, 1, e.z, PCOL.red, 24, 6);
+  popup('HATCHED!', 'combo c1', e.x, 3, e.z, 1.0);
+  sound.play('warn');
+  if (e.def.relay) e.relayT = e.def.relay;
+}
+function hitTarget(S, fraction, label) {
+  const T = S.tower && S.tower.alive ? S.tower : S.boss && S.boss.alive ? S.boss : null;
+  if (!T) return;
+  const d = T.max * fraction;
+  T.hp -= d; T.flash = 1; G.dmgAcc += d; G.dmgTotal += d;
+  popup(`${label} -${fmt(d)}!`, 'combo c4', T.x ?? 0, 7, T.z, 1.6);
+}
+function cartBlast(S, c) {
+  hitTarget(S, c.def.dmg ?? 0.2, 'KABOOM');
+  for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && (R.x[j] - c.x) ** 2 + (R.z[j] - c.z) ** 2 < 20) killRed(j);
+  burst(c.x, 1, c.z, PCOL.orange, 50, 9, 1.4);
+  spark(c.x, 1.5, c.z, PCOL.gold, 20, 8, 1.2, 0.6);
+  addRing(c.x, c.z, 5, 0xff8a1a, 0.5);
+  if (!TURBO) debris.burst(c.x, 1, c.z, [PCOL.orange, PCOL.metal, PCOL.gold], 24, 2, 2, 9, 0.4);
+  G.shake = Math.max(G.shake, 1); G.kick = Math.max(G.kick || 0, 0.5);
+  sound.play('boom'); buzz(80);
+  c.uses--; c.prog = 0; c.need = Math.round(c.need * 2); c.cool = 2.5; c.model.group.visible = false;
+  if (c.uses <= 0) c.alive = false;
+}
+function fuse(S, f) {
+  const dur = f.def.dur ?? 5;
+  f.active = dur; f.uses--; f.need = Math.round(f.need * 2);
+  for (const c of f.cores) { c.full = false; c.prog = 0; c.flash = 1; }
+  f.beam.group.visible = true;
+  hitTarget(S, f.def.dmg ?? 0.12, 'FUSION');
+  for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.z[j] - f.z) < 2.5 && R.x[j] > f.lo - 1 && R.x[j] < f.hi + 1) killRed(j);
+  addRing((f.lo + f.hi) / 2, f.z, (f.hi - f.lo) / 2 + 2, 0x48e8ff, 0.6);
+  spark((f.lo + f.hi) / 2, 2.2, f.z, PCOL.ice, 30, 9, 1.3, 0.7);
+  banner(`FUSION! BEAM x${f.def.v ?? 3}`, 'gold', 1.4);
+  G.shake = Math.max(G.shake, 0.8); sound.play('star'); buzz(60);
+}
+function updateLate(S, dt) {
+  const play = G.phase === 'play';
+  for (const b of S.bumpers) {
+    if (b.def.slide) b.x = b.def.x + Math.sin(G.t * b.def.slide.speed + b.ph) * b.def.slide.amp;
+    b.flash = Math.max(0, b.flash - dt * 4);
+    if (!play) continue;
+    // Bumpers shove marching enemies aside instead of multiplying them.
+    for (let j = 0; j < R.n; j++) {
+      if (R.hp[j] <= 0 || RED_TYPES[R.kind[j]].fly) continue;
+      const dx = R.x[j] - b.x, dz = R.z[j] - b.z, rr = b.r + R.rad[j], d2 = dx * dx + dz * dz;
+      if (d2 >= rr * rr) continue;
+      const d = Math.sqrt(d2) || 1;
+      R.x[j] = clamp(b.x + dx / d * rr, -XLIM, XLIM); R.z[j] = b.z + dz / d * rr;
+      R.vx[j] = (dx >= 0 ? 1 : -1) * 7;
+    }
+  }
+  const boss = S.boss && S.boss.alive ? S.boss : null;
+  for (const c of S.carts) {
+    if (!c.alive) continue;
+    c.flash = Math.max(0, c.flash - dt * 4);
+    if (c.cool > 0) {
+      c.cool -= dt;
+      if (c.cool <= 0) { c.d = c.def.d1; c.z = S.z0 - c.d; c.model.group.visible = true; }
+      continue;
+    }
+    const target = c.def.d1 + (c.def.d2 - c.def.d1) * Math.min(1, c.prog / c.need);
+    const step = Math.max(0, Math.min(target - c.d, (c.prog >= c.need ? 9 : 5) * dt));
+    c.speed = dt > 0 ? step / dt : 0; c.d += step; c.z = S.z0 - c.d;
+    if (!play) continue;
+    if (c.speed > 0.4) for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.x[j] - c.x) < 1.3 && Math.abs(R.z[j] - c.z) < 1.2) killRed(j);
+    if (c.prog >= c.need && (c.d >= c.def.d2 - 0.05 || boss && c.z <= boss.z + boss.model.radius)) cartBlast(S, c);
+  }
+  for (const e of S.eggs) {
+    e.flash = Math.max(0, e.flash - dt * 5);
+    if (!play) continue;
+    if (!e.alive) {
+      if (e.relayT > 0) {
+        e.relayT -= dt;
+        if (e.relayT <= 0) { e.alive = true; e.hp = e.max; e.t = e.def.hatch ?? 10; e.model.group.visible = true; burst(e.x, 0.6, e.z, PCOL.sand, 10, 3); }
+      }
+      continue;
+    }
+    e.t -= dt;
+    if (e.t <= 0) hatchEgg(S, e);
+  }
+  for (const f of S.fusions) {
+    if (!f.alive) continue;
+    for (const c of f.cores) c.flash = Math.max(0, c.flash - dt * 4);
+    if (f.active > 0) {
+      f.active -= dt;
+      if (play) for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.z[j] - f.z) < 0.6 && R.x[j] > f.lo && R.x[j] < f.hi) killRed(j);
+      if (f.active <= 0) { f.active = 0; f.beam.group.visible = false; if (f.uses <= 0) f.alive = false; }
+      continue;
+    }
+    if (!play) continue;
+    for (const c of f.cores) {
+      if (!c.full) continue;
+      c.holdT -= dt;
+      if (c.holdT <= 0) { c.full = false; c.prog = f.need * 0.5; popup('CORE FADING', 'combo c1', c.x, 4.4, f.z, 0.9); }
+    }
+    if (f.cores.every((c) => c.full)) fuse(S, f);
+  }
+}
+function renderLate(S, dt, cur) {
+  for (const b of S.bumpers) {
+    const m = b.model;
+    m.group.position.x = b.x;
+    m.cap.position.y = 0.82 - b.flash * 0.18;
+    m.ring.scale.setScalar(1 + b.flash * 0.12);
+    m.capMat.color.setHex(b.flash > 0.3 ? 0xffffff : b.def.color ?? 0xff3fae);
+    m.lights.rotation.y += dt * (1.5 + b.flash * 8);
+    if (cur) M.drawLabel(m.label, 'x' + fmt(b.v), 'BUMPER', -1, '#ffd0f0');
+  }
+  for (const c of S.carts) {
+    const m = c.model;
+    if (!c.alive || c.cool > 0) continue;
+    m.group.position.z = c.z;
+    m.body.position.x = Math.sin(G.t * 60) * c.flash * 0.04;
+    for (const w of m.wheels) w.rotation.x -= c.speed * dt / 0.3;
+    m.fuse.scale.setScalar(c.prog >= c.need ? 1.2 + Math.sin(G.t * 30) * 0.4 : 0.8 + Math.sin(G.t * 6) * 0.1);
+    if (cur) M.drawLabel(m.label, c.prog >= c.need ? 'FUSE LIT!' : 'PUSH THE CART', `${fmtHp(c.prog)}/${fmtHp(c.need)}`, c.prog / c.need, '#ffd28a');
+  }
+  for (const e of S.eggs) {
+    if (!e.alive) continue;
+    const m = e.model, hatch = e.def.hatch ?? 10, urgency = 1 - Math.max(0, e.t) / hatch;
+    m.body.rotation.z = Math.sin(G.t * (4 + urgency * 18)) * (0.02 + urgency * 0.1) + Math.sin(G.t * 60) * e.flash * 0.04;
+    m.crackMat.opacity = Math.min(1, urgency * 1.4);
+    m.shellMat.color.setHex(e.flash > 0.2 ? 0xffffff : urgency > 0.75 && Math.sin(G.t * 16) > 0 ? 0xffd0b0 : 0xf2ead2);
+    if (cur) M.drawLabel(m.label, fmtHp(e.hp), `HATCH IN ${Math.max(0, Math.ceil(e.t))}s`, Math.max(0, e.t) / hatch, urgency > 0.75 ? '#ff9a8a' : '#fff4d0');
+  }
+  for (const f of S.fusions) {
+    for (const c of f.cores) {
+      const m = c.model, p = f.alive ? (f.active > 0 ? 1 : c.prog / f.need) : 0;
+      m.column.scale.y = Math.max(0.05, p * 2.6);
+      m.column.position.y = 0.4 + m.column.scale.y / 2;
+      m.orb.scale.setScalar(0.7 + p * 0.5 + (c.full ? Math.sin(G.t * 14) * 0.12 : 0) + c.flash * 0.2);
+      m.orbMat.color.setHex(!f.alive ? 0x4a5068 : c.full || f.active > 0 ? 0xffffff : 0x9af6ff);
+      m.rings.forEach((r, k) => { r.rotation.y += dt * (1 + p * 5) * (k % 2 ? -1 : 1); r.position.y = 0.9 + k * 0.7 + Math.sin(G.t * 2 + k) * 0.06 * (1 + p); });
+      if (cur) {
+        if (!f.alive) M.drawLabel(m.label, 'SPENT', '', -1, '#9aa4c0');
+        else if (f.active > 0) M.drawLabel(m.label, 'FUSION', `BEAM ${Math.ceil(f.active)}s`, f.active / (f.def.dur ?? 5), '#bff6ff');
+        else if (c.full) M.drawLabel(m.label, 'READY', `PAIR IT ${Math.ceil(c.holdT)}s`, c.holdT / (f.def.hold ?? 5), '#ffffff');
+        else M.drawLabel(m.label, 'CORE', `${fmtHp(c.prog)}/${fmtHp(f.need)}`, c.prog / f.need, '#9af6ff');
+      }
+    }
+    if (f.active > 0) {
+      const pulse = 1 + Math.sin(G.t * 24) * 0.12;
+      f.beam.outer.scale.set(f.hi - f.lo, pulse, pulse);
+      f.beam.outerMat.opacity = 0.25 + Math.min(1, f.active) * 0.2;
+      if (cur) M.drawLabel(f.beam.label, 'x' + fmt(f.def.v ?? 3), 'FUSION BEAM', -1, '#bff6ff');
+    }
+  }
+}
+// Boss attacks for worlds 21-50
+function attackTilt(b) {
+  const side = Math.random() < 0.5 ? -1 : 1, zc = (b.z + G.z0) / 2, len = G.z0 - b.z - 6;
+  popup(side < 0 ? 'TILT LEFT!' : 'TILT RIGHT!', 'combo c2', 0, 3, G.z0 - 14, 1.0);
+  sound.play('warn');
+  addTelegraph('band', side * 5.2, zc, 2.4, len, 1.0, () => {
+    for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && B.adur[i] <= 0) B.vx[i] += side * 16;
+    for (let j = 0; j < R.n; j++) if (R.hp[j] > 0) R.vx[j] += side * 10;
+    blueInRect(side * 5.2, zc, 2.4, len);
+    G.shake = Math.max(G.shake, 0.6); sound.play('crush');
+  });
+}
+// Hypnotic band: troops caught inside defect and march back as enemies.
+function attackMesmer(b, x) {
+  const z1 = b.z + 3, len = 16, zc = z1 + len / 2;
+  addTelegraph('band', x, zc, 3.4, len, 1.15, () => {
+    const cap = Math.max(3 * threat(G.stage), Math.min(b.max * 0.0015, G.armyAvg * 0.05));
+    let n = 0;
+    for (let i = 0; i < B.n && n < 24; i++) {
+      if (B.hp[i] <= 0 || B.adur[i] > 0 || Math.abs(B.x[i] - x) > 1.7 || Math.abs(B.z[i] - zc) > len / 2) continue;
+      if (spawnRed(B.x[i], B.z[i], 9, Math.min(B.hp[i], cap) / RED_TYPES[9].atk) < 0) break;
+      killBlue(i, false); n++;
+    }
+    blueInRect(x, zc, 3.4, len);
+    for (let k = 0; k < 10; k++) burst(x + rand(-1.5, 1.5), 0.6, z1 + (k / 10) * len, PCOL.purple, 3, 3);
+    if (n) popup(`HYPNOTIZED ${n}!`, 'combo c2', x, 3, zc, 1.0);
+    sound.play('warp');
+  });
+}
+function attackEggs(S, b, n) {
+  for (let k = 0; k < n; k++) {
+    const x = rand(-5, 5), z = b.z + rand(9, 18);
+    const hp = Math.max(30 * threat(S), Math.min(b.max * 0.004, G.armyAvg * 0.35));
+    addTelegraph('circle', x, z, 1.4, 0, 0.8, () => {
+      if (S !== G.stage) return;
+      addEgg(S, S.group, x, z, { hp, hatch: 6, kind: 1, n: 2, unitHp: 8, scale: 0.8, spots: 0xc0603a });
+      burst(x, 0.6, z, PCOL.sand, 12, 4); sound.play('crush');
+    });
+  }
+}
 function step(dt) {
   G.t += dt;
   G.phaseT += dt;
@@ -2667,13 +3069,23 @@ function renderWorld(dt) {
       if (t === 'portal' || t === 'loop') { g.model.swirl.rotation.z -= dt * (t === 'loop' ? -7 : 5); g.model.panelMat.opacity = 0.55 + g.flash * 0.35; }
       else if (t === 'jump') { grp.scale.set(1, 1 - g.flash * 0.35, 1); }
       else if (t === 'hangar') { g.model.plane.position.y = 2.2 + Math.sin(G.t * 2 + g.ph) * 0.15; g.model.plane.rotation.z = Math.sin(G.t * 1.3 + g.ph) * 0.1; }
-      else if (t === 'tesla') { g.model.orb.scale.setScalar(g.active ? 1 + Math.sin(G.t * 30) * 0.15 + (g.zapT < 0.1 ? 0.4 : 0) : 0.7 + g.prog / g.need * 0.4); g.model.panelMat.opacity = (g.active ? 0.2 : 0.45) + g.flash * 0.3; }
+      else if (t === 'hypno') {
+        for (const s of g.model.spirals) s.rotation.z -= dt * (g.active ? 6 : 1.2);
+        g.model.armMat.color.setHex(g.active ? 0x6affd0 : 0xb07aff);
+        g.model.panelMat.opacity = (g.active ? 0.3 : 0.5) + g.flash * 0.3;
+      } else if (t === 'bank') {
+        const ripe = g.bankT >= 0 ? Math.min(1, g.bankT / (g.def.ripe ?? 7)) : 0;
+        g.model.sprout.scale.setScalar(0.25 + ripe * 0.95 + g.flash * 0.08);
+        g.model.head.material = ripe >= 0.95 && Math.sin(G.t * 20) > 0 ? M.lam(0xffffff) : M.lam(0xffd04a);
+        g.model.panelMat.opacity = (g.coolUntil > S.time ? 0.2 : 0.5) + g.flash * 0.3;
+      } else if (t === 'tesla') { g.model.orb.scale.setScalar(g.active ? 1 + Math.sin(G.t * 30) * 0.15 + (g.zapT < 0.1 ? 0.4 : 0) : 0.7 + g.prog / g.need * 0.4); g.model.panelMat.opacity = (g.active ? 0.2 : 0.45) + g.flash * 0.3; }
       else if (t === 'nuke' && g.coolUntil > S.time) g.model.panelMat.opacity = 0.12 + Math.abs(Math.sin(G.t * 4)) * 0.2;
       else if (t !== 'statue') g.model.panelMat.opacity = (t === 'ice' ? 0.82 : t === 'fence' ? 0.9 : 0.55) + g.flash * 0.35;
       if (BLOCKERS.has(t) || REDGATES.has(t)) grp.position.x = g.x + Math.sin(G.t * 60) * g.flash * 0.08;
       if (t === 'star') g.model.setColor(new THREE.Color().setHSL((G.t * 0.4) % 1, 1, 0.6));
     }
     for (const ex of S.exits) ex.ring.rotation.z += dt * 2;
+    renderLate(S, dt, cur);
     for (const bt of S.belts) bt.model.tex.offset.x -= dt * 0.9;
     for (const tn of S.tornados) {
       tn.model.group.position.x = tn.x;
@@ -3066,6 +3478,7 @@ window.__game = {
       id: g.def.id, requires: g.def.requires, locked: g.locked,
       x: +g.x.toFixed(2), d: +(G.z0 - g.z).toFixed(1), w: g.w, hp: g.hp, need: g.need, prog: g.prog, up: g.cur.up, to: g.def.to,
       slide: !!g.def.slide, fa: g.def.a, fb: g.def.b, passes: g.passes || 0, on: g.on, active: g.active, phase: g.def.phase, loopMax: g.def.max,
+      stored: g.stored, cooling: g.coolUntil > G.stage.time,
     }));
   },
   hazards() {
@@ -3080,6 +3493,10 @@ window.__game = {
       pillars: S.pillars.filter((p) => p.alive).map((p) => ({ x: p.x, d: G.z0 - p.z, hp: p.hp })),
       zones: G.zones.map((z) => ({ x: z.x, d: G.z0 - z.z, w: z.w, len: z.d })),
       spawners: S.spawners.filter((t) => t.alive).map((t) => ({ x: t.x, d: G.z0 - t.z, hp: t.hp })),
+      bumpers: S.bumpers.map((b) => ({ x: b.x, d: G.z0 - b.z, r: b.r, v: b.v, kick: b.kick })),
+      carts: S.carts.filter((c) => c.alive && c.cool <= 0).map((c) => ({ x: c.x, d: G.z0 - c.z, need: c.need, prog: c.prog, uses: c.uses })),
+      eggs: S.eggs.filter((e) => e.alive).map((e) => ({ x: e.x, d: G.z0 - e.z, hp: e.hp, w: 1.7 * e.s, t: e.t })),
+      fusion: S.fusions.filter((f) => f.alive).map((f) => ({ d: G.z0 - f.z, need: f.need, active: f.active, v: f.def.v ?? 3, lo: f.lo, hi: f.hi, uses: f.uses, cores: f.cores.map((c) => ({ x: c.x, prog: c.prog, full: c.full, hold: c.holdT })) })),
     };
   },
   aim(x) { G.aim = clamp(x, -XLIM + 0.2, XLIM - 0.2); },

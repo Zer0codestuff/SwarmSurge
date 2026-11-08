@@ -15,13 +15,15 @@ try {
   await page.waitForFunction(() => window.__game, { polling: 100 });
   const report = await page.evaluate(async () => {
     const M = await import('/src/models.js'), L = await import('/src/bosses.js');
-    const P = await import('/src/props.js'), THREE = await import('three');
-    const { THEMES } = await import('/src/levels.js');
+    const P = await import('/src/props.js'), PL = await import('/src/props-late.js'), THREE = await import('three');
+    const { THEMES, LEVELS } = await import('/src/levels.js');
     const contracts = [
       ['king',2.8,8.8],['skeleton',2.7,10.5],['dragon',2.9,10.4],['golem',3,9.2],['brute',3.2,9.4],
       ['robot',3,9.8],['jelly',2.8,8.8],['moon',3,9.2],['storm',2.9,10.4],['titan',3.4,13.5],
       ['drill',3.4,9],['dice',3.2,9.5],['kraken',3.3,10],['pumpkin',3,11],['commander',3,10.4],
       ['spider',3.6,8.5],['magma',3.625,13],['pharaoh',2.9,10.6],['thunder',3.9,11.96],['emperor',4.06,12.76],
+      ['jack',2.8,9.4],['flipper',3.1,9.7],['ringmaster',3,10.6],['mesmer',3.5,11.4],['locomotive',3.4,10.2],['scarecrow',3,9.6],
+      ['panda',3.2,10.2],['shogun',3.1,11.2],['trex',3.5,11.6],['roc',3.7,11.2],['clockwork',3.4,10.8],['overlord',4,13],
     ];
     const pose = group => {
       group.updateMatrixWorld(true);
@@ -79,12 +81,20 @@ try {
     const muzzle = turret.muzzle?.getWorldPosition(new THREE.Vector3());
     const propPass = props.every(x=>x.finite && x.lights===0) && turretYaw && muzzle?.toArray().every(Number.isFinite) && pillar.height===10 && crusher.shadow.material.transparent;
     [turret.group,spawner.group,dome.group,wall,crusher.group,pillar.group].forEach(dispose);
-    return {bosses,forts,props,propPass};
+    const late = [PL.buildBumper(), PL.buildHypnoGate(5.6), {group:PL.buildRails(30)}, PL.buildCart(), PL.buildBank(5.6), PL.buildEgg(), PL.buildFusionCore(), PL.buildFusionBeam()];
+    const lateProps = late.map(m => inspect(m.group));
+    const latePass = lateProps.every(x=>x.finite && x.lights===0 && x.triangles<=12000);
+    late.forEach(m=>dispose(m.group));
+    const used = new Set(LEVELS.flatMap(l=>l.stages.map(s=>s.boss?.type).filter(Boolean)));
+    const rosterPass = [...used].every(type=>contracts.some(([t])=>t===type)) && LEVELS.every(l=>THEMES[l.theme]);
+    return {bosses,forts,props,propPass,lateProps,latePass,rosterPass,worlds:LEVELS.length};
   });
   for (const boss of report.bosses) console.log(`${boss.pass?'PASS':'FAIL'} ${boss.type}: ${boss.meshes} meshes, ${boss.triangles} triangles, top ${boss.top.toFixed(2)}/${boss.height}`);
-  console.log(`${report.forts.every(f=>f.pass)?'PASS':'FAIL'} all twenty biome fort bounds`);
+  console.log(`${report.forts.every(f=>f.pass)?'PASS':'FAIL'} all ${report.forts.length} biome fort bounds`);
   console.log(`${report.propPass?'PASS':'FAIL'} defense and obstacle contracts`);
+  console.log(`${report.latePass?'PASS':'FAIL'} late mechanic models: ${report.lateProps.map(p=>p.triangles).join(', ')} triangles`);
+  console.log(`${report.rosterPass?'PASS':'FAIL'} every boss and theme in the ${report.worlds} worlds has a contract`);
   fs.mkdirSync(new URL('./out/',import.meta.url),{recursive:true});
   fs.writeFileSync(new URL('./out/asset-checks.json',import.meta.url),JSON.stringify({...report,errors},null,2));
-  if (errors.length || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass) { console.error(errors.join('\n')); process.exitCode=1; }
+  if (errors.length || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass) { console.error(errors.join('\n')); process.exitCode=1; }
 } finally { await browser.close(); }

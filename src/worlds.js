@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { lam, paint, merge, scatter } from './models.js';
 import * as S from './scenery-assets.js';
+import { LATE_DECOR } from './decor-late.js';
 
 const vc = (flat = true) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: flat });
 const glow = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
@@ -134,5 +135,5 @@ const DECOR = {
 
 export function decorate(theme, g, len) {
   const total = len + 160, zc = -len / 2 + 30;
-  DECOR[theme]?.(g, zc, total);
+  (DECOR[theme] ?? LATE_DECOR[theme])?.(g, zc, total);
 }

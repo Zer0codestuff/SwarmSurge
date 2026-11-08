@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LATE_AMBIENT } from './biomes-late.js';
 
 /** Upload only the first `count` items of a dynamic attribute: most pools run far below capacity. */
 export function uploadUsed(attribute, count) {
@@ -310,6 +311,7 @@ const AMBIENT = {
   tomb: { n: 220, color: 0xfff0c8, color2: 0xe0b070, size: 0.18, vel: [2.4, 0.05, 0.6], sway: 0.6, opacity: 0.6, add: false },
   storm: { n: 520, color: 0xd0e8ff, color2: 0x8aa0c0, size: 0.16, vel: [0.8, -7, 0.4], sway: 0.2, opacity: 0.7, add: false },
   blackhole: { n: 360, color: 0xffc08a, color2: 0x9a3aff, size: 0.24, vel: [0, 0, 3], sway: 0.3, opacity: 0.95, add: true, twinkle: 1 },
+  ...LATE_AMBIENT,
 };
 export class Ambient {
   constructor(scene) {

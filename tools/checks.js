@@ -260,8 +260,9 @@ window.runGameChecks = (g) => {
     return {pass:Math.abs(R.hp[j]-93)<.001,hp:R.hp[j]};
   })()`);
   check('Campaign unlocks one world at a time and preserves legacy wins', `(() => {
-    const fresh=campaignProgress([],20), first=campaignProgress([3],20), legacy=campaignProgress([0,0,0,2],20);
-    return {pass:fresh.unlocked===0 && first.unlocked===1 && legacy.unlocked===4};
+    const fresh=campaignProgress([],LEVELS.length), first=campaignProgress([3],LEVELS.length), legacy=campaignProgress([0,0,0,2],LEVELS.length);
+    const veteran=campaignProgress(Array(20).fill(3),LEVELS.length);
+    return {pass:fresh.unlocked===0 && first.unlocked===1 && legacy.unlocked===4 && veteran.unlocked===20};
   })()`);
   check('Map locks block play and unlocked islands launch their level', `(() => {
     const saved=progress;
@@ -269,7 +270,7 @@ window.runGameChecks = (g) => {
       progress={stars:[3]}; showMenu();
       const buttons=[...document.querySelectorAll('.map-stop')];
       buttons[2].click(); const blocked=G.phase==='menu'; buttons[1].click();
-      return {pass:buttons.length===20 && buttons.filter(b=>!b.disabled).length===2 && blocked && G.levelIdx===1};
+      return {pass:LEVELS.length===50 && buttons.length===LEVELS.length && buttons.filter(b=>!b.disabled).length===2 && blocked && G.levelIdx===1};
     } finally { progress=saved; }
   })()`);
   check('Victory saves progress before the result animation', `(() => {
@@ -455,6 +456,74 @@ window.runGameChecks = (g) => {
       if(bounds.min.x<10 && bounds.max.x>-10) clear=false;
     }
     return {pass:clear,count:clouds.count};
+  })()`);
+  const late=(idx,stage=0)=>`startLevel(${idx},${stage}); G.paused=true; G.phase='play'; G.bot=null; B.n=R.n=0; const S=G.stage;`;
+  check('Bumpers multiply a troop once and bounce it toward the touched side', `(() => { ${late(20)}
+    const b=S.bumpers[0], i=spawn(B,b.x+.3,b.z+.2,10,0);
+    lateContacts(S,i); const first=B.hp[i]===10*b.v && B.adur[i]>0 && B.ax1[i]>b.x;
+    B.adur[i]=0; B.x[i]=b.x-.3; B.z[i]=b.z+.2; lateContacts(S,i);
+    return {pass:first && B.hp[i]===10*b.v && B.ax1[i]<b.x,hp:B.hp[i]};
+  })()`);
+  check('A charged hypno gate converts crossing enemies, then recharges at a higher cost', `(() => { ${late(25)}
+    const g=S.gates.find(q=>q.def.t==='hypno'), need=g.need;
+    const i=spawn(B,g.x,g.z+.3,need+5,0); B.vz[i]=-9; buildGrid(gB,B); moveBlue(S,.1);
+    const charged=g.active;
+    const j=spawn(R,g.x,g.z-.03,20,0); buildCoarse(cR,R); moveRed(S,.1);
+    let joined=0; for(let k=0;k<B.n;k++) if(B.hp[k]>0 && Math.abs(B.hp[k]-20*1.5*(g.def.v??2))<1e-9) joined++;
+    g.activeT=.001; updateMechanics(S,.01);
+    return {pass:charged && R.hp[j]<=0 && joined===1 && !g.active && g.need===Math.round(need*1.8),joined,need:g.need};
+  })()`);
+  check('Harvest banks store troops and return the multiplied total once', `(() => { ${late(35)}
+    const g=S.gates.find(q=>q.def.t==='bank'), max=g.def.max??5;
+    const i=spawn(B,g.x,g.z+.3,40,0); B.vz[i]=-9; buildGrid(gB,B); moveBlue(S,.1);
+    const stored=B.hp[i]<=0 && g.stored===40 && g.bankT===0;
+    g.bankT=(g.def.ripe??7)-.001; updateMechanics(S,.01);
+    let power=0; for(let k=0;k<B.n;k++) if(B.hp[k]>0) power+=B.hp[k];
+    return {pass:stored && Math.abs(power/(40*max)-1)<1e-6 && g.stored===0 && g.bankT<0 && g.coolUntil>S.time,power};
+  })()`);
+  check('A filled mine cart blasts the fort once and returns at a higher cost', `(() => { ${late(30)}
+    const c=S.carts[0], T=S.tower, hp=T.hp, need=c.need, uses=c.uses;
+    const i=spawn(B,c.x,c.z,need+5,0); lateContacts(S,i);
+    const fed=c.prog===need && B.hp[i]===5;
+    c.d=c.def.d2; c.z=S.z0-c.d; updateLate(S,.016);
+    return {pass:fed && Math.abs(T.hp-(hp-T.max*(c.def.dmg??.2)))<1e-6 && c.uses===uses-1 && c.need===need*2 && c.cool>0,hp:T.hp};
+  })()`);
+  check('Smashed eggs release hatchlings and missed eggs hatch enemies', `(() => { ${late(40)}
+    const [e,miss]=S.eggs, i=spawn(B,e.x,e.z,e.hp+3,0), n=B.n;
+    lateContacts(S,i);
+    let hatch=0; for(let k=n;k<B.n;k++) if(Math.abs(B.hp[k]-e.max*.4)<1e-9) hatch++;
+    const smashed=!e.alive && B.hp[i]===3 && hatch===(e.def.n??4);
+    miss.t=.001; updateLate(S,.01);
+    return {pass:smashed && !miss.alive && R.n===(miss.def.n??4),hatch,red:R.n};
+  })()`);
+  check('Charging both fusion cores opens a beam that multiplies each troop once', `(() => { ${late(45)}
+    const f=S.fusions[0], T=S.tower, hp=T.hp, need=f.need;
+    for(const c of f.cores){ const i=spawn(B,c.x,f.z,need,0); lateContacts(S,i); }
+    const ready=f.cores.every(c=>c.full);
+    updateLate(S,.01);
+    const fused=f.active>0 && T.hp<hp && f.need===need*2 && f.cores.every(c=>!c.full && c.prog===0);
+    const j=spawn(B,(f.lo+f.hi)/2,f.z-.1,10,0); B.pz[j]=f.z+.1; lateContacts(S,j);
+    const once=B.hp[j]===10*(f.def.v??3); B.pz[j]=f.z+.1; lateContacts(S,j);
+    return {pass:ready && fused && once && B.hp[j]===10*(f.def.v??3),hp:B.hp[j]};
+  })()`);
+  check('Every late boss runs its full attack cycle without errors', `(() => {
+    const failed=[];
+    for(let idx=20;idx<LEVELS.length;idx++){
+      try {
+        ${late('idx',2)} const b=S.boss;
+        for(let k=0;k<7;k++){ b.atkN=k; bossAttack(S,b); updateEffects(.7); updateEffects(.7); updateLate(S,.1); }
+        if(!b.alive || !Number.isFinite(b.hp)) failed.push(b.type);
+      } catch(error) { failed.push(LEVELS[idx].name+': '+error.message); }
+    }
+    return {pass:failed.length===0,failed};
+  })()`);
+  check('Late stages resolve every fractional cost before play', `(() => {
+    const bad=[];
+    for(let idx=20;idx<LEVELS.length;idx++) LEVELS[idx].stages.forEach((s,si)=>{
+      const text=JSON.stringify(s);
+      if(/"(hp|need)F"/.test(text) || !(s.boss?s.boss.hp>0:s.tower>0)) bad.push((idx+1)+':'+(si+1));
+    });
+    return {pass:bad.length===0,bad};
   })()`);
   g.start(1); g.pause();
   return results;

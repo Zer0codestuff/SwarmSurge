@@ -6,10 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 const toolsDir = path.dirname(fileURLToPath(import.meta.url));
 const option = (name, fallback) => process.argv.find(arg => arg.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
-const levels = [...new Set(option('levels', Array.from({ length: 20 }, (_, i) => i + 1).join(',')).split(',').map(Number))];
+const WORLDS = 50;
+const levels = [...new Set(option('levels', Array.from({ length: WORLDS }, (_, i) => i + 1).join(',')).split(',').map(Number))];
 const policies = [...new Set(option('policies', 'smart,naive,center').split(','))];
 const seeds = [...new Set(option('seeds', '42').split(',').map(Number))];
-if (!levels.length || levels.some(level => !Number.isInteger(level) || level < 1 || level > 20)) throw new Error('--levels must contain world numbers from 1 to 20.');
+if (!levels.length || levels.some(level => !Number.isInteger(level) || level < 1 || level > WORLDS)) throw new Error(`--levels must contain world numbers from 1 to ${WORLDS}.`);
 if (!policies.length || policies.some(policy => !['smart', 'naive', 'random', 'center'].includes(policy))) throw new Error('--policies must contain smart, naive, random or center.');
 if (!seeds.length || seeds.some(seed => !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff)) throw new Error('--seeds must contain unsigned 32-bit integers.');
 const outDir = path.join(toolsDir, 'out');

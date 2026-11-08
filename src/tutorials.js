@@ -5,7 +5,16 @@ const TIPS = {
   chain: 'Line up gates in a row to multiply their numbers.',
   equipment: 'Fill a supply crate to equip your army for this level.',
 };
-const IDS = new Set([...Object.keys(TIPS), 'movement']);
+// Late mechanics, in the order worlds 21 to 50 introduce them, with the world index of each first appearance.
+const MECHANICS = [
+  { id: 'bumper', world: 20, text: 'Bumpers double each troop once, then bounce it to the side it touched.', has: def => def.bumpers?.length },
+  { id: 'hypno', world: 25, text: 'Fill the hypno gate. While it glows, enemies crossing it join your army.', has: (def, gates) => gates.some(gate => gate?.t === 'hypno') },
+  { id: 'cart', world: 30, text: 'Troops that reach the mine cart push it up its rail. A full cart blasts the target.', has: def => def.carts?.length },
+  { id: 'bank', world: 35, text: 'Troops planted in a harvest field return multiplied when the timer ends.', has: (def, gates) => gates.some(gate => gate?.t === 'bank') },
+  { id: 'egg', world: 40, text: 'Smash eggs before they hatch. Broken eggs release hatchlings for your army.', has: def => def.eggs?.length },
+  { id: 'fusion', world: 45, text: 'Charge both fusion cores in time. Their beam multiplies every troop crossing it.', has: def => def.fusion?.length },
+];
+const IDS = new Set([...Object.keys(TIPS), 'movement', ...MECHANICS.map(m => m.id)]);
 const MOVEMENT = {
   portal: 'Portals send troops to the lane marked by their exit.',
   jump: 'Jump pads carry troops over walls into another lane.',
@@ -72,6 +81,12 @@ export function createTutorials(storage = defaultStorage()) {
     if (!tip && !seen.has('movement') && !wins.slice(6).some(value => Number(value) > 0)) {
       const movement = gates.find(gate => MOVEMENT[gate?.t]);
       if (movement) tip = { id: 'movement', text: MOVEMENT[movement.t] };
+    }
+    // Each late mechanic gets one lesson, skipped for saves that already won its first world or beyond.
+    for (const m of MECHANICS) {
+      if (tip) break;
+      if (!seen.has(m.id) && m.has(def, gates) && !wins.slice(m.world).some(value => Number(value) > 0))
+        tip = { id: m.id, text: m.text };
     }
     if (!tip) return null;
     seen.add(tip.id);

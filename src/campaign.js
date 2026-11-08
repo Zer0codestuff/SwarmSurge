@@ -47,7 +47,11 @@ const LESSONS = {
   rapid: 'Rapid doubles your firing rate. Stack it to reach x8.',
   squad: 'Deploy an escort cannon. It mirrors your guns and adds two armor points.',
 };
-const FLANK_TYPES = { jungle:4, neon:7, candy:6, moon:5, sky:7, void:9, factory:8, casino:2, coral:4, spooky:9, arena:3, crystal:6, volcano:12, tomb:10, storm:7, blackhole:9 };
+import { LATE_FLANKS } from './biomes-late.js';
+
+const FLANK_TYPES = { ...LATE_FLANKS, jungle:4, neon:7, candy:6, moon:5, sky:7, void:9, factory:8, casino:2, coral:4, spooky:9, arena:3, crystal:6, volcano:12, tomb:10, storm:7, blackhole:9 };
+// Base HP of each enemy kind (RED_TYPES in main.js), used to size late flanks.
+const RED_HP = [1, 12, 1, 6, 1, 40, 4, 2, 10, 3, 5, 5, 2];
 const VAULTS = [
   { world: 4, stage: 1, x: 5.65, d: 30.5, hp: 1000, t: 'ice', prizes: [34, 37, 40] },
   { world: 6, stage: 2, x: 5.65, d: 31, hp: 8000, t: 'fence', prizes: [34.5, 37.5, 40.5] },
@@ -70,11 +74,61 @@ function addVault(s, world, stage) {
   }));
 }
 
+// Worlds 21-50 store their target HP directly (calibrated per stage), and write breakable HP and
+// charge costs as fractions of it so a recalibration keeps every obstacle proportional.
+function resolveFractions(s, target) {
+  const scaled = (f, floor) => Math.max(floor, Math.round(f * target));
+  const each = (list, key) => {
+    for (const o of list || []) {
+      if (o[key + 'F'] != null) { o[key] = scaled(o[key + 'F'], key === 'hp' ? 30 : 20); delete o[key + 'F']; }
+    }
+  };
+  for (const key of ['hp', 'need']) {
+    each(s.gates, key);
+    for (const list of [s.spawners, s.turrets, s.balls, s.pillars, s.eggs, s.carts, s.holes, s.fusion]) each(list, key);
+  }
+}
+
+function prepareLate(level, li, original, si) {
+  const s = structuredClone(original), route = level.route;
+  s.surge = !!original.surge;
+  s.targetTime = si === 2 ? 32 : 23;
+  s.enemyScale = 1.15;
+  s.enemyWarmup = si === 0 ? 0.3 : 0.4;
+  if (!s.surge) {
+    // Late worlds restart from one barrel, so a flank carries a fixed toughness budget: heavy kinds
+    // arrive as a weakened pair instead of a full pack that the raw cannon stream cannot stop.
+    // Openers get one flank: a second one landing on a slow first stage snowballed into losses.
+    // Ghosts phase past troops and cover, so they come as a pair with a smaller budget.
+    const kind = FLANK_TYPES[level.theme] ?? 4, base = RED_HP[kind] ?? 1, ghost = kind === 9;
+    const count = base >= 5 || ghost ? 2 : 3;
+    s.flanks = {
+      kind, count, start: si === 2 ? 8 : 8.5, every: 10, limit: si === 1 ? 2 : 1, warning: 1.4,
+      firstSide: (li + si) % 2, hpScale: Math.min(1, (ghost ? 4 : 9) / (count * base)),
+    };
+  }
+  const target = s.boss ? s.boss.hp : s.tower;
+  resolveFractions(s, target);
+  if (s.boss && !s.surge) { s.boss.sweep = true; s.boss.cadence = 0.9; s.boss.opening = 2.8; }
+  // Every world starts from a single barrel, so equipment costs stop rising after world 20.
+  const supplyScale = si === 0 ? 1.25 : 1.35 + si * 0.45, ci = Math.min(li, 19);
+  for (const g of s.gates) {
+    if (g.t === 'upgrade' || g.t === 'hangar') g.need = Math.round(Math.min(g.need, 18 + ci * 2 + si * 8) * supplyScale);
+    if (g.t === 'charge') g.per = Math.max(8, g.per * 0.6);
+  }
+  const up = route[si];
+  s.gates.unshift({ t: 'upgrade', up, need: Math.round((12 + ci + si * 5) * supplyScale), x: si % 2 ? 3.4 : -3.4, d: 5.5, w: 4.7 });
+  s.tip = `${LESSONS[up]} ${original.tip}`;
+  for (const b of s.balls || []) b.delay = Math.min(b.delay ?? 0, 5);
+  return s;
+}
+
 export function prepareCampaign(levels) {
   return levels.map((level, li) => ({
     ...level,
     stages: level.stages.map((original, si) => {
-      const s = structuredClone(original), route = ROUTES[li];
+      if (level.calibrated) return prepareLate(level, li, original, si);
+      const s = structuredClone(original), route = level.route ?? ROUTES[li];
       s.surge = [1, 8, 9, 16, 19].includes(li) && si === 2 || li === 1;
       s.targetTime = si === 2 ? 32 : s.surge ? 16 : 23;
       // Equipment stays generous. Defenders become relevant sooner without adding more bodies.
@@ -90,7 +144,7 @@ export function prepareCampaign(levels) {
       if (s.tower) s.tower = Math.max(250, Math.round(s.tower * route[3]));
       if (s.boss) {
         const endurance = s.surge ? 1 : li === 0 ? 1.2 : li === 7 ? 1.25 : 1.8;
-        s.boss.hp *= (li < 2 ? 0.9 : 0.8) * endurance * BOSS_HP[li];
+        s.boss.hp *= (li < 2 ? 0.9 : 0.8) * endurance * (BOSS_HP[li] ?? 1);
         if (!s.surge && li >= 2) {
           // Moon already alternates crushers across both lanes; another lane wipe stalls its army.
           if (li !== 7) s.boss.sweep = true;

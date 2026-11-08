@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { THEMES } from './levels.js';
+import { LATE_FORT_FAMILY, LATE_FORT_TRIM, LATE_FORT_LIGHT } from './biomes-late.js';
 import { assetBatch, assetGlow, bevelBox } from './asset-kit.js';
 import { loftGeometry, sweepGeometry, patchGeometry, crownGeometry } from './boss-shapes.js';
 
@@ -14,15 +15,18 @@ const FAMILY = {
   moon: 'station', factory: 'station', neon: 'station',
   lava: 'gothic', spooky: 'gothic', void: 'gothic', volcano: 'gothic', blackhole: 'gothic',
   coral: 'reef', crystal: 'prism', storm: 'prism', casino: 'casino',
+  ...LATE_FORT_FAMILY,
 };
 const TRIM = {
   candy: 0xffe8f2, tomb: 0xe9c47c, jungle: 0xd7b06a, sky: 0xffe2a0, frost: 0xe8f4ff, moon: 0xc6ccd8,
   factory: 0x9aa3ad, neon: 0x8d92c4, casino: 0xffd21a, coral: 0xffd8c2, crystal: 0xb9b0ff, storm: 0xaab4c8,
+  ...LATE_FORT_TRIM,
 };
 const LIGHT = {
   spooky: 0xffa340, lava: 0xff7a2a, volcano: 0xff8a2a, void: 0xd16bff, blackhole: 0xffa25a, neon: 0xff4fe0,
   crystal: 0x6afff0, storm: 0xfff06a, moon: 0x8fe8ff, factory: 0xffb21a, coral: 0x7ff4ff, casino: 0xffe27a,
   frost: 0xbff4ff, sky: 0xffe7a0, candy: 0xfff0a0,
+  ...LATE_FORT_LIGHT,
 };
 // Face blocks, parapet and gate profile for each family.
 const STYLE = {

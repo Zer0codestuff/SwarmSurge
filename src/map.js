@@ -1,3 +1,5 @@
+import { lateMapArt } from './biomes-late.js';
+
 // Legacy saves may contain isolated late-level wins. Keep all earlier worlds accessible.
 export function campaignProgress(stars, count) {
   let last = -1, cleared = 0;
@@ -26,7 +28,7 @@ function scenery(theme, colors) {
     case 'arena': return `<ellipse cx="80" cy="49" rx="40" ry="23" fill="#ca9f77"/><ellipse cx="80" cy="42" rx="40" ry="23" fill="#f2d1a2"/><ellipse cx="80" cy="42" rx="24" ry="12" fill="#a77b60"/><path d="M47 45v13m15-8v14m18-13v16m18-17v14m15-19v13" stroke="#906958" stroke-width="5"/>`;
     case 'crystal': return `<path d="M44 65l-6-25 10-14 10 14-8 25M74 65l-9-39 15-17 16 19-10 37M108 65l-4-25 12-13 10 14-10 24" fill="#9ee7ed"/><path d="M80 9v56h6l10-37zM116 27v38l10-24z" fill="#a993e6"/>`;
     case 'tomb': return mountain(60,65,'#e0bd77')+mountain(100,63,'#c3a161')+`<path d="M50 65l10-17 10 17z" fill="${roof}"/>`;
-    default: return mountain(80,65,rock);
+    default: return lateMapArt(theme, colors) ?? mountain(80,65,rock);
   }
 }
 
