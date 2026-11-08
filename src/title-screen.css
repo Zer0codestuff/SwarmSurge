@@ -1,6 +1,7 @@
 #welcome { position:fixed; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; padding: max(28px, env(safe-area-inset-top)) 20px 20px; background:linear-gradient(#183b6680,transparent 65%); }
 .welcome-logo { margin:0; font-size:clamp(66px,11vw,116px); line-height:.86; letter-spacing:-.055em; text-align:center; transform:rotate(-5deg); color:#f2fbff; -webkit-text-stroke:2px #163651; paint-order:stroke fill; text-shadow:0 5px 0 #163651,0 10px 18px #16365155; animation:logo-arrive .8s cubic-bezier(.2,.8,.2,1) both,logo-drift 5s 1s ease-in-out infinite; }
 .welcome-logo span { display:block; color:#ffd16e; font-size:1.18em; }
+.welcome-logo i { font-style:normal; color:#9fe0ff; }
 .welcome-actions { display:flex; gap:12px; align-items:center; margin-top:30px; animation:menu-arrive .7s .25s both; }
 #welcome button { font-family:var(--font); cursor:pointer; transition:transform .18s,filter .18s; }
 #welcome button:hover { transform:translateY(-3px); filter:brightness(1.08); }

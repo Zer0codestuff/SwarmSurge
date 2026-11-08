@@ -1,4 +1,4 @@
-# Swarm Surge
+# ThatAdGame
 
 A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your cannon, fire a stream of blue units through multiplier gates, and let the swarm grow from a handful to billions before it crashes into the enemy fort or boss.
 
