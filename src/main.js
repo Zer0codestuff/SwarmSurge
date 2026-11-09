@@ -3269,6 +3269,19 @@ function renderWorld(dt) {
   updateTroopMotion(G.t);
   labelLayer.style.visibility = G.phase === 'menu' || G.shown || G.cine > 0 ? 'hidden' : 'visible';
   cheer = G.phase === 'clear' || G.phase === 'won' ? Math.min(1, G.phaseT / 0.3) : 0;
+  // Fireworks over the fallen boss while the army cheers.
+  if (G.phase === 'won' && !reducedMotion && G.phaseT > 0.5 && G.phaseT < 7.5) {
+    G.fireworkT = (G.fireworkT || 0) - dt;
+    if (G.fireworkT <= 0) {
+      G.fireworkT = 0.2 + Math.random() * 0.28;
+      const at = G.stage.boss || G.stage.tower, colors = [PCOL.gold, PCOL.pink, PCOL.blue, PCOL.green, PCOL.orange, PCOL.purple];
+      // Between the camera and the wreck, so the bursts read at any road length.
+      const far = at?.z ?? G.cannonZ - 30, x = (at?.x ?? 0) + rand(-10, 10), y = rand(5, 11), z = far + rand(2, Math.max(6, (camera.position.z - far) * 0.55));
+      spark(x, y, z, colors[Math.floor(Math.random() * colors.length)], 60, 10, 2.6, 1.2, -8);
+      spark(x, y, z, PCOL.white, 14, 5, 1.8, 0.5, -3);
+      if (!G.shown) sound.play('pop');
+    }
+  }
   if (labelBoundsDirty && G.phase !== 'menu') {
     labelTop = Math.max($('topbar').getBoundingClientRect().bottom, $('target').getBoundingClientRect().bottom) + 8;
     labelBottom = $('bottom').getBoundingClientRect().top - 8;

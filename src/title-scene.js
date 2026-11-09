@@ -120,7 +120,7 @@ export function createTitleScreen(sound, draw) {
   try { const stored = localStorage.getItem('swarm-menu-motion'); if (stored !== null) animated = stored === '1'; } catch {}
   glow.onchange = () => { prefs.set('glow', glow.checked); dirty = true; };
   music.onchange = () => prefs.set('music', music.checked);
-  function sync() { motion.checked = animated; audio.checked = !sound.muted; glow.checked = prefs.get('glow'); music.checked = prefs.get('music'); root.classList.toggle('still', !animated || preference.matches); }
+  function sync() { motion.checked = animated; audio.checked = !sound.muted; glow.checked = prefs.get('glow'); music.checked = prefs.get('music'); root.classList.toggle('still', !animated || preference.matches); document.body.classList.toggle('menu-still', !animated); }
   document.getElementById('welcome-settings').onclick = () => { sync(); settings.showModal(); };
   document.getElementById('settings-close').onclick = () => settings.close();
   audio.onchange = () => { if (audio.checked === sound.muted) sound.toggle(); document.getElementById('mute').textContent = sound.muted ? '🔇' : '🔊'; };
