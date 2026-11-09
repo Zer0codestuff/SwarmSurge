@@ -350,6 +350,74 @@ export function buildPortal(w, color = 0xff4fd8, inner = 0xc040ff) {
   g.add(text);
   return { group: g, label, text, panelMat, swirl, setColor() {} };
 }
+// Prism portal: an A-frame of two leaning pylons under a crystal, with a rainbow pane. Each troop
+// leaves through every exit pad at once.
+export const PRISM_COLORS = [0x65f4ff, 0xff8df0, 0xffbc50];
+export function buildPrismPortal(w) {
+  const g = new THREE.Group();
+  const half = Math.min(w / 2 - 0.15, 2.3), H = Math.min(3.1, half * 1.5 + 0.9);
+  const len = Math.hypot(half, H), lean = Math.atan2(half, H);
+  const frame = lam(0x3b2a6b), trim = lam(0xf1e9ff);
+  const pylon = new THREE.LatheGeometry([[0.001, 0], [0.17, 0], [0.2, 0.07], [0.13, 0.16], [0.1, len - 0.3], [0.15, len - 0.22], [0.15, len - 0.12], [0.07, len - 0.02], [0.001, len]]
+    .map(([r, y]) => new THREE.Vector2(r, y)), 10);
+  const collar = new THREE.TorusGeometry(0.17, 0.045, 6, 14).rotateX(Math.PI / 2);
+  const bead = new THREE.SphereGeometry(0.075, 8, 6);
+  for (const s of [-1, 1]) {
+    const leg = new THREE.Group(); leg.position.x = s * half; leg.rotation.z = s * lean; g.add(leg);
+    leg.add(mesh(pylon, frame), mesh(collar, trim, 0, 0.2, 0, false), mesh(collar, trim, 0, len - 0.36, 0, false));
+    PRISM_COLORS.forEach((color, k) => leg.add(new THREE.Mesh(bead, new THREE.MeshBasicMaterial({ color })).translateY(len * (0.3 + k * 0.17)).translateZ(0.1)));
+  }
+  const pane = new THREE.BufferGeometry();
+  pane.setAttribute('position', new THREE.Float32BufferAttribute([-half + 0.14, 0.1, 0, half - 0.14, 0.1, 0, 0, H - 0.2, 0], 3));
+  pane.setAttribute('color', new THREE.Float32BufferAttribute(PRISM_COLORS.flatMap((c) => new THREE.Color(c).toArray()), 3));
+  const panelMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
+  g.add(new THREE.Mesh(pane, panelMat));
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0).scale(1, 1.5, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  gem.position.y = H + 0.28; g.add(gem);
+  const swirl = new THREE.Group(); swirl.position.y = H + 0.28; g.add(swirl);
+  PRISM_COLORS.forEach((color, k) => {
+    const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.11, 0).scale(1, 1.8, 1), new THREE.MeshBasicMaterial({ color }));
+    shard.position.set(Math.cos(k * 2.094) * 0.56, 0, Math.sin(k * 2.094) * 0.56); swirl.add(shard);
+  });
+  g.add(mesh(new THREE.BoxGeometry(half * 2 + 0.5, 0.1, 0.34), frame, 0, 0.05, 0, false));
+  const label = makeCanvasLabel();
+  const text = textPlane(label, 3.2, 1.6, false);
+  text.position.set(0, H + 1.45, 0); text.rotation.x = -0.3; text.renderOrder = 4;
+  g.add(text);
+  return { group: g, label, text, panelMat, swirl, gem, setColor() {} };
+}
+// Mirror gate: a silver frame with a low arch and a pale glass pane crossed by two glints.
+export function buildMirrorGate(w) {
+  const g = new THREE.Group();
+  const half = w / 2 - 0.12, H = 2.3;
+  const silver = lam(0xcfd8e6), dark = lam(0x51607a);
+  const pylon = new THREE.LatheGeometry([[0.001, 0], [0.2, 0], [0.22, 0.08], [0.13, 0.18], [0.11, H - 0.2], [0.16, H - 0.12], [0.16, H], [0.001, H + 0.02]]
+    .map(([r, y]) => new THREE.Vector2(r, y)), 10);
+  for (const s of [-1, 1]) {
+    g.add(mesh(pylon, silver, s * half, 0, 0));
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshBasicMaterial({ color: 0xe6fbff })).translateX(s * half).translateY(H + 0.14));
+  }
+  const rise = Math.min(0.9, half * 0.4);
+  const arch = new THREE.TorusGeometry(half, 0.1, 8, 28, Math.PI).scale(1, rise / half, 1);
+  g.add(mesh(arch, silver, 0, H, 0));
+  g.add(mesh(new THREE.BoxGeometry(half * 2, 0.1, 0.3), dark, 0, 0.05, 0, false));
+  const pane = new THREE.Shape();
+  pane.moveTo(-half, 0.1); pane.lineTo(half, 0.1); pane.lineTo(half, H);
+  pane.absellipse(0, H, half, rise, 0, Math.PI, false); pane.lineTo(-half, 0.1);
+  const panelMat = new THREE.MeshBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
+  g.add(new THREE.Mesh(new THREE.ShapeGeometry(pane, 14), panelMat));
+  const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
+  for (const [x, wide] of [[-half * 0.35, 0.34], [half * 0.1, 0.14]]) {
+    const glint = new THREE.Mesh(new THREE.PlaneGeometry(wide, H * 0.9), glintMat);
+    glint.position.set(x, H * 0.52, 0.02); glint.rotation.z = -0.5; g.add(glint);
+  }
+  const label = makeCanvasLabel();
+  const tw = Math.min(w, 3.6);
+  const text = textPlane(label, tw, tw / 2, false);
+  text.position.set(0, H + rise + 0.95, 0); text.rotation.x = -0.3; text.renderOrder = 4;
+  g.add(text);
+  return { group: g, label, text, panelMat, setColor() {} };
+}
 export function buildPortalExit() {
   const g = new THREE.Group();
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.25, 32), new THREE.MeshBasicMaterial({ color: 0xff4fd8, transparent: true, opacity: 0.85, depthWrite: false }));

@@ -66,6 +66,19 @@ window.__policies = (() => {
       else if (q.t === 'add') m *= q.v + 1;
       else if (q.t === 'div') m /= q.v;
       else if (q.t === 'charge') m *= q.v + (q.max - q.v) * 0.3;
+      else if (q.t === 'prism') {
+        // One copy walks on from every exit, so the lanes add up.
+        if (depth > 2) return { m: m * q.to.length, stop: null, pre: m * q.to.length };
+        let sum = 0;
+        for (const to of q.to) sum += walk(to.x, to.d, gates, depth + 1).m;
+        return { m: m * sum, stop: null, pre: m * sum, x2: q.to[0].x };
+      } else if (q.t === 'mirror') {
+        // The twin walks the mirrored lane from the same distance.
+        if (depth > 2) { m *= 2; continue; }
+        const twin = walk(Math.max(-6.3, Math.min(6.3, 2 * (q.axis || 0) - x)), q.d + 0.1, gates.filter((o) => o !== q), depth + 1);
+        const own = walk(x, q.d + 0.1, gates.filter((o) => o !== q), depth + 1);
+        return { m: m * (own.m + twin.m), stop: own.stop, pre: m * ((own.stop ? own.pre : own.m) + twin.m), after: own.after };
+      }
       else if (q.t === 'portal') {
         if (depth > 2) return { m, stop: null };
         const r = walk(q.to.x, q.to.d, gates, depth + 1);

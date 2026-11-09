@@ -219,6 +219,32 @@ window.runGameChecks = (g) => {
     const knock=WEAPON_SPECS[10].knock;
     return {pass:lobbed && Math.abs(R.z[open]-(-10-knock))<.001 && Math.abs(R.z[heavy]-(-10-knock*.35))<.001 && R.z[walled]===-4.5 && R.chill[open]>0,lobbed,z:[R.z[open],R.z[heavy],R.z[walled]]};
   })()`);
+  check('Prism portals send one copy to every exit and mirror gates add a twin once', `(() => {
+    const S=G.stage;
+    const gate=(def,k)=>({def,cur:def,bit:1<<k,hi:false,x:def.x,z:G.z0-def.d,w:def.w,alive:true,on:true,flash:0,boost:1,model:{}});
+    const prism=gate({t:'prism',x:0,d:6,w:3.6,to:[{x:-4,d:8},{x:0,d:8},{x:4,d:8}]},0), mirror=gate({t:'mirror',x:-4,d:10,w:3},1);
+    S.gates.push(prism,mirror);
+    const i=spawn(B,.2,G.z0-5.9,10,0); B.vx[i]=0; B.vz[i]=-9; B.weapon[i]=3; buildGrid(gB,B); moveBlue(S,.05);
+    const xs=[...B.x.slice(0,B.n)].map(Math.round).sort((a,b)=>a-b);
+    const split=B.n===3 && [-4,0,4].every(e=>[0,1,2].some(k=>Math.abs(B.x[k]-e)<.75)) && [0,1,2].every(k=>B.hp[k]===10 && B.weapon[k]===3 && Math.abs(B.z[k]-(G.z0-8))<.6);
+    const left=[0,1,2].find(k=>B.x[k]<-3); B.x[left]=-4; B.z[left]=G.z0-9.9; B.vx[left]=0; B.vz[left]=-9;
+    buildGrid(gB,B); moveBlue(S,.05);
+    const twin=B.n===4 && Math.abs(B.x[3]-4)<.01 && B.hp[3]===10 && B.hp[left]===10 && B.cm[3]===6;
+    B.z[left]=G.z0-9.9; buildGrid(gB,B); moveBlue(S,.05);
+    const once=B.n===4;
+    // A full pool folds the copies into the troop that fits.
+    B.n=1; B.hp[0]=10; B.mask[0]=0; B.x[0]=0; B.z[0]=G.z0-5.9; B.vx[0]=0; B.vz[0]=-9; B.adur[0]=0;
+    const real=B.N; B.N=RESERVE+1; buildGrid(gB,B); moveBlue(S,.05); B.N=real;
+    return {pass:split && twin && once && B.n===1 && B.hp[0]===30,split,twin,once,n:B.n,hp:B.hp[0],xs};
+  })()`);
+  check('Every split gate replaces a multiplier of the same strength', `(() => {
+    const prisms=[], mirrors=[];
+    LEVELS.forEach((level,li)=>level.stages.forEach((s,si)=>s.gates.forEach(g=>{
+      if(g.t==='prism') prisms.push([li+1,si+1,g.to.length,g.v]);
+      if(g.t==='mirror') mirrors.push([li+1,si+1,g.v]);
+    })));
+    return {pass:prisms.length===9 && mirrors.length===15 && prisms.every(p=>p[2]===3 && p[3]===undefined) && mirrors.every(m=>m[2]===undefined),prisms:prisms.length,mirrors:mirrors.length};
+  })()`);
   check('Grounded vehicle parts move only while driving', `(() => {
     cannon.setChassis(1); cannon.animateVehicle(0,.1,0,0,0);
     const belt=cannon.rig.group.getObjectByName('belt'), start=Array.from(belt.instanceMatrix.array);

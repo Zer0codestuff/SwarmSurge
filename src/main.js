@@ -545,6 +545,8 @@ function refreshGate(g) {
     const prog = atMax ? 1 : (g.fed % c.per) / c.per;
     M.drawLabel(L, 'x' + fmt(g.val * g.boost), atMax ? 'MAX!' : `CHARGE ▲ x${fmt(c.max * g.boost)}`, prog, atMax ? '#fff35a' : '#bfffd8');
   } else if (t === 'portal') M.drawLabel(L, 'WARP', '', -1, '#ffd0ff');
+  else if (t === 'prism') M.drawLabel(L, 'PRISM', 'SPLIT x' + g.def.to.length, -1, '#ffffff');
+  else if (t === 'mirror') M.drawLabel(L, 'MIRROR', 'TWIN x2', -1, '#e6fbff');
   else if (t === 'loop') M.drawLabel(L, 'LOOP', 'ALL GATES AGAIN', -1, '#b8ffd8');
   else if (t === 'jump') M.drawLabel(L, 'JUMP!', '', -1, '#bffff0');
   else if (t === 'slot') {
@@ -569,6 +571,8 @@ function buildGateModel(gd, cur) {
   if (gd.t === 'fence') return M.buildFence(gd.w);
   if (gd.t === 'statue') return M.buildStatue(gd.w, gd.small);
   if (gd.t === 'portal') return M.buildPortal(gd.w);
+  if (gd.t === 'prism') return M.buildPrismPortal(gd.w);
+  if (gd.t === 'mirror') return M.buildMirrorGate(gd.w);
   if (gd.t === 'loop') return M.buildPortal(gd.w, 0x2aff8a, 0x10a060);
   if (gd.t === 'jump') return P.buildJumpPad(gd.w);
   if (gd.t === 'hangar') return P.buildHangar(gd.w);
@@ -612,6 +616,15 @@ function buildStage(sd, i, root, theme) {
       root.add(ex.group);
       st.exits.push(ex);
     }
+    // Split gates mark every place a copy appears: one pad per prism exit, one across the road for a mirror.
+    const pads = gd.t === 'prism' ? gd.to : gd.t === 'mirror' ? [{ x: 2 * (gd.axis ?? 0) - gd.x, d: gd.d + 0.6 }] : [];
+    pads.forEach((to, n) => {
+      const ex = M.buildPortalExit();
+      ex.ring.material.color.set(gd.t === 'mirror' ? 0xcfefff : M.PRISM_COLORS[n % 3]);
+      ex.group.position.set(to.x, 0, z0 - to.d);
+      root.add(ex.group);
+      st.exits.push(ex);
+    });
   });
   for (const g of st.gates) if (g.def.requires) g.seal = st.gates.find(seal => seal.def.id === g.def.requires);
   sd.walls?.forEach((wd) => {
@@ -1492,6 +1505,42 @@ function teleport(S, g, i) {
   sound.play('warp');
 }
 
+// Prism portals send one copy of the troop to every exit. Mirror gates leave the troop in place and
+// add a twin across the road. Either way total power is multiplied by the number of copies; when the
+// pool is nearly full the surplus is folded into the copies that fit, like a multiplier gate.
+function splitTroop(S, g, i) {
+  const mirror = g.def.t === 'mirror';
+  const exits = mirror
+    ? [null, { x: clamp(2 * (g.def.axis ?? 0) - B.x[i], -XLIM, XLIM), z: B.z[i] }]
+    : g.def.to.map((to) => ({ x: to.x, z: S.z0 - to.d }));
+  const n = exits.length, total = B.hp[i] * n, cm = Math.min(1e37, B.cm[i] * n);
+  const room = Math.max(0, Math.min(n - 1, (S.def.surge ? 620 : 420) - B.n, B.N - RESERVE - B.n));
+  const share = Math.min(MAX_POWER, total / (room + 1));
+  const fx = g.flash < 0.5, fromX = B.x[i], fromZ = B.z[i];
+  B.hp[i] = share; B.cm[i] = cm; B.flash[i] = 1;
+  g.flash = 1; g.passes = (g.passes || 0) + 1;
+  if (!mirror) {
+    B.x[i] = B.px[i] = clamp(exits[0].x + rand(-0.6, 0.6), -XLIM, XLIM); B.z[i] = B.pz[i] = exits[0].z; B.vx[i] = 0;
+  }
+  for (let k = 1; k <= room; k++) {
+    const e = exits[k];
+    const j = spawn(B, clamp(e.x + (mirror ? 0 : rand(-0.6, 0.6)), -XLIM, XLIM), e.z, share, B.kind[i], B.mask[i], B.mask2[i]);
+    if (j < 0) break;
+    B.vx[j] = mirror ? -B.vx[i] : 0; B.vz[j] = B.vz[i]; B.flash[j] = 1; B.cm[j] = cm; B.stk[j] = B.stk[i]; B.weapon[j] = B.weapon[i];
+  }
+  if (fx) {
+    const top = mirror ? 1.3 : g.model.gem?.position.y ?? 3;
+    exits.forEach((e, k) => {
+      if (!e) return;
+      const color = mirror ? 0xdff6ff : M.PRISM_COLORS[k % 3];
+      addBeam(mirror ? fromX : g.x, top, mirror ? fromZ : g.z, e.x, 0.5, e.z, color, 0.22, mirror ? 0.07 : 0.1);
+      spark(e.x, 0.7, e.z, mirror ? PCOL.ice : k % 3 === 0 ? PCOL.ice : k % 3 === 1 ? PCOL.pink : PCOL.gold, 4, 3, 1, 0.4, 2);
+    });
+    sound.play('warp');
+  }
+  comboCheck(S, i, g.x, g.z);
+}
+
 function damageTarget(t, i, col) {
   const d = B.hp[i] * ((t === G.stage.tower || t === G.stage.boss) ? G.stage.breach || 1 : 1);
   t.hp -= d;
@@ -1594,6 +1643,8 @@ function moveBlue(S, dt) {
       if (t === 'jump') { jump(S, g, i); break; }
       if (g.hi ? B.mask2[i] & g.bit : B.mask[i] & g.bit) continue;
       if (g.hi) B.mask2[i] |= g.bit; else B.mask[i] |= g.bit;
+      if (t === 'prism') { splitTroop(S, g, i); break; }
+      if (t === 'mirror') { splitTroop(S, g, i); continue; }
       applyGate(S, g, i);
       if (B.hp[i] <= 0) break;
     }
@@ -3205,6 +3256,7 @@ function renderWorld(dt) {
       }
       if (!BLOCKERS.has(t) && t !== 'jump') grp.scale.set(1 + g.flash * 0.05, 1 + g.flash * 0.09, 1);
       if (g.model.text) g.model.text.scale.setScalar(g.textScale * (1 + g.flash * 0.14 + (g.def.mega ? Math.sin(G.t * 5) * 0.04 : 0) + (g.spin > 0 ? 0.08 : 0)));
+      if (t === 'prism') { g.model.swirl.rotation.y += dt * (2 + g.flash * 9); g.model.gem.rotation.y -= dt * 1.2; g.model.gem.scale.setScalar(1 + g.flash * 0.35); }
       if (t === 'portal' || t === 'loop') { g.model.swirl.rotation.z -= dt * (t === 'loop' ? -7 : 5); g.model.panelMat.opacity = 0.55 + g.flash * 0.35; }
       else if (t === 'jump') { grp.scale.set(1, 1 - g.flash * 0.35, 1); }
       else if (t === 'hangar') { g.model.plane.position.y = 2.2 + Math.sin(G.t * 2 + g.ph) * 0.15; g.model.plane.rotation.z = Math.sin(G.t * 1.3 + g.ph) * 0.1; }
@@ -3624,7 +3676,7 @@ window.__game = {
       boost: g.boost, v: (g.def.t === 'charge' ? g.val : g.cur.v) * (g.cur.t === 'div' ? 1 : g.boost), max: g.def.max,
       id: g.def.id, requires: g.def.requires, locked: g.locked,
       x: +g.x.toFixed(2), d: +(G.z0 - g.z).toFixed(1), w: g.w, hp: g.hp, need: g.need, prog: g.prog, up: g.cur.up, to: g.def.to,
-      slide: !!g.def.slide, fa: g.def.a, fb: g.def.b, passes: g.passes || 0, on: g.on, active: g.active, phase: g.def.phase, loopMax: g.def.max,
+      axis: g.def.axis ?? 0, slide: !!g.def.slide, fa: g.def.a, fb: g.def.b, passes: g.passes || 0, on: g.on, active: g.active, phase: g.def.phase, loopMax: g.def.max,
       stored: g.stored, cooling: g.coolUntil > G.stage.time,
     }));
   },
