@@ -230,6 +230,15 @@ window.runGameChecks = (g) => {
     startLevel(0,2);
     return {pass:cards && !G.cine && !G.hitStop && G.phase==='intro',cards,cine:G.cine,stop:G.hitStop};
   })()`);
+  check('Records keep personal bests and medals need a full run', `(() => {
+    const r={worlds:{}};
+    const a=recordRun(r,3,{army:500,combo:20,kills:90,time:70,bossTime:20,heartsLost:2,full:true});
+    const b=recordRun(r,3,{army:900,combo:10,kills:50,time:60,bossTime:9,heartsLost:0,full:true});
+    const c=recordRun(r,3,{army:1e9,combo:5,kills:5,time:5,bossTime:1,heartsLost:0,full:false});
+    const e=r.worlds[3];
+    startLevel(0,1); const partial=G.fullRun; startLevel(0); const full=G.fullRun && G.hurt===0;
+    return {pass:a.earned.length===0 && !a.fresh.army && b.fresh.army && !b.fresh.combo && b.fresh.time && b.earned.join()==='flawless,swift,overpowered' && c.earned.length===0 && e.time===60 && e.army===1e9 && e.combo===20 && e.wins===3 && medalTotal(r)===3 && clock(65.04)==='1:05.0' && clock(9.96)==='0:10.0' && !partial && full,a,b,c,e,partial,full};
+  })()`);
   check('Every world has its own score and the arrangement grows with the battle', `(() => {
     const ids=new Set(LEVELS.map(L=>{music.setMode('battle',L.theme,THEMES[L.theme].sky);const s=music.score;return [s.root,s.bpm,s.scale,s.loop,s.arp,s.bass,s.melody].join('|');}));
     const kinds=(level,mode,boss)=>{const set=new Set();for(let i=0;i<64;i++)for(const n of music.plan(i,level,mode,boss))set.add(n[0]);return [...set].sort().join();};

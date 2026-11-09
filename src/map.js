@@ -1,3 +1,4 @@
+import { MEDALS, clock } from './records.js';
 import { lateMapArt } from './biomes-late.js';
 
 // Legacy saves may contain isolated late-level wins. Keep all earlier worlds accessible.
@@ -50,7 +51,7 @@ function trail(count, columns, unlocked) {
   return `<svg class="map-trail cols-${columns}" viewBox="0 0 ${columns*160} ${rows*136}" preserveAspectRatio="none" aria-hidden="true"><path d="${path(count)}" class="trail-future"/><path d="${path(unlocked+1)}" class="trail-done"/></svg>`;
 }
 
-export function renderCampaignMap(container, levels, themes, progress, start) {
+export function renderCampaignMap(container, levels, themes, progress, records, start) {
   const status = campaignProgress(progress.stars, levels.length);
   container.innerHTML = trail(levels.length,5,status.unlocked)+trail(levels.length,3,status.unlocked);
   const lock = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 7V5a3 3 0 016 0v2M4 7h8v7H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
@@ -61,9 +62,12 @@ export function renderCampaignMap(container, levels, themes, progress, start) {
     button.style.cssText = `--col:${row%2?5-i%5:1+i%5};--row:${row+1};--mcol:${mobileRow%2?3-i%3:1+i%3};--mrow:${mobileRow+1}`;
     button.dataset.level = i;
     button.disabled = locked;
-    button.setAttribute('aria-label', `Level ${i+1}: ${level.name}. ${locked?'Locked':stars?`${stars} stars`:'Ready to play'}`);
+    const medals = MEDALS.map(medal => !!records.worlds[i]?.medals?.includes(medal.id)), held = medals.filter(Boolean).length;
+    if (held === MEDALS.length) button.className += ' mastered';
+    button.setAttribute('aria-label', `Level ${i+1}: ${level.name}. ${locked?'Locked':stars?`${stars} stars, ${held} of ${MEDALS.length} medals`:'Ready to play'}`);
+    if (stars) button.title = MEDALS.map((medal, k) => `${medals[k] ? '◆' : '◇'} ${medal.name}: ${medal.hint}`).join('\n') + (records.worlds[i]?.time ? `\nBest time ${clock(records.worlds[i].time)}` : '');
     if (i===status.unlocked) button.setAttribute('aria-current','step');
-    button.innerHTML = `${biomeArt(level.theme,themes[level.theme])}<span class="map-number">${i+1}${locked?lock:''}</span><span class="map-name">${level.name}</span><span class="map-stars" aria-hidden="true">${[0,1,2].map(k=>`<i class="${k<stars?'earned':''}">★</i>`).join('')}</span>`;
+    button.innerHTML = `${biomeArt(level.theme,themes[level.theme])}<span class="map-number">${i+1}${locked?lock:''}</span><span class="map-name">${level.name}</span><span class="map-stars" aria-hidden="true">${[0,1,2].map(k=>`<i class="${k<stars?'earned':''}">★</i>`).join('')}${stars?`<span class="map-medals">${medals.map(has=>`<b class="${has?'earned':''}"></b>`).join('')}</span>`:''}</span>`;
     button.addEventListener('click',()=>start(i));
     container.appendChild(button);
   });
