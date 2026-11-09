@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { LEVELS, THEMES } from './levels.js';
 import * as M from './models.js';
 import { Sound } from './sound.js';
+import { Music } from './music.js';
 import * as FX from './fx.js';
 import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
@@ -525,6 +526,9 @@ function setHud(key, el, val, prop = 'textContent') {
 
 // ---------------------------------------------------------------- game state
 const sound = new Sound();
+const music = new Music(sound);
+music.enabled = prefs.get('music');
+prefs.watch('music', (on) => { music.enabled = on; });
 const G = {
   phase: 'menu', phaseT: 0, t: 0, levelIdx: 0, stageIdx: 0, stages: [], stage: null, root: null,
   z0: 0, cannonZ: 0, camZ: 0, aim: 0, cx: 0, lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0,
@@ -3085,6 +3089,7 @@ function stageCleared(S) {
   G.phase = 'clear'; G.phaseT = 0; G.shake = 0.8;
   banner('STAGE CLEAR!', 'gold', 1.6);
   if (overkill > T.max) popup(`OVERKILL x${fmt(1 + overkill / T.max)}!`, 'combo c3', 0, 6, T.z, 1.8);
+  music.duck(1.1);
   sound.play('clear');
 }
 function bossDefeated(S) {
@@ -3107,6 +3112,7 @@ function bossDefeated(S) {
   G.phase = 'won'; G.phaseT = 0; G.shake = 1.4; G.shown = false; G.slow = 1.3;
   whiteFlash();
   banner('VICTORY!', 'gold', 2.6);
+  music.duck(3.2);
   if (overkill > b.max * 0.5) popup(`OVERKILL x${fmt(1 + overkill / b.max)}!`, 'combo c3', b.x, 8, b.z, 2.2);
   sound.play('win');
 }
@@ -3115,6 +3121,7 @@ function lose(msg) {
   G.phase = 'lost'; G.phaseT = 0; G.shown = false; G.loseMsg = msg;
   logStage(G.stage, 'lost');
   banner('DEFEAT', 'red', 1.6);
+  music.duck(2.4);
   sound.play('lose');
 }
 
@@ -3711,6 +3718,8 @@ addEventListener('keyup', (e) => {
   if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
 });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
+// Browsers only start audio from a gesture; the first one anywhere lets the camp theme begin.
+if (!TURBO) for (const type of ['pointerdown', 'keydown']) addEventListener(type, () => sound.unlock(), { once: true, capture: true });
 
 // ---------------------------------------------------------------- main loop
 let last = performance.now(), acc = 0, fpsAcc = 0, fpsN = 0;
@@ -3746,9 +3755,25 @@ function updateMobileQuality(dt) {
 // The simulation runs at 60 Hz, so drawing faster on 90 to 144 Hz screens mostly repeats
 // the same state. Skipping callbacks under 9 ms renders 120 Hz screens at 60 fps.
 const MIN_FRAME_MS = 9;
+// The soundtrack follows the screen: the camp theme on the title, map and results, the biome's
+// own score in battle. Its arrangement thickens with the armies and turns minor for the boss.
+function updateMusic() {
+  const battle = !titleScreen?.visible && ['intro', 'play', 'clear', 'move'].includes(G.phase);
+  music.held = G.paused || document.hidden || !document.hasFocus();
+  if (!battle) { music.setMode('menu'); music.setIntensity(0); music.tick(); return; }
+  const theme = LEVELS[G.levelIdx].theme, boss = !!G.stage?.boss;
+  music.setMode('battle', theme, THEMES[theme].sky);
+  music.setBoss(boss);
+  let heat = 0.14 + 0.3 * Math.min(1, Math.log10(1 + (G.army || 0)) / 4) + 0.3 * Math.min(1, R.n / 120) + (G.lives <= 3 ? 0.15 : 0);
+  if (boss) heat = G.cine > 0 ? 0.3 : Math.max(0.7, heat + 0.3);
+  else if (G.phase !== 'play') heat = Math.min(heat, 0.34);
+  music.setIntensity(heat);
+  music.tick();
+}
 function frame(now) {
   requestAnimationFrame(frame);
   if (!TURBO && now - last < MIN_FRAME_MS) return;
+  if (!TURBO) updateMusic();
   const elapsed = (now - last) / 1000;
   const dt = Math.min(0.1, elapsed);
   last = now;

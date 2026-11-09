@@ -230,6 +230,13 @@ window.runGameChecks = (g) => {
     startLevel(0,2);
     return {pass:cards && !G.cine && !G.hitStop && G.phase==='intro',cards,cine:G.cine,stop:G.hitStop};
   })()`);
+  check('Every world has its own score and the arrangement grows with the battle', `(() => {
+    const ids=new Set(LEVELS.map(L=>{music.setMode('battle',L.theme,THEMES[L.theme].sky);const s=music.score;return [s.root,s.bpm,s.scale,s.loop,s.arp,s.bass,s.melody].join('|');}));
+    const kinds=(level,mode,boss)=>{const set=new Set();for(let i=0;i<64;i++)for(const n of music.plan(i,level,mode,boss))set.add(n[0]);return [...set].sort().join();};
+    const calm=kinds(.15,'battle',false), full=kinds(1,'battle',false), boss=kinds(1,'battle',true), camp=kinds(1,'menu',false);
+    music.setMode('menu');
+    return {pass:ids.size===LEVELS.length && calm==='arp,pad' && full==='arp,bass,hat,kick,lead,pad,snare' && boss==='arp,bass,boom,hat,kick,lead,pad,snare' && camp==='arp,pad' && music.mode==='menu',ids:ids.size,calm,full,boss,camp};
+  })()`);
   check('Prism portals send one copy to every exit and mirror gates add a twin once', `(() => {
     const S=G.stage;
     const gate=(def,k)=>({def,cur:def,bit:1<<k,hi:false,x:def.x,z:G.z0-def.d,w:def.w,alive:true,on:true,flash:0,boost:1,model:{}});
