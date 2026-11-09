@@ -113,13 +113,14 @@ function buildCamp() {
 
 export function createTitleScreen(sound, draw) {
   const root = document.getElementById('welcome'), settings = document.getElementById('settings');
-  const motion = document.getElementById('setting-motion'), audio = document.getElementById('setting-audio'), glow = document.getElementById('setting-glow');
+  const motion = document.getElementById('setting-motion'), audio = document.getElementById('setting-audio'), glow = document.getElementById('setting-glow'), music = document.getElementById('setting-music');
   let camp, visible = false, time = 0, elapsed = 0, dirty = true, focused = document.hasFocus();
   const preference = matchMedia('(prefers-reduced-motion: reduce)');
   let animated = !preference.matches;
   try { const stored = localStorage.getItem('swarm-menu-motion'); if (stored !== null) animated = stored === '1'; } catch {}
   glow.onchange = () => { prefs.set('glow', glow.checked); dirty = true; };
-  function sync() { motion.checked = animated; audio.checked = !sound.muted; glow.checked = prefs.get('glow'); root.classList.toggle('still', !animated || preference.matches); }
+  music.onchange = () => prefs.set('music', music.checked);
+  function sync() { motion.checked = animated; audio.checked = !sound.muted; glow.checked = prefs.get('glow'); music.checked = prefs.get('music'); root.classList.toggle('still', !animated || preference.matches); }
   document.getElementById('welcome-settings').onclick = () => { sync(); settings.showModal(); };
   document.getElementById('settings-close').onclick = () => settings.close();
   audio.onchange = () => { if (audio.checked === sound.muted) sound.toggle(); document.getElementById('mute').textContent = sound.muted ? '🔇' : '🔊'; };

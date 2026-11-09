@@ -2,6 +2,7 @@
 // store only loses persistence: the value still works for the session.
 const DEFAULTS = {
   glow: { key: 'swarm-glow', value: true },
+  music: { key: 'swarm-music', value: true },
 };
 const values = {}, listeners = {};
 for (const [name, { key, value }] of Object.entries(DEFAULTS)) {
