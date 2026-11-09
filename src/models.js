@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { sculptIceWall, sculptFence, sculptStatue, sculptSaw } from './obstacle-assets.js';
+import { sculptIceWall, sculptFence, sculptStatue, sculptSaw, sculptPortal, sculptPortalExit } from './obstacle-assets.js';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
 import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
@@ -312,15 +312,10 @@ export function buildStatue(w, small) {
 export function buildPortal(w, color = 0xff4fd8, inner = 0xc040ff) {
   const g = new THREE.Group();
   const r = Math.min(1.25, w / 2 - 0.1);
-  const ringMat = new THREE.MeshLambertMaterial({ color, emissive: new THREE.Color(color).multiplyScalar(0.55) });
-  const ring = mesh(new THREE.TorusGeometry(r, 0.16, 10, 32), ringMat, 0, r + 0.25, 0);
-  g.add(ring);
   const panelMat = new THREE.MeshBasicMaterial({ color: inner, transparent: true, opacity: 0.6, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
   const disc = new THREE.Mesh(new THREE.CircleGeometry(r - 0.08, 32), panelMat);
   disc.position.y = r + 0.25; g.add(disc);
-  const swirl = new THREE.Mesh(new THREE.RingGeometry(r * 0.25, r * 0.75, 3, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false }));
-  swirl.position.set(0, r + 0.25, 0.02); g.add(swirl);
-  g.add(mesh(new THREE.BoxGeometry(w, 0.1, 0.3), lam(0x5a1a6a), 0, 0.05, 0, false));
+  const swirl = sculptPortal(g, w, r, color);
   const label = makeCanvasLabel();
   const text = textPlane(label, 3, 1.5, false);
   text.position.set(0, 2 * r + 0.9, 0); text.rotation.x = -0.3; text.renderOrder = 4;
@@ -397,8 +392,8 @@ export function buildMirrorGate(w) {
 }
 export function buildPortalExit() {
   const g = new THREE.Group();
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.25, 32), new THREE.MeshBasicMaterial({ color: 0xff4fd8, transparent: true, opacity: 0.85, depthWrite: false }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04; g.add(ring);
+  const ring = sculptPortalExit(g).finish(g, 'exit-ring', new THREE.MeshBasicMaterial({ color: 0xff4fd8, transparent: true, opacity: 0.85, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04;
   const inner = new THREE.Mesh(new THREE.CircleGeometry(0.9, 32), new THREE.MeshBasicMaterial({ color: 0xc040ff, transparent: true, opacity: 0.4, depthWrite: false }));
   inner.rotation.x = -Math.PI / 2; inner.position.y = 0.035; g.add(inner);
   return { group: g, ring };
