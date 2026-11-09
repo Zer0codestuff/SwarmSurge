@@ -393,8 +393,9 @@ export const DECOR = {
     // A giant portal ring and throne camped on the plain, offset so the fort gate never hides it.
     const ringZ = zc - total / 2 + 70, ringX = 30;
     const gold = new THREE.MeshLambertMaterial({ color: 0x8a6a1a, emissive: 0xffd86a, emissiveIntensity: .8, fog: false });
-    far(g, new THREE.Mesh(new THREE.TorusGeometry(17, 1.6, 8, 44), gold), ringX, 6, ringZ);
-    far(g, new THREE.Mesh(new THREE.CircleGeometry(15.4, 40), new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false })), ringX, 6, ringZ);
+    // Sunk a third into the plain: the full arc stays inside the opening frame on wide screens.
+    far(g, new THREE.Mesh(new THREE.TorusGeometry(12.5, 1.3, 8, 44), gold), ringX, 3.2, ringZ);
+    far(g, new THREE.Mesh(new THREE.CircleGeometry(11.2, 40), new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false })), ringX, 3.2, ringZ);
     const daisMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, fog: false });
     far(g, new THREE.Mesh(paint(new THREE.CylinderGeometry(9, 11, 2.4, 12).translate(0, 1.2, 0), 0x241430), daisMat), ringX, 0, ringZ + 8);
     const back = loftGeometry([[0, 2.2, .9, 0, 0, 4], [7.5, 1.7, .7, 0, 0, 4], [10.5, .5, .5, 0, 0, 4]], { segments: 10, steps: 3 });
