@@ -229,12 +229,12 @@ export function buildGate(w, hex, mega = false) {
   const trimMesh = mesh(mergeGeometries(trim.map(geo => { const n = geo.toNonIndexed(); n.deleteAttribute('uv'); return n; })), gateTrim, 0, 0, 0, false);
   const capMesh = new THREE.Mesh(mergeGeometries(caps.map(geo => { const n = geo.index ? geo.toNonIndexed() : geo; n.deleteAttribute('uv'); return n; })), capMat);
   g.add(frame, trimMesh, capMesh);
-  const panelMat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+  const panelMat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(w - .12, H - 0.16), panelMat);
   panel.position.y = (H - 0.16) / 2 + 0.06;
   g.add(panel);
   // moving shine stripe (one shared texture animates every gate)
-  const shine = new THREE.Mesh(panel.geometry, new THREE.MeshBasicMaterial({ map: shineTexture(), transparent: true, opacity: mega ? 0.55 : 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  const shine = new THREE.Mesh(panel.geometry, new THREE.MeshBasicMaterial({ map: shineTexture(), transparent: true, opacity: mega ? 0.55 : 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true }));
   shine.position.copy(panel.position); shine.position.z = 0.01;
   g.add(shine);
   const label = makeCanvasLabel();
@@ -293,7 +293,7 @@ export function buildFence(w) {
   g.add(mesh(bar, dark, 0, H - 0.05, 0), mesh(bar, dark, 0, 0.1, 0));
   const tex = chainTexture().clone(); tex.needsUpdate = true;
   tex.repeat.set(w * 2.2, H * 2.2);
-  const panelMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, color: 0xdde4ee });
+  const panelMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.9, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false, color: 0xdde4ee });
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, H - 0.15), panelMat);
   panel.position.y = H / 2;
   g.add(panel);
@@ -338,10 +338,10 @@ export function buildPortal(w, color = 0xff4fd8, inner = 0xc040ff) {
   const ringMat = new THREE.MeshLambertMaterial({ color, emissive: new THREE.Color(color).multiplyScalar(0.55) });
   const ring = mesh(new THREE.TorusGeometry(r, 0.16, 10, 32), ringMat, 0, r + 0.25, 0);
   g.add(ring);
-  const panelMat = new THREE.MeshBasicMaterial({ color: inner, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
+  const panelMat = new THREE.MeshBasicMaterial({ color: inner, transparent: true, opacity: 0.6, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
   const disc = new THREE.Mesh(new THREE.CircleGeometry(r - 0.08, 32), panelMat);
   disc.position.y = r + 0.25; g.add(disc);
-  const swirl = new THREE.Mesh(new THREE.RingGeometry(r * 0.25, r * 0.75, 3, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+  const swirl = new THREE.Mesh(new THREE.RingGeometry(r * 0.25, r * 0.75, 3, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false }));
   swirl.position.set(0, r + 0.25, 0.02); g.add(swirl);
   g.add(mesh(new THREE.BoxGeometry(w, 0.1, 0.3), lam(0x5a1a6a), 0, 0.05, 0, false));
   const label = makeCanvasLabel();
