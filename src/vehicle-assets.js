@@ -26,6 +26,8 @@ const mounts = [
   [1.28, -0.32, 1.77, 0.12],
   [1.48, -0.28, 1.95, 0.36],
   [1.68, -0.35, 2.11, 0.6],
+  [1.36, -0.25, 1.86, 0.62],
+  [1.24, -0.6, 2.12, 0.06],
 ];
 
 function beveledBox(w, h, d, bevel = 0.045) {
@@ -489,6 +491,117 @@ function buildTitan(root, tint) {
   }
 }
 
+const ROSE = 0xff8df0;
+// Prism lancer: an arrowhead skiff whose wing yokes carry a hoop around the guns. Three crystals
+// orbit inside the hoop and focus the lance.
+function buildLancer(root, tint) {
+  const hover = node(root, 'hover');
+  const b = batch();
+  b.add(pod([[1.0, 0.3, 0.06, 0.84], [0.8, 0.56, 0.14, 0.84], [0.25, 0.7, 0.17, 0.85], [-0.5, 0.46, 0.15, 0.85], [-1.05, 0.2, 0.09, 0.86], [-1.4, 0.04, 0.03, 0.87]], 16), NAVY);
+  b.add(pod([[0.92, 0.28, 0.05, 1.0], [0.7, 0.5, 0.12, 1.02], [0.2, 0.6, 0.13, 1.03], [-0.5, 0.38, 0.12, 1.01], [-1.0, 0.16, 0.07, 0.99], [-1.32, 0.03, 0.02, 0.97]], 16), tint);
+  b.add(pod([[0.82, 0.18, 0.04, 1.14], [0.6, 0.28, 0.1, 1.16], [0.1, 0.27, 0.1, 1.17], [-0.12, 0.16, 0.05, 1.14]], 14), IVORY);
+  b.add(pod([[0.5, 0.17, 0.03, 1.27], [0.3, 0.2, 0.05, 1.28], [0.05, 0.16, 0.03, 1.26]], 12), NAVY);
+  b.add(pod([[-0.6, 0.05, 0.03, 1.11], [-0.9, 0.06, 0.04, 1.08], [-1.2, 0.03, 0.02, 1.03]], 8), IVORY);
+  b.add(axle([[0.001, -0.5], [0.15, -0.5], [0.19, -0.42], [0.19, 0.42], [0.15, 0.5], [0.001, 0.5]], 14), STEEL, 0, 1.36, -0.32);
+  // Rear mast under the charge orb.
+  b.add(lathe([[0.2, 1.1], [0.16, 1.2], [0.1, 1.3], [0.085, 1.56], [0.12, 1.62], [0.001, 1.64]], 12), tint, 0, 0, 0.62);
+  for (const side of [-1, 1]) {
+    // Swept wings with pale tips, then fins that lean outward.
+    b.add(pod([[0.9, 0.3, 0.03, 0.95, 0.4], [0.3, 0.44, 0.05, 0.96, 0.4], [-0.3, 0.22, 0.035, 0.96, 0.4], [-0.62, 0.05, 0.015, 0.96, 0.4]], 12), tint, side * 0.82);
+    b.add(pod([[0.94, 0.08, 0.03, 0.97], [0.4, 0.1, 0.045, 0.98], [-0.1, 0.05, 0.03, 0.98]], 8), IVORY, side * 1.2);
+    b.add(upright([[1.0, 0.05, 0.32, 0.7], [1.3, 0.04, 0.24, 0.78], [1.62, 0.02, 0.09, 0.9]], 10), IVORY, side * 0.52);
+    b.add(upright([[1.58, 0.03, 0.1, 0.9], [1.68, 0.02, 0.05, 0.94], [1.72, 0.008, 0.02, 0.96]], 8), AMBER, side * 0.52);
+    // Yoke from the wing root to the hoop.
+    b.add(limb([[side * 0.8, 0.98, -0.1], [side * 0.98, 1.1, -0.55], [side * 1.0, 1.36, -0.95]], [0.07, 0.06, 0.055], 8, 8), STEEL);
+    b.add(new THREE.SphereGeometry(0.085, 10, 8), tint, side * 1.0, 1.36, -0.95);
+    // Lift pods under the wings and one under the prow.
+    b.add(lathe([[0.1, 0.62], [0.2, 0.68], [0.22, 0.8], [0.16, 0.9], [0.001, 0.92]], 14), NAVY, side * 0.62, 0, 0.45);
+  }
+  b.add(lathe([[0.08, 0.66], [0.16, 0.7], [0.18, 0.8], [0.12, 0.88], [0.001, 0.9]], 14), NAVY, 0, 0, -0.75);
+  b.add(new THREE.TorusGeometry(1.0, 0.04, 6, 40), STEEL, 0, 1.36, -0.95);
+  for (let k = 0; k < 6; k++) {
+    const a = k * TAU / 6 + TAU / 12;
+    b.add(new THREE.BoxGeometry(0.1, 0.12, 0.1), IVORY, Math.cos(a) * 1.0, 1.36 + Math.sin(a) * 1.0, -0.95, 0, 0, a);
+  }
+  b.finish(hover, 'hull');
+  const ring = node(hover, 'prism-ring', 0, 1.36, -0.95);
+  const crystals = batch();
+  for (let k = 0; k < 3; k++) {
+    const a = k * TAU / 3 + Math.PI / 2, x = Math.cos(a) * 0.82, y = Math.sin(a) * 0.82;
+    crystals.add(new THREE.OctahedronGeometry(0.13, 0).scale(1, 1, 2.3), k === 0 ? CYAN : k === 1 ? ROSE : AMBER, x, y, 0, 0, 0, a);
+    crystals.add(new THREE.OctahedronGeometry(0.06, 0).scale(1, 1, 1.6), IVORY, x * 0.86, y * 0.86, 0.02);
+  }
+  crystals.add(new THREE.TorusGeometry(0.82, 0.016, 4, 36), CYAN).finish(ring, 'crystals', luminous);
+  const flames = batch();
+  for (const [x, z, r] of [[-0.62, 0.45, 0.2], [0.62, 0.45, 0.2], [0, -0.75, 0.16]]) {
+    flames.add(lathe([[0.001, 0.2], [r * 0.4, 0.3], [r * 0.75, 0.46], [r, 0.62]], 14), CYAN, x, 0, z);
+    flames.add(new THREE.TorusGeometry(r + 0.01, 0.02, 4, 16).rotateX(Math.PI / 2), CYAN, x, 0.64, z);
+  }
+  flames.finish(hover, 'thrusters', luminous);
+  const lamps = batch();
+  for (const side of [-1, 1]) lamps.add(pod([[0.86, 0.02, 0.012, 0.99], [0.3, 0.025, 0.014, 1.0], [-0.26, 0.02, 0.012, 0.99]], 6), CYAN, side * 1.27);
+  lamps.add(pod([[-1.2, 0.05, 0.02, 0.95], [-1.42, 0.02, 0.012, 0.93]], 8), ROSE);
+  lamps.add(pod([[0.45, 0.14, 0.012, 1.325], [0.12, 0.12, 0.012, 1.3]], 8), CYAN).finish(hover, 'lamps', luminous);
+}
+
+// Dreadnought: a long tracked hull with a ram bow, a stepped citadel, two rotary sponson guns,
+// a rear mortar battery and a turning radar dish.
+function buildDread(root, tint) {
+  const b = batch(); tracks(root, b, tint, true);
+  b.add(pod([[1.3, 0.74, 0.16, 0.72], [1.08, 0.88, 0.27, 0.76], [-0.8, 0.9, 0.27, 0.77], [-1.14, 0.78, 0.17, 0.7], [-1.28, 0.6, 0.07, 0.65]]), NAVY);
+  b.add(pod([[1.2, 0.72, 0.05, 1.0], [1.0, 0.82, 0.12, 1.02], [-0.7, 0.84, 0.13, 1.03], [-1.04, 0.72, 0.07, 0.99], [-1.16, 0.56, 0.02, 0.95]]), tint);
+  b.add(pod([[-1.1, 0.56, 0.16, 0.62, 0.45], [-1.3, 0.36, 0.14, 0.6, 0.45], [-1.52, 0.03, 0.07, 0.58, 0.45]], 14), IVORY);
+  b.add(pod([[-1.16, 0.5, 0.02, 0.8], [-1.34, 0.3, 0.018, 0.76], [-1.5, 0.04, 0.015, 0.68]], 10), STEEL);
+  // Citadel in two tiers, with a visor slot cut by a dark band.
+  b.add(upright([[1.02, 0.6, 0.7, 0.12, 0.7], [1.2, 0.62, 0.72, 0.12, 0.68], [1.42, 0.56, 0.64, 0.14, 0.68], [1.5, 0.46, 0.52, 0.16, 0.7]], 18), tint);
+  b.add(upright([[1.46, 0.4, 0.44, 0.24, 0.7], [1.62, 0.42, 0.46, 0.24, 0.68], [1.8, 0.36, 0.4, 0.26, 0.68], [1.86, 0.26, 0.3, 0.28, 0.7]], 18), IVORY);
+  b.add(upright([[1.84, 0.28, 0.32, 0.28], [1.9, 0.26, 0.3, 0.28], [1.93, 0.18, 0.2, 0.28]], 14), tint);
+  b.add(axle([[0.001, -0.56], [0.19, -0.56], [0.23, -0.47], [0.23, 0.47], [0.19, 0.56], [0.001, 0.56]], 14), STEEL, 0, 1.24, -0.62);
+  for (const side of [-1, 1]) {
+    // Sponson housings and their mounting collars.
+    b.add(pod([[0.5, 0.15, 0.13, 1.2], [0.3, 0.2, 0.18, 1.2], [-0.3, 0.2, 0.18, 1.2], [-0.48, 0.15, 0.13, 1.2]], 12), tint, side * 0.98);
+    b.add(new THREE.TorusGeometry(0.16, 0.035, 6, 16), IVORY, side * 0.98, 1.2, -0.46);
+    b.add(pod([[0.4, 0.06, 0.02, 1.4], [0.2, 0.08, 0.03, 1.4], [-0.2, 0.08, 0.03, 1.4], [-0.36, 0.06, 0.02, 1.4]], 8), IVORY, side * 0.98);
+    // Exhaust stacks behind the bridge.
+    b.add(lathe([[0.08, 0], [0.085, 0.3], [0.1, 0.34], [0.1, 0.42], [0.07, 0.42], [0.07, 0.3]], 10), DARK, side * 0.44, 1.48, 0.68, 0.18);
+    b.add(new THREE.TorusGeometry(0.095, 0.02, 4, 12).rotateX(Math.PI / 2), AMBER, side * 0.44, 1.86, 0.75);
+    for (const k of [0, 1]) {
+      // Mortar battery on the rear deck, raised toward the front.
+      const x = side * (0.17 + k * 0.32);
+      b.add(lathe([[0.1, 0], [0.115, 0.04], [0.11, 0.5], [0.125, 0.52], [0.125, 0.58], [0.085, 0.58], [0.085, 0.06]], 12), DARK, x, 1.02, 1.08, -0.5);
+      b.add(new THREE.TorusGeometry(0.118, 0.022, 4, 12).rotateX(Math.PI / 2 - 0.5), IVORY, x, 1.02 + Math.cos(0.5) * 0.55, 1.08 - Math.sin(0.5) * 0.55);
+    }
+    b.add(upright([[0.98, 0.07, 0.03], [1.04, 0.09, 0.04], [1.1, 0.07, 0.03]], 8), AMBER, side * 0.62, 0, 1.2);
+  }
+  b.add(pod([[1.3, 0.56, 0.06, 1.06], [1.18, 0.6, 0.09, 1.07], [0.92, 0.6, 0.09, 1.07], [0.86, 0.56, 0.06, 1.06]], 12), NAVY);
+  b.add(lathe([[0.06, 0], [0.045, 0.1], [0.04, 0.5], [0.06, 0.53], [0.001, 0.54]], 8), STEEL, 0, 1.84, 0.62);
+  chevrons(b, 0, 1.515, -0.3, 0.24);
+  b.finish(root, 'hull');
+  for (const side of [-1, 1]) {
+    const gun = node(root, 'gatling', side * 0.98, 1.2, -0.5);
+    gun.userData.side = side;
+    const g = batch();
+    for (let k = 0; k < 6; k++) {
+      const a = k * TAU / 6;
+      g.add(new THREE.CylinderGeometry(0.028, 0.028, 0.62, 6).rotateX(Math.PI / 2), DARK, Math.cos(a) * 0.085, Math.sin(a) * 0.085, -0.31);
+    }
+    g.add(new THREE.CylinderGeometry(0.13, 0.13, 0.06, 12).rotateX(Math.PI / 2), STEEL, 0, 0, -0.2)
+      .add(new THREE.CylinderGeometry(0.125, 0.125, 0.05, 12).rotateX(Math.PI / 2), IVORY, 0, 0, -0.56)
+      .add(new THREE.CylinderGeometry(0.05, 0.05, 0.66, 8).rotateX(Math.PI / 2), tint, 0, 0, -0.3).finish(gun, 'barrels');
+  }
+  const radar = node(root, 'radar', 0, 2.36, 0.62);
+  batch().add(lathe([[0.001, 0], [0.12, 0.02], [0.24, 0.08], [0.32, 0.18], [0.3, 0.19], [0.22, 0.1], [0.11, 0.045], [0.001, 0.03]], 16).rotateX(-1.1), IVORY, 0, 0.1, 0)
+    .add(limb([[0, 0.1, 0], [0, 0.2, -0.16], [0, 0.26, -0.3]], [0.018, 0.015, 0.012], 5, 3), STEEL)
+    .add(new THREE.SphereGeometry(0.04, 8, 6), AMBER, 0, 0.26, -0.3).finish(radar, 'dish');
+  const lights = batch();
+  lights.add(pod([[0.02, 0.33, 0.035, 1.68], [-0.04, 0.35, 0.04, 1.68], [-0.1, 0.3, 0.03, 1.68]], 12), CYAN, 0, 0, -0.14);
+  for (const side of [-1, 1]) {
+    lights.add(upright([[0.84, 0.08, 0.02], [0.89, 0.1, 0.025], [0.94, 0.08, 0.02]], 10), CYAN, side * 0.55, 0, -1.14);
+    for (const k of [0, 1]) lights.add(new THREE.SphereGeometry(0.06, 8, 6), AMBER, side * (0.17 + k * 0.32), 1.02 + Math.cos(0.5) * 0.6, 1.08 - Math.sin(0.5) * 0.6);
+  }
+  lights.finish(root, 'lamps', luminous);
+}
+
 const RED = 0xe8333a, CHASSIS = 0x2b2f3a;
 const carriageGeometries = new Map();
 /** Starting field-cannon carriage. Wheels are separate meshes that spin on X. */
@@ -538,7 +651,7 @@ export function orbSocketGeometry() {
   return socketGeometry;
 }
 
-const builders = [null, buildBulldog, buildSiege, buildSpider, buildHover, buildRail, buildTitan];
+const builders = [null, buildBulldog, buildSiege, buildSpider, buildHover, buildRail, buildTitan, buildLancer, buildDread];
 
 function getTemplate(id, tint) {
   const key = `${id}:${tint}`;
@@ -551,7 +664,7 @@ function getTemplate(id, tint) {
 
 function instanceForm(id, tint) {
   const group = getTemplate(id, tint).clone(true);
-  const parts = { legs: [], knees: [], arms: [], rotors: [], wheels: [] };
+  const parts = { legs: [], knees: [], arms: [], rotors: [], wheels: [], gatlings: [] };
   group.traverse(part => {
     if (part.name === 'belt') parts.belt = part;
     if (part.name === 'rollers') parts.rollers = part;
@@ -561,6 +674,9 @@ function instanceForm(id, tint) {
     if (part.name === 'rotor') parts.rotors.push(part);
     if (part.name === 'rail-wheel') parts.wheels.push(part);
     if (part.name === 'hover') parts.hover = part;
+    if (part.name === 'prism-ring') parts.prisms = part;
+    if (part.name === 'gatling') parts.gatlings.push(part);
+    if (part.name === 'radar') parts.radar = part;
     if (part.name === 'thrusters') parts.thrusters = part;
     if (part.name === 'rail-slide') parts.railSlide = part;
     if (part.name === 'capacitors') parts.capacitors = part;
@@ -585,7 +701,7 @@ export function createVehicleRig(tint = 0x2f8bff) {
   const glowAnchor = new THREE.Vector3(0, 1.6, 0.2);
   let form = null, formId = 0, travel = 0;
   function setForm(requested) {
-    const id = Math.max(0, Math.min(6, Math.trunc(Number(requested) || 0)));
+    const id = Math.max(0, Math.min(builders.length - 1, Math.trunc(Number(requested) || 0)));
     if (id === formId) return;
     if (form) group.remove(form.group);
     formId = id; form = null;
@@ -621,6 +737,13 @@ export function createVehicleRig(tint = 0x2f8bff) {
       p.thrusters.scale.y = 0.82 + Math.sin(time * 19) * 0.1 + motion * 0.22;
       p.rotors.forEach((rotor, i) => { rotor.rotation.y = time * (i % 2 ? -19 : 19); });
     }
+    if (p.prisms) {
+      // The crystals spin up as the charge builds and flare on every volley.
+      p.prisms.rotation.z = time * (1.4 + Math.max(0, Math.min(1, charge)) * 2.2);
+      p.prisms.scale.setScalar(1 + kick * 0.07);
+    }
+    p.gatlings.forEach(gun => { gun.rotation.z = gun.userData.side * time * (5 + kick * 14); gun.position.z = -0.5 + kick * 0.05; });
+    if (p.radar) p.radar.rotation.y = time * 1.3;
     if (p.railSlide) {
       p.railSlide.position.z = kick * 0.16;
       const pulse = 1 + Math.sin(time * 8) * 0.012 + Math.max(0, Math.min(1, charge)) * 0.035;

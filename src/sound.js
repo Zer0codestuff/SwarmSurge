@@ -54,7 +54,7 @@ export class Sound {
   play(name, p = 1) {
     if (this.muted || this.paused || !this.ctx) return;
     const now = performance.now();
-    const gap = { pop: 45, shoot: 90, weapon: 110, shield: 110, flyby: 800, shatter: 300, ignite: 300, gate: 70, hit: 150, boom: 120, warp: 90, zap: 80, crush: 150, combo: 120 }[name] || 0;
+    const gap = { pop: 45, shoot: 90, weapon: 110, shield: 110, flyby: 800, lance: 600, barrage: 600, shatter: 300, ignite: 300, gate: 70, hit: 150, boom: 120, warp: 90, zap: 80, crush: 150, combo: 120 }[name] || 0;
     if (now - (this.last[name] || 0) < gap) return;
     this.last[name] = now;
     switch (name) {
@@ -69,8 +69,12 @@ export class Sound {
           case 6: this.burst(.06,.04,600); break;
           case 7: this.tone(1350,.08,'triangle',.03,450); this.tone(2200,.06,'sine',.012,-500,.02); break;
           case 8: this.tone(200,.11,'sine',.045,350); this.tone(600,.05,'triangle',.018,-400); break;
+          case 9: this.tone(95,.12,'sine',.07,-40); this.burst(.05,.05,500); break;
+          case 10: this.tone(1700,.05,'sawtooth',.02,-1300); this.tone(260,.07,'square',.018,-120); break;
         }
         break;
+      case 'lance': this.tone(220,.5,'sawtooth',.07,1400); this.tone(1320,.45,'sine',.06,-900); this.burst(.3,.12,2600); break;
+      case 'barrage': [0, .09, .18, .27].forEach((d) => this.tone(130,.14,'sine',.12,-60,d)); this.burst(.12,.1,700); break;
       case 'heavy': this.tone(110,.09,'sine',.13,-45); break;
       case 'shield': this.tone(950,.08,'triangle',.07,550); this.tone(470,.05,'sine',.05); break;
       case 'flyby': this.burst(.4,.09,1000); this.tone(160+p*20,.32,'sine',.04,180); break;

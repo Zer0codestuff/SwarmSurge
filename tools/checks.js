@@ -179,6 +179,46 @@ window.runGameChecks = (g) => {
     }
     return {pass:forms.every(Boolean) && G.shield===6 && G.power===144 && G.aircraft===1 && G.weapon===8,forms};
   })()`);
+  check('Tank crates stop at the Titan while named crates reach the two ability forms', `(() => {
+    for(let k=0;k<9;k++) upgradeCannon('tank');
+    const capped=G.chassis===6 && cannon.rig.formId===6;
+    upgradeCannon('lancer'); const lancer=G.chassis===7 && cannon.rig.formId===7 && twinCannon.rig.formId===7 && (G.weaponMask & (1<<10)) && cannon.barrels.position.equals(cannon.rig.barrelAnchor);
+    cannon.animateVehicle(G.t,.016,.5,4,.8);
+    upgradeCannon('dread'); const dread=G.chassis===8 && cannon.rig.formId===8 && (G.weaponMask & (1<<9)) && G.abilityT===ABILITY_SPECS.barrage.first;
+    cannon.animateVehicle(G.t,.016,.5,4,.8);
+    upgradeCannon('tank'); upgradeCannon('titan');
+    return {pass:capped && !!lancer && !!dread && G.chassis===8,capped,lancer,dread};
+  })()`);
+  check('The prism lance pierces armor in its lane, wears down walls and spares vault seals', `(() => {
+    const S=G.stage; G.chassis=7; G.cx=G.aim=0; G.power=1; G.armyAvg=0; S.tower.hp=S.tower.max=1e6;
+    const crab=spawnRed(.4,G.z0-20,8,100), side=spawnRed(4,G.z0-20,0,100);
+    const wall={def:{t:'ice',hp:1000},x:0,z:G.z0-30,w:3,alive:true,on:true,hp:1000,flash:0};
+    const seal={def:{t:'ice',hp:1000,vault:true},x:0,z:G.z0-34,w:3,alive:true,on:true,hp:1000,flash:0};
+    S.gates.push(wall,seal);
+    G.abilityT=0; updateAbility(S,.01);
+    const spec=ABILITY_SPECS.lance;
+    return {pass:R.hp[crab]===70 && R.hp[side]===100 && wall.hp===850 && seal.hp===1000 && S.tower.hp===1e6-60 && spec.targetCap===.025 && G.abilityT===spec.every,crab:R.hp[crab],wall:wall.hp,tower:S.tower.hp};
+  })()`);
+  check('The barrage shells the heaviest pack after its flight time and caps target damage', `(() => {
+    const S=G.stage; G.chassis=8; G.power=1; G.armyAvg=0; S.tower.hp=S.tower.max=1000;
+    const pack=[spawnRed(2,G.z0-20,0,100),spawnRed(2.4,G.z0-20.5,0,100)], far=spawnRed(-5,G.z0-40,8,100);
+    G.abilityT=0; updateAbility(S,.01);
+    const shells=G.effects.filter(e=>e.kind==='shell');
+    const waiting=R.hp[pack[0]]===100;
+    for(let k=0;k<90;k++) updateEffects(STEP);
+    return {pass:shells.length===4 && waiting && R.hp[pack[0]]<100 && R.hp[pack[1]]<100 && Math.abs(R.hp[far]-(100-24*.35))<.01 && S.tower.hp>=1000-4*10 && S.tower.hp<1000 && !G.effects.some(e=>e.kind==='shell'),shells:shells.length,hp:[R.hp[pack[0]],R.hp[far],S.tower.hp]};
+  })()`);
+  check('Mortars fire over cover and shock lances shove enemies back without crossing walls', `(() => {
+    const S=G.stage;
+    S.gates.push({def:{t:'barrier'},x:0,z:-5,w:4,alive:true,on:true,hp:100,flash:0});
+    const hidden=spawnRed(0,-8,0,100), blaster=spawn(B,0,-2,10,0), mortar=spawn(B,.5,-2,10,0);
+    B.weapon[blaster]=1; B.weapon[mortar]=9; B.shot[blaster]=B.shot[mortar]=0; buildGrid(gR,R); updateArsenal(S,.01);
+    const lobbed=Math.abs(R.hp[hidden]-(100-10*WEAPON_SPECS[9].damage))<.001 && Math.abs(B.shot[blaster]-.12)<.001;
+    const open=spawnRed(4,-10,0,100), heavy=spawnRed(-4,-10,1,100), walled=spawnRed(0,-4.5,0,100);
+    hitArmedRed(open,1,WEAPON_SPECS[10],1); hitArmedRed(heavy,1,WEAPON_SPECS[10],1); hitArmedRed(walled,1,WEAPON_SPECS[10],1);
+    const knock=WEAPON_SPECS[10].knock;
+    return {pass:lobbed && Math.abs(R.z[open]-(-10-knock))<.001 && Math.abs(R.z[heavy]-(-10-knock*.35))<.001 && R.z[walled]===-4.5 && R.chill[open]>0,lobbed,z:[R.z[open],R.z[heavy],R.z[walled]]};
+  })()`);
   check('Grounded vehicle parts move only while driving', `(() => {
     cannon.setChassis(1); cannon.animateVehicle(0,.1,0,0,0);
     const belt=cannon.rig.group.getObjectByName('belt'), start=Array.from(belt.instanceMatrix.array);

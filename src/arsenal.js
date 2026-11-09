@@ -29,6 +29,9 @@ export const WEAPON_SPECS = [
   { key: 'flame', name: 'Flamethrowers', range: 4.5, damage: .13, cooldown: .3, color: 0xff8b42, cone: .7, targets: 6, burn: 2 },
   { key: 'frost', name: 'Frost projectors', range: 9, damage: .35, cooldown: .7, color: 0x80eaff, chill: 1.8, splash: 1.3 },
   { key: 'plasma', name: 'Plasma casters', range: 11, damage: .8, cooldown: 1.1, color: 0xff8dec, splash: 2.4 },
+  // Mortars lob over gates and walls. Shock lances shove enemies back up the road.
+  { key: 'mortar', name: 'Mortars', range: 13, damage: 1.15, cooldown: 1.9, color: 0xffe27a, splash: 2.2, lob: true },
+  { key: 'shock', name: 'Shock lances', range: 6.5, damage: .5, cooldown: .85, color: 0x9dffb0, knock: 1.6, chill: .5 },
 ];
 export const WEAPONS = ['Unarmed', ...WEAPON_SPECS.slice(1).map(spec => spec.name)];
 export const WEAPON_IDS = Object.fromEntries(WEAPON_SPECS.slice(1).map((spec, i) => [spec.key, i + 1]));
@@ -40,7 +43,16 @@ export const CHASSIS_SPECS = [
   { key: 'hover', name: 'Hover fortress', power: 2, guns: 1, armor: 4, weapon: 7, rate: 2 },
   { key: 'railfort', name: 'Rail fortress', power: 3, guns: 1, armor: 5, weapon: 5 },
   { key: 'titan', name: 'Titan walker', power: 3, guns: 2, armor: 6, weapon: 8, rate: 2, aircraft: 1 },
+  // Forms past the Titan carry a timed ability. Crates named 'tank' stop evolving at the Titan.
+  { key: 'lancer', name: 'Prism lancer', power: 3, guns: 1, armor: 5, weapon: 10, rate: 2, ability: 'lance' },
+  { key: 'dread', name: 'Dreadnought', power: 3, guns: 2, armor: 6, weapon: 9, rate: 2, ability: 'barrage' },
 ];
+export const TANK_EVOLUTION_CAP = 6;
+// Form abilities fire on their own. Damage follows the army like air strikes; target damage is capped per use.
+export const ABILITY_SPECS = {
+  lance: { name: 'Prism lance', every: 4.5, first: 1.5, width: 1.15, army: .2, base: 30, targetCap: .025, blockerShare: .15 },
+  barrage: { name: 'Barrage', every: 6, first: 2, shells: 4, radius: 2.6, flight: .85, army: .14, base: 24, targetCap: .01 },
+};
 export const CHASSIS = ['Cannon', ...CHASSIS_SPECS.slice(1).map(spec => spec.name)];
 export const CHASSIS_IDS = Object.fromEntries(CHASSIS_SPECS.slice(1).map((spec, i) => [spec.key, i + 1]));
 export const AIRCRAFT_SPECS = [

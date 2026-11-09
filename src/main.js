@@ -6,7 +6,7 @@ import * as FX from './fx.js';
 import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
-import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, sweptCircle } from './arsenal.js';
+import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, TANK_EVOLUTION_CAP, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
@@ -851,6 +851,7 @@ function priceStageSupplies(S, inheritedFlux) {
 function enterStage(i) {
   G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives, chassis: G.chassis, weapon: G.weapon, weaponMask: G.weaponMask, aircraft: G.aircraft, shield: G.shield, supplyFlux: cannonFlux(false) };
   G.rad = 0; G.armyAvg = 0; G.overdrive = 0; G.airPass = 0; G.airTier = 0; G.airT = 2;
+  G.abilityT = ABILITY_SPECS[CHASSIS_SPECS[G.chassis]?.ability]?.first ?? 0;
   for (const zn of G.zones) if (zn.mesh) { G.root.remove(zn.mesh); zn.mesh.geometry.dispose(); }
   G.zones.length = 0;
   G.stageIdx = i;
@@ -972,7 +973,7 @@ function rangedHit(target, damage) {
   target.hp -= d; target.flash = 1; G.dmgTotal += d;
   if (target === G.stage.tower || target === G.stage.boss) G.dmgAcc += d;
 }
-function nearestVisibleRed(S, x, z, range, excluded = null, forwardOnly = true) {
+function nearestVisibleRed(S, x, z, range, excluded = null, forwardOnly = true, lob = false) {
   let best = range * range, index = -1;
   const left = cellX(x - range), right = cellX(x + range);
   const front = cellZ(z + range), back = cellZ(z - range);
@@ -980,7 +981,7 @@ function nearestVisibleRed(S, x, z, range, excluded = null, forwardOnly = true) 
     for (let j = gR.head[row * GCOLS + col]; j !== -1; j = gR.next[j]) {
       if (R.hp[j] <= 0 || excluded?.has(j) || forwardOnly && R.z[j] >= z) continue;
       const d2 = (R.x[j] - x) ** 2 + (R.z[j] - z) ** 2;
-      if (d2 < best && !shotBlocked(S, x, z, R.x[j], R.z[j])) { best = d2; index = j; }
+      if (d2 < best && (lob || !shotBlocked(S, x, z, R.x[j], R.z[j]))) { best = d2; index = j; }
     }
   }
   return index;
@@ -1010,7 +1011,12 @@ function hitArmedRed(j, damage, spec, troopPower) {
     R.burn[j] = spec.burn;
     R.burnDamage[j] = Math.max(R.burnDamage[j], troopPower * .09 * armor);
   }
-  if (spec.chill) R.chill[j] = spec.chill;
+  if (spec.chill) R.chill[j] = Math.max(R.chill[j], spec.chill);
+  if (spec.knock) {
+    // Heavy bodies barely move, and nothing is shoved through a wall, gate or the fort line.
+    const push = spec.knock * (RED_TYPES[R.kind[j]].big ? .35 : 1), to = Math.max(G.z0 - 56, R.z[j] - push);
+    if (to < R.z[j] && !shotBlocked(G.stage, R.x[j], R.z[j] + .01, R.x[j], to)) { R.z[j] = to; R.vz[j] = Math.min(R.vz[j], 0); }
+  }
 }
 function redLift(i) {
   const type = RED_TYPES[R.kind[i]], phase = R.phase[i];
@@ -1030,34 +1036,40 @@ function updateArsenal(S, dt) {
     if (searches++ >= 48) break;
     const x = B.x[i], z = B.z[i], spec = WEAPON_SPECS[B.weapon[i]];
     if (!spec) continue;
-    const { range, color } = spec, damage = B.hp[i] * spec.damage;
+    const { range, color } = spec, damage = B.hp[i] * spec.damage, lob = !!spec.lob;
     // Balls intercept direct fire, including shots fired before they start rolling.
-    const ball = S.balls.find(b => b.alive && b.hp > 0 && b.z < z && Math.hypot(b.x - x, b.z - z) < range + b.r && !shotBlocked(S, x, z, b.x, b.z));
-    let j = ball ? -1 : nearestVisibleRed(S, x, z, range);
-    const target = !ball && j < 0 ? [S.tower, S.boss, ...S.spawners, ...S.turrets].find(t => t?.alive && t.hp > 0 && t.z < z && Math.hypot((t.x ?? 0) - x, t.z - z) < range + 2 && !shotBlocked(S, x, z, t.x ?? 0, t.z)) : null;
+    const ball = S.balls.find(b => b.alive && b.hp > 0 && b.z < z && Math.hypot(b.x - x, b.z - z) < range + b.r && (lob || !shotBlocked(S, x, z, b.x, b.z)));
+    let j = ball ? -1 : nearestVisibleRed(S, x, z, range, null, true, lob);
+    const target = !ball && j < 0 ? [S.tower, S.boss, ...S.spawners, ...S.turrets].find(t => t?.alive && t.hp > 0 && t.z < z && Math.hypot((t.x ?? 0) - x, t.z - z) < range + 2 && (lob || !shotBlocked(S, x, z, t.x ?? 0, t.z))) : null;
     if (!ball && j < 0 && !target) { B.shot[i] = .12; continue; }
     B.shot[i] = spec.cooldown; budget--;
     B.flash[i] = Math.max(B.flash[i], .25);
     const angle = Math.atan2(B.vx[i], B.vz[i]), scale = B.sc[i];
     const sx = x + (.35 * Math.cos(angle) + .72 * Math.sin(angle)) * scale;
     const sz = z + (-.35 * Math.sin(angle) + .72 * Math.cos(angle)) * scale, sy = .68 * scale;
-    const width = spec.burn ? .18 : spec.pierce ? .045 : spec.key === 'plasma' ? .14 : .08;
+    const width = spec.burn ? .18 : spec.pierce ? .045 : spec.key === 'plasma' || lob ? .14 : .08;
+    // Lobbed shells climb to an apex first, so their trail clears the cover they ignore.
+    const shotBeam = (x2, y2, z2, life) => {
+      if (!lob) { addBeam(sx, sy, sz, x2, y2, z2, color, life, width); return; }
+      const mx = (sx + x2) / 2, mz = (sz + z2) / 2, my = 2.2 + Math.hypot(x2 - sx, z2 - sz) * .14;
+      addBeam(sx, sy, sz, mx, my, mz, color, life + .05, width); addBeam(mx, my, mz, x2, y2, z2, color, life + .05, width);
+    };
     spark(sx, sy, sz, WEAPON_RGB[B.weapon[i]], 1, .4, spec.burn ? .5 : .3, .09, 0);
     if (!TURBO) sound.play('weapon', B.weapon[i]);
     if (ball) {
       rangedHit(ball, damage); ball.impact = .15;
       if (spec.chill) ball.chill = spec.chill;
-      addBeam(sx, sy, sz, ball.x, ball.r, ball.z, color, .09, width);
+      shotBeam(ball.x, ball.r, ball.z, .09);
       if (ball.hp <= 0) ballDies(S, ball, false);
       continue;
     }
     if (j < 0) {
       rangedHit(target, damage * (S.breach || 1));
-      addBeam(sx, sy, sz, target.x ?? 0, 2, target.z, color, .08, width);
+      shotBeam(target.x ?? 0, 2, target.z, .08);
       continue;
     }
     const tx = R.x[j], tz = R.z[j], ty = redAimY(j), primary = j;
-    addBeam(sx, sy, sz, tx, ty, tz, color, .09, width);
+    shotBeam(tx, ty, tz, .09);
     hitArmedRed(j, damage, spec, B.hp[i]);
     if (spec.splash) {
       addRing(tx, tz, spec.splash, color, .2);
@@ -1125,6 +1137,94 @@ function updateArsenal(S, dt) {
     }
     G.shake = Math.max(G.shake, 0.2); sound.play('boom');
   }
+}
+
+// Timed abilities of the forms past the Titan. They fire on their own while the stage is in play.
+function abilityDamage(spec) { return Math.max(spec.base * G.power, G.armyAvg * spec.army); }
+function fireLance(S, spec) {
+  const x = G.cx, damage = abilityDamage(spec), far = G.z0 - 60;
+  for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.x[j] - x) < spec.width + R.rad[j]) {
+    R.hp[j] -= damage; if (R.hp[j] <= 0) killRed(j); else R.flash[j] = 1;
+  }
+  for (const ball of S.balls) if (ball.alive && ball.hp > 0 && Math.abs(ball.x - x) < ball.r + spec.width) {
+    rangedHit(ball, damage * 2); ball.impact = .2; if (ball.hp <= 0) ballDies(S, ball, false);
+  }
+  // Walls in the lane lose a fixed share of their strength per beam. Vault seals still need troops.
+  for (const g of S.gates) {
+    if (!g.alive || !g.on || g.def.vault || !(BLOCKERS.has(g.def.t) || REDGATES.has(g.def.t)) || Math.abs(g.x - x) > g.w / 2 + spec.width * .5) continue;
+    g.hp -= Math.min(g.hp, Math.max(damage, (g.def.hp || 0) * spec.blockerShare)); g.flash = 1; g.dirty = true;
+    spark(x, 1.2, g.z, PCOL.ice, 8, 5, 1, .4);
+    if (g.hp <= 0) {
+      g.alive = false; g.dying = 1; burst(g.x, 1, g.z, PCOL.ice, 40, 8); sound.play('boom');
+      popup('BROKEN!', 'combo c1', g.x, 2.5, g.z, 1.0);
+    }
+  }
+  for (const t of [...S.spawners, ...S.turrets]) if (t.alive && Math.abs(t.x - x) < spec.width + 1.2) rangedHit(t, damage);
+  const target = S.tower?.alive ? S.tower : S.boss?.alive ? S.boss : null;
+  if (target && (target === S.tower || Math.abs(target.x - x) < target.model.radius + spec.width)) {
+    rangedHit(target, Math.min(target.max * spec.targetCap, damage * 2));
+    burst(target.x ?? x, 2.5, target.z + 1, PCOL.ice, 16, 7, 1.2);
+  }
+  if (!TURBO) {
+    const y = 1.5, z0 = G.cannonZ - 1.6;
+    addBeam(x, y, z0, x, y, far, 0x9df4ff, .42, .62); addBeam(x, y, z0, x, y, far, 0xffffff, .3, .24);
+    addBeam(x, y, z0, x, y, far, 0xff8df0, .5, .95);
+    for (let k = 0; k < 7; k++) { addRing(x, G.z0 - 6 - k * 8, 1.5, k % 2 ? 0xff8df0 : 0x9df4ff, .35 + k * .03); spark(x, 1.4, G.z0 - 6 - k * 8, k % 2 ? PCOL.pink : PCOL.ice, 5, 4, 1, .4); }
+    sound.play('lance');
+  }
+  G.recoil = 1; G.cannonPulse = Math.max(G.cannonPulse || 0, .5); G.shake = Math.max(G.shake, .28);
+  if (!S.lanceShown) { S.lanceShown = true; popup('PRISM LANCE!', 'combo c2', x, 3.4, G.z0 - 9, .9); }
+}
+function shellLands(S, spec, x, z) {
+  if (G.phase !== 'play') return;
+  const damage = abilityDamage(spec), r2 = spec.radius ** 2;
+  for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && (R.x[j] - x) ** 2 + (R.z[j] - z) ** 2 < r2) {
+    R.hp[j] -= damage * (RED_TYPES[R.kind[j]].armor || 1); if (R.hp[j] <= 0) killRed(j); else R.flash[j] = 1;
+  }
+  for (const ball of S.balls) if (ball.alive && ball.hp > 0 && Math.hypot(ball.x - x, ball.z - z) < ball.r + spec.radius) {
+    rangedHit(ball, damage * 2); ball.impact = .2; if (ball.hp <= 0) ballDies(S, ball, false);
+  }
+  for (const t of [...S.spawners, ...S.turrets]) if (t.alive && Math.hypot(t.x - x, t.z - z) < spec.radius + 1) rangedHit(t, damage);
+  const target = S.tower?.alive ? S.tower : S.boss?.alive ? S.boss : null;
+  if (target && Math.abs(target.z - z) < spec.radius + 2 && (target === S.tower || Math.abs(target.x - x) < target.model.radius + spec.radius)) {
+    rangedHit(target, Math.min(target.max * spec.targetCap, damage * 2));
+  }
+  addRing(x, z, spec.radius, 0xffc45a, .4); addRing(x, z, spec.radius * .55, 0xffffff, .25);
+  burst(x, .5, z, PCOL.orange, 14, 6, 1.2); spark(x, .8, z, PCOL.gold, 8, 6, 1, .5);
+  G.shake = Math.max(G.shake, .16); sound.play('boom');
+}
+function fireBarrage(S, spec) {
+  // Shell the heaviest packs first, bucketed by 3 x 4 cells; spare shells fall on the target.
+  const cells = new Map();
+  for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && R.z[j] < G.z0 - 4) {
+    const key = Math.round(R.x[j] / 3) * 100 + Math.round((G.z0 - R.z[j]) / 4);
+    const c = cells.get(key) ?? { x: 0, z: 0, w: 0 };
+    const w = R.hp[j] * (1 + 12 / (4 + G.z0 - R.z[j]));
+    c.x += R.x[j] * w; c.z += R.z[j] * w; c.w += w; cells.set(key, c);
+  }
+  const packs = [...cells.values()].sort((a, b) => b.w - a.w).slice(0, spec.shells);
+  const target = S.tower?.alive ? S.tower : S.boss?.alive ? S.boss : null;
+  for (let k = 0; k < spec.shells; k++) {
+    const pack = packs[k];
+    let tx, tz;
+    if (pack) { tx = pack.x / pack.w; tz = pack.z / pack.w; }
+    else if (target) { tx = (target.x ?? 0) + (k - (spec.shells - 1) / 2) * 1.6; tz = target.z + 1.2; }
+    else break;
+    const flight = spec.flight + k * .12;
+    G.effects.push({ kind: 'shell', life: flight, max: flight, fx: G.cx + (k % 2 ? .3 : -.3), fz: G.cannonZ + .9, tx, tz, onHit: () => shellLands(S, spec, tx, tz) });
+    addRing(tx, tz, spec.radius, 0x8beaff, flight);
+  }
+  G.recoil = 1; G.cannonPulse = Math.max(G.cannonPulse || 0, .35);
+  if (!TURBO) { sound.play('barrage'); burst(G.cx, 1.6, G.cannonZ + .9, PCOL.orange, 10, 4); }
+}
+function updateAbility(S, dt) {
+  const key = CHASSIS_SPECS[G.chassis]?.ability;
+  if (!key) return;
+  const spec = ABILITY_SPECS[key];
+  G.abilityT -= dt;
+  if (G.abilityT > 0) return;
+  G.abilityT = spec.every;
+  if (key === 'lance') fireLance(S, spec); else fireBarrage(S, spec);
 }
 
 function wallClamp(S, px, x, z) {
@@ -1221,13 +1321,14 @@ function upgradeCannon(up) {
   else if (up === 'power') { G.power = Math.min(243, G.power * 3); banner(`POWER x${G.power}!`, 'gold'); }
   else if (up === 'twin') { G.twin = true; twinCannon.group.visible = true; G.shield = Math.min(6, G.shield + 1); banner('TWIN CANNON!', 'gold'); }
   else if (up === 'tank' || CHASSIS_IDS[up]) {
-    G.chassis = Math.min(CHASSIS.length - 1, Math.max(G.chassis, up === 'tank' ? G.chassis + 1 : CHASSIS_IDS[up]));
+    G.chassis = Math.min(CHASSIS.length - 1, Math.max(G.chassis, up === 'tank' ? Math.min(TANK_EVOLUTION_CAP, G.chassis + 1) : CHASSIS_IDS[up]));
     const spec = CHASSIS_SPECS[G.chassis];
     G.power = Math.min(243, G.power * spec.power);
     G.barrels = Math.min(6, G.barrels + spec.guns); G.shield = Math.min(6, G.shield + spec.armor);
     G.rate = Math.max(G.rate, spec.rate || 1);
     if (spec.weapon) unlockWeapon(spec.weapon);
     if (spec.aircraft) { G.aircraft = Math.min(3, G.aircraft + spec.aircraft); G.airT = .2; }
+    if (spec.ability) G.abilityT = ABILITY_SPECS[spec.ability].first;
     setBarrels(G.barrels); cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
     addRing(G.cx, G.cannonZ, 3.5, 0x8beaff, .5);
     burst(G.cx, .6, G.cannonZ, PCOL.gold, 16, 3);
@@ -2028,6 +2129,10 @@ function updateEffects(dt) {
       e.mesh.position.set(0, 0, e.z);
       e.mesh.scale.setScalar(2 + p * 16);
       e.mesh.children.forEach((c) => { c.material.opacity = 0.9 * (1 - p); });
+    } else if (e.kind === 'shell') {
+      const y = .8 + Math.sin(p * Math.PI) * (5 + Math.hypot(e.tx - e.fx, e.tz - e.fz) * .12);
+      if (!TURBO) spark(e.fx + (e.tx - e.fx) * p, y, e.fz + (e.tz - e.fz) * p, PCOL.gold, 1, .3, 1.5, .22, 0);
+      if (e.life <= 0) e.onHit();
     } else if (e.kind === 'rock') {
       e.mesh.position.set(e.fx + (e.tx - e.fx) * p, e.high ? e.high * (1 - p) + 0.6 : 7 + Math.sin(p * Math.PI) * 6 - p * 7, e.fz + (e.tz - e.fz) * p);
       e.mesh.rotation.set(p * 8, p * 5, 0);
@@ -2748,7 +2853,7 @@ function step(dt) {
   moveRed(S, dt);
   buildGrid(gR, R);
   combat();
-  if (G.phase === 'play') updateArsenal(S, dt);
+  if (G.phase === 'play') { updateArsenal(S, dt); updateAbility(S, dt); }
   compact(B); compact(R);
   let army = 0;
   for (let i = 0; i < B.n; i++) {
@@ -3337,6 +3442,7 @@ $('rretry').addEventListener('click', () => {
   Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, weaponMask: snap.weaponMask, aircraft: snap.aircraft, shield: snap.shield, lives: Math.max(snap.lives, 5) });
   setBarrels(G.barrels);
   cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
+  G.abilityT = ABILITY_SPECS[CHASSIS_SPECS[G.chassis]?.ability]?.first ?? 0;
   twinCannon.group.visible = G.twin;
   renderUps();
   G.snap = { ...snap, lives: G.lives };

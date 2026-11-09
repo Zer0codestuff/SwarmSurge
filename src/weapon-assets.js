@@ -135,8 +135,46 @@ function plasmaCaster(k) {
   k.blob(1, [0.06, 0.06, 0.02], [0, 0.49, -0.34], G.cyan);
 }
 
-const WEAPONS = [null, blaster, rocketLauncher, arcRifle, scattergun, railgun, flamethrower, frostProjector, plasmaCaster];
-const NAMES = [null, 'Blaster', 'Rocket launcher', 'Arc rifle', 'Scattergun', 'Railgun', 'Flamethrower', 'Frost projector', 'Plasma caster'];
+// Shouldered mortar: a short fat tube raised half a radian, with a bipod and a shell in the muzzle.
+function mortar(k) {
+  grip(k, false);
+  body(k, [[0.1, 0.06, 0.06], [0.16, 0.08, 0.078], [0.3, 0.075, 0.072], [0.36, 0.055, 0.055]], G.dark);
+  const tilt = 0.5, ax = [0, Math.sin(tilt), Math.cos(tilt)], c = [X, 0.6, 0.44];
+  const at = d => [X, c[1] + ax[1] * d, c[2] + ax[2] * d];
+  k.cyl(0.088, 0.078, 0.52, c, G.body, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : 10);
+  for (const d of [-0.2, 0.02, 0.24]) k.ring(0.092, 0.018, at(d), d > 0.2 ? G.ivory : G.edge, [-tilt, 0, 0]);
+  k.cyl(0.06, 0.06, 0.02, at(0.262), G.dark, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : 10);
+  k.blob(0.052, [1, 1, 1.5], at(0.3), G.amber, 0, [-tilt, 0, 0]);
+  k.cyl(0.1, 0.11, 0.03, at(-0.275), G.edge, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : 10);
+  for (const s of [-1, 1]) k.limb([[X + s * 0.05, 0.63, 0.5], [X + s * 0.13, 0.5, 0.6], [X + s * 0.17, 0.36, 0.66]], [0.017, 0.015, 0.011], G.edge);
+  k.blob(1, [0.02, 0.03, 0.02], [X + 0.1, 0.66, 0.4], G.cyan);
+  for (let i = 0; i < 3; i++) {
+    k.cyl(0.03, 0.03, 0.15, [-0.08 + i * 0.08, 0.5, -0.28], G.amber, [0, 0, 0], 6);
+    if (!k.low) k.blob(0.03, [1, 1.1, 1], [-0.08 + i * 0.08, 0.585, -0.28], G.ivory);
+  }
+  k.cyl(0.14, 0.14, 0.03, [0, 0.42, -0.28], G.dark, [0, 0, 0], 10);
+}
+
+// Shock lance: a long shaft, three coil rings and a forked head around a bright tip.
+function shockLance(k) {
+  grip(k, false);
+  tube(k, 0.022, 0.022, -0.12, 0.74, 0.49, G.dark, X, 6);
+  body(k, [[0.1, 0.045, 0.05], [0.17, 0.062, 0.062], [0.29, 0.056, 0.056], [0.34, 0.035, 0.035]], G.body);
+  body(k, [[0.14, 0.03, 0.018, 0, 0.06], [0.3, 0.028, 0.016, 0, 0.055]], G.ivory, [X, 0.48, 0], { segments: 6, steps: 2 });
+  for (const z of [0.48, 0.56, 0.64]) band(k, 0.05, 0.015, 0.49, z, G.cyan);
+  body(k, [[0.68, 0.03, 0.03], [0.73, 0.06, 0.045], [0.77, 0.05, 0.035]], G.ivory, [X, 0.49, 0], { segments: 8, steps: 2 });
+  for (const s of [-1, 1]) {
+    k.limb([[X + s * 0.035, 0.49, 0.75], [X + s * 0.1, 0.5, 0.86], [X + s * 0.06, 0.49, 1.02]], [0.024, 0.02, 0.008], G.ivory);
+  }
+  k.gem(0.036, [X, 0.49, 0.9], G.glow, 2.4, [Math.PI / 2, 0, 0]);
+  k.blob(0.036, [1, 1, 1], [X, 0.49, -0.13], G.amber);
+  body(k, [[-0.34, 0.07, 0.09], [-0.3, 0.09, 0.115], [-0.24, 0.09, 0.115], [-0.21, 0.06, 0.08]], G.dark, [0, 0.49, 0]);
+  for (const s of [-1, 1]) k.cyl(0.022, 0.022, 0.2, [s * 0.05, 0.5, -0.35], G.cyan, [0, 0, 0], 6);
+  k.limb([[0.07, 0.46, -0.28], [0.24, 0.36, -0.14], [0.35, 0.39, 0.06], [0.31, 0.46, 0.14]], [0.015, 0.015, 0.015, 0.013], G.body);
+}
+
+const WEAPONS = [null, blaster, rocketLauncher, arcRifle, scattergun, railgun, flamethrower, frostProjector, plasmaCaster, mortar, shockLance];
+const NAMES = [null, 'Blaster', 'Rocket launcher', 'Arc rifle', 'Scattergun', 'Railgun', 'Flamethrower', 'Frost projector', 'Plasma caster', 'Mortar', 'Shock lance'];
 
 /** Includes the overlay's 1.2 scale and right-hand placement. 'low' halves the segment counts for distant troops. */
 export function sculptedWeaponGeometry(id, detail = 'high') {
