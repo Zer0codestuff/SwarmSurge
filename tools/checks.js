@@ -219,6 +219,17 @@ window.runGameChecks = (g) => {
     const knock=WEAPON_SPECS[10].knock;
     return {pass:lobbed && Math.abs(R.z[open]-(-10-knock))<.001 && Math.abs(R.z[heavy]-(-10-knock*.35))<.001 && R.z[walled]===-4.5 && R.chill[open]>0,lobbed,z:[R.z[open],R.z[heavy],R.z[walled]]};
   })()`);
+  check('Troops stop and turn to the camera once the stage is cleared', `(() => {
+    const i=spawn(B,0,G.z0-10,5,0); B.vx[i]=2; B.vz[i]=-9; G.phase='clear';
+    for(let k=0;k<60;k++){ buildGrid(gB,B); moveBlue(G.stage,1/60); }
+    const moved=Math.abs(B.z[i]-(G.z0-10));
+    return {pass:B.vz[i]>0 && Math.abs(B.vx[i])<.05 && moved<2.2 && B.hp[i]===5,vz:B.vz[i],vx:B.vx[i],moved};
+  })()`);
+  check('Every world has a boss card and the introduction never holds the headless simulation', `(() => {
+    const cards=BOSS_CARDS.length===LEVELS.length && BOSS_CARDS.every(c=>c.length===2 && c.every(t=>typeof t==='string' && t.length>2 && !t.includes('\u2014')));
+    startLevel(0,2);
+    return {pass:cards && !G.cine && !G.hitStop && G.phase==='intro',cards,cine:G.cine,stop:G.hitStop};
+  })()`);
   check('Prism portals send one copy to every exit and mirror gates add a twin once', `(() => {
     const S=G.stage;
     const gate=(def,k)=>({def,cur:def,bit:1<<k,hi:false,x:def.x,z:G.z0-def.d,w:def.w,alive:true,on:true,flash:0,boost:1,model:{}});
