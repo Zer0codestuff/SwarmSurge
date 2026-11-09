@@ -477,7 +477,7 @@ export const MORE_LEVELS = [
           ...ladder(0, 14, 2, 3, 2, 12.9),
           ...ladder(-4.9, 20, 4, 7, 3.6, 3.0),
           ...ladder(4.9, 20, 4, 7, 3.6, 3.0),
-          { t: 'loop', x: 0, d: 40, w: 4, to: { x: 0, d: 12 }, max: 1 },
+          { t: 'loop', x: 0, d: 40, w: 5.6, to: { x: 0, d: 12 }, max: 1 },
           { t: 'star', need: 20000, x: -4.6, d: 40, w: 3.6 },
           { t: 'star', need: 20000, x: 4.6, d: 40, w: 3.6 },
         ],
