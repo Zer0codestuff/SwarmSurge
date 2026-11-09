@@ -315,22 +315,18 @@ function moon() {
   });
 }
 
-function dragonWing(parent,s,sky) {
+function dragonWing(parent,s) {
   const g=node(parent,`curved-wing-${s}`,s*1.2,5.65,-.61),b=assetBatch(),membrane=assetBatch();
-  const outline=sky?[[0,0],[s*.86,1.55],[s*3.5,2.48],[s*3.05,1.15],[s*2.51,.26],[s*1.78,-.56],[s*.74,-.7]]:
-    [[0,0],[s*.74,1.68],[s*3.27,2.54],[s*2.82,1.02],[s*3.15,.18],[s*2.02,.41],[s*1.47,-.76],[s*.62,-.16]];
-  shell(membrane,outline,sky?0xa8cede:0x95434a,0,0,0,.065,.18);
-  membrane.finish(g,sky?'curved-feather-web':'swept-bat-membrane',bossCloth);
-  path(b,[[0,0,.04],[s*.77,1.57,.12],[s*2.08,2.24,.06],[s*3.26,2.52,0]],[.23,.19,.11,.025],sky?0xe1f1ed:0xd8a36e,{segments:8,steps:20});
-  if(sky)for(let k=0;k<5;k++) {
-    const x=s*(.68+k*.44), y=.54+k*.25;
-    shell(b,[[0,0],[s*.37,.11],[s*.64,-.81],[s*.15,-1.17],[-s*.11,-.43]],k%2?0xd4e8ed:0x8eb6ce,x,y,.11,.08,.12,0,0,-s*.08);
-  } else for(const end of [[2.83,1.03],[3.12,.2],[1.48,-.72]])path(b,[[s*.76,1.56,.12],[s*1.36,.84,.19],[s*end[0],end[1],.04]],[.13,.085,.018],0xd8a36e,{segments:7,steps:14});
-  b.finish(g,sky?'layered-swept-feathers':'curved-wing-fingers',bossShell);return{g,s};
+  const outline=[[0,0],[s*.74,1.68],[s*3.27,2.54],[s*2.82,1.02],[s*3.15,.18],[s*2.02,.41],[s*1.47,-.76],[s*.62,-.16]];
+  shell(membrane,outline,0x95434a,0,0,0,.065,.18);
+  membrane.finish(g,'swept-bat-membrane',bossCloth);
+  path(b,[[0,0,.04],[s*.77,1.57,.12],[s*2.08,2.24,.06],[s*3.26,2.52,0]],[.23,.19,.11,.025],0xd8a36e,{segments:8,steps:20});
+  for(const end of [[2.83,1.03],[3.12,.2],[1.48,-.72]])path(b,[[s*.76,1.56,.12],[s*1.36,.84,.19],[s*end[0],end[1],.04]],[.13,.085,.018],0xd8a36e,{segments:7,steps:14});
+  b.finish(g,'curved-wing-fingers',bossShell);return{g,s};
 }
-function dragon(sky=false) {
-  const {group,pose}=rig(sky?'cloud-feather-wyvern':'ember-drake');
-  const skin=sky?0x719eb8:0x9f4c45,belly=sky?0xe1eeee:0xe2ad78,horn=sky?0xeaf4e8:0xf0c581,dark=sky?0x335973:0x57303a;
+function dragon() {
+  const {group,pose}=rig('ember-drake');
+  const skin=0x9f4c45,belly=0xe2ad78,horn=0xf0c581,dark=0x57303a;
   const legs=[-1,1].map(s=>leg(pose,s,{x:1.05,y:2.45,width:.77,color:skin,foot:dark}));
   const torso=node(pose,'drake-body',0,2.7),b=assetBatch();
   loft(b,[[0,.98,.83,0,-.1],[.5,1.43,1.13,0,-.17],[1.55,1.77,1.42,0,-.34],[2.65,1.78,1.34,0,-.5],[3.6,1.19,.91,0,-.39],[4.2,.72,.66,0,-.16]],skin,{segments:32,steps:26});
@@ -350,17 +346,97 @@ function dragon(sky=false) {
     shell(h,[[-.1,0],[.09,.11],[.18,.02],[.04,-.08]],dark,s*.48,-.17,1.61,.05,.01,0,0,s*.1);
   }
   h.finish(head,'sculpted-snout-horns-and-nostrils',bossSkin);
-  eyePair(head,{y:.27,z:1.01,spacing:.62,width:.4,iris:sky?0x9af3f4:0xffd778,skin:dark});
+  eyePair(head,{y:.27,z:1.01,spacing:.62,width:.4,iris:0xffd778,skin:dark});
   const jaw=node(head,'articulated-lower-jaw',0,-.63,.62),j=assetBatch();
   loft(j,[[-.38,.36,.41,0,.36],[-.25,.76,.94,0,.44],[.02,.85,1.03,0,.46],[.16,.59,.73,0,.4]],belly,{segments:24,steps:12});
   for(const s of [-1,1])for(let k=0;k<3;k++)path(j,[[s*.67,.03,.03+k*.5],[s*.69,.3,.03+k*.5],[s*.65,.4,.03+k*.5]],[.08,.06,.007],horn,{segments:6,steps:6});j.finish(jaw,'contoured-jaw-and-teeth',bossSkin);
-  const wings=[-1,1].map(s=>dragonWing(pose,s,sky)),tail=node(pose,'serpentine-tail',0,2.28,-1.22),tb=assetBatch();
+  const wings=[-1,1].map(s=>dragonWing(pose,s)),tail=node(pose,'serpentine-tail',0,2.28,-1.22),tb=assetBatch();
   path(tb,[[0,0,0],[0,-.18,-1.43],[.16,.18,-2.84],[.48,.86,-3.81],[.6,1.27,-4.08]],[.7,.5,.29,.15,.008],skin,{segments:12,steps:26});tb.finish(tail,'continuous-tapered-tail',bossSkin);
   const crest=assetBatch();for(let k=0;k<4;k++)path(crest,[[0,5.82-k*.59,-1.08],[0,6.55-k*.59,-1.59],[0,6.72-k*.59,-1.82]],[.22,.13,.009],horn,{segments:7,steps:8});crest.finish(pose,'swept-dorsal-spines',bossShell);
   return fitBoss(group,pose,2.9,10.4,(t,p,state={})=>{const a=attackPose(p),walk=walking(t,state,2.7);hitPose(pose,t,state);
     legs.forEach(l=>{l.g.rotation.x=l.s*walk*.14;l.g.position.y=l.y+Math.max(0,l.s*walk)*.06;});arms.forEach(({g,s})=>{g.rotation.x=-.17-a*.7-s*walk*.06;});
     neck.rotation.x=-a*.19;head.rotation.y=Math.sin(t*.47)*.07;jaw.rotation.x=a*.48;
-    wings.forEach(({g,s})=>{g.rotation.z=s*(.1+Math.sin(t*(sky?2.1:1.5))*.1+a*.2);g.rotation.y=-s*.12;});tail.rotation.y=Math.sin(t*1.3)*.24;
+    wings.forEach(({g,s})=>{g.rotation.z=s*(.1+Math.sin(t*1.5)*.1+a*.2);g.rotation.y=-s*.12;});tail.rotation.y=Math.sin(t*1.3)*.24;
+  });
+}
+
+// Tempest djinn: a cloud-mantled giant rising out of a spinning funnel, with a bolt halo behind its shoulders.
+function cumulus(batch, puffs, color) {
+  for (const [x,y,z,w,h=w*.78,d=w*.86] of puffs) pebble(batch,w,h,d,color,x,y,z);
+}
+function djinn() {
+  const {group,pose}=rig('tempest-djinn');
+  const skin=0x6b9bbd, dark=0x2c4a66, pale=0xc6e0ea, cloud=0xf1f7f9, shade=0xb9cfdc, gold=0xe5bb66, bolt=0xffe04a;
+  // Funnel: a lofted vortex with three helical cloud bands; it spins as one piece.
+  const funnel=node(pose,'storm-funnel'), vortex=assetBatch(), bands=assetBatch();
+  const girth=y=>.2+.3*y+.012*y*y*y, low=new THREE.Color(dark), high=new THREE.Color(skin), mix=new THREE.Color();
+  loft(vortex,[[.04,.16,.16],[.5,girth(.5),girth(.5),.1,0],[1.3,girth(1.3),girth(1.3),-.08,.1],[2.2,girth(2.2),girth(2.2),.1,-.06],[3.1,girth(3.1),girth(3.1),-.06,-.08],[3.8,1.5,1.32,0,0],[4.3,1.08,.9]],
+    (x,y)=>mix.copy(low).lerp(high,Math.min(1,y/3.6)),{segments:28,steps:26});
+  for(let k=0;k<3;k++) {
+    const points=[],radii=[];
+    for(let i=0;i<=13;i++){const y=.3+i*.27,a=k*TAU/3+i*.62,r=girth(y)*1.02;points.push([Math.sin(a)*r,y,Math.cos(a)*r]);radii.push(i===0||i===13?.03:.1+.035*i/13*3);}
+    path(bands,points,radii,k===1?shade:cloud,{segments:8,steps:54,flatten:.55});
+  }
+  // Dust ring thrown up where the tip meets the ground.
+  const ring=[];for(let i=0;i<=10;i++){const a=i*.56;ring.push([Math.sin(a)*(.95+.05*i),.22+.02*i,Math.cos(a)*(.95+.05*i)]);}
+  path(bands,ring,[.03,.16,.2,.17,.03],shade,{segments:8,steps:40,flatten:.5});
+  vortex.finish(funnel,'lofted-vortex',bossCloth);bands.finish(funnel,'helical-cloud-bands',bossCloth);
+  // Torso: broad chest tapering into the funnel, with a sash and gem at the waist.
+  const torso=node(pose,'djinn-torso',0,3.75),body=assetBatch(),trim=assetBatch(),gems=assetBatch();
+  loft(body,[[-.1,.92,.78],[.45,1.08,.86,0,.02],[1.2,1.38,1,0,.06],[2,1.86,1.18,0,.1],[2.62,1.98,1.1,0,.02],[3.05,1.12,.84,0,-.04],[3.4,.62,.58,0,-.02]],skin,{segments:32,steps:26});
+  shell(body,[[-1.32,.52],[-.7,.86],[0,.72],[.7,.86],[1.32,.52],[1.05,-.3],[.3,-.5],[0,-.36],[-.3,-.5],[-1.05,-.3]],pale,0,2.12,1.02,.1,.3);
+  for(let k=0;k<3;k++)path(body,[[-.62+k*.05,1.32-k*.38,.98-k*.04],[0,1.25-k*.38,1.1-k*.05],[.62-k*.05,1.32-k*.38,.98-k*.04]],[.04,.055,.04],dark,{segments:6,steps:11});
+  body.finish(torso,'continuous-djinn-torso',bossSkin);
+  loft(trim,[[.28,1.06,.87],[.42,1.16,.95],[.66,1.2,.97],[.8,1.14,.93]],gold,{segments:28,steps:8});
+  shell(trim,[[0,.34],[.3,0],[0,-.34],[-.3,0]],gold,0,.54,.99,.1,.08);
+  shell(gems,[[0,.2],[.17,0],[0,-.2],[-.17,0]],0x9af3f4,0,.54,1.07,.06,.1);
+  // Cumulus mantle over the shoulders and down the back.
+  const mantle=assetBatch();
+  cumulus(mantle,[[-2.05,2.78,-.02,1.7],[2.05,2.78,-.02,1.7],[-1.3,3.2,-.42,1.35],[1.3,3.2,-.42,1.35],[0,3.1,-.92,1.9],[-.95,2.42,-1,1.45],[.95,2.42,-1,1.45],[0,1.7,-1.02,1.5],[-.86,2.98,.62,.95],[.86,2.98,.62,.95]],cloud);
+  cumulus(mantle,[[-2.5,2.3,-.3,1.05],[2.5,2.3,-.3,1.05],[-.5,1.05,-.95,1.05],[.5,1.05,-.95,1.05]],shade);
+  mantle.finish(torso,'cumulus-mantle',bossCloth);
+  // Arms with forged bracers.
+  const arms=[-1,1].map(s=>arm(torso,s,{x:2.18,y:2.5,length:2.25,width:.64,color:skin,hand:pale,bulky:true}));
+  arms.forEach(({g,s})=>{const b=assetBatch();loft(b,[[-1.92,.46,.47,0,.16],[-1.72,.56,.56,0,.13],[-1.3,.5,.5,0,.05],[-1.12,.42,.42,0,.03]],gold,{segments:20,steps:10});
+    path(b,[[-.4,-1.52,.5],[0,-1.5,.64],[.4,-1.52,.5]],[.03,.05,.03],0xfff7cf,{segments:6,steps:8});b.finish(g,`forged-bracer-${s}`,bossMetal);});
+  trim.finish(torso,'forged-sash',bossMetal);gems.finish(torso,'storm-gem',assetGlow);
+  // Head: heavy brow, full cheeks for the gale breath, cloud beard and a swept topknot.
+  const head=node(torso,'djinn-visage',0,4.18,.16),h=assetBatch(),hair=assetBatch(),crown=assetBatch();
+  h.add(headGeometry(1.95,1.9,1.82,{snout:.18,brow:.32,cheeks:.34,jaw:.92}),skin);
+  pebble(h,.44,.5,.5,skin,0,-.1,.98);
+  for(const s of [-1,1]) {
+    shell(h,[[0,-.28],[s*.2,.1],[s*.62,.62],[s*.3,.5],[s*.02,.3]],skin,s*.9,.08,-.05,.14,.1,0,s*.5,0);
+    path(hair,[[s*.2,-.36,.98],[s*.62,-.5,.92],[s*1.05,-.36,.8],[s*1.3,-.02,.7]],[.13,.15,.11,.02],cloud,{segments:8,steps:16});
+    path(hair,[[s*.62,.58,.84],[s*.34,.66,.96],[s*.08,.5,1]],[.06,.13,.11],cloud,{segments:8,steps:10});
+  }
+  path(hair,[[0,-.72,.72],[0,-1.3,.9],[0,-1.95,.84],[0,-2.4,1.12],[0,-2.5,1.38]],[.52,.5,.36,.2,.02],cloud,{segments:14,steps:26,flatten:.8});
+  for(const s of [-1,1])path(hair,[[s*.5,-.62,.5],[s*.62,-1.15,.62],[s*.5,-1.62,.6],[s*.6,-1.9,.82]],[.3,.32,.2,.02],shade,{segments:10,steps:18});
+  path(hair,[[0,.86,-.1],[0,1.5,-.16],[0,2.05,-.62],[0,2.12,-1.3],[0,1.72,-1.78],[0,1.28,-1.7]],[.3,.46,.42,.3,.16,.02],cloud,{segments:14,steps:30});
+  h.finish(head,'sculpted-brow-cheeks-and-ears',bossSkin);hair.finish(head,'cloud-beard-and-topknot',bossCloth);
+  loft(crown,[[.74,.5,.48,0,-.08],[.86,.56,.54,0,-.09],[1.04,.5,.48,0,-.1],[1.12,.4,.38,0,-.1]],gold,{segments:24,steps:8});
+  crown.finish(head,'forged-topknot-band',bossMetal);
+  eyePair(head,{y:.24,z:.92,spacing:.5,width:.36,iris:0x9af3f4,skin:dark});
+  const jaw=node(head,'articulated-lower-jaw',0,-.6,.5),j=assetBatch();
+  loft(j,[[-.3,.3,.3,0,.26],[-.16,.62,.56,0,.3],[.04,.66,.6,0,.3],[.14,.46,.42,0,.26]],skin,{segments:22,steps:10});
+  shell(j,[[-.44,.06],[0,.12],[.44,.06],[.3,-.1],[-.3,-.1]],dark,0,.12,.58,.06,.04,-.9);
+  j.finish(jaw,'contoured-jaw',bossSkin);
+  // Bolt halo behind the shoulders and three squalls circling the waist.
+  const halo=node(torso,'lightning-halo',0,3.2,-1.25),bolts=assetBatch();
+  for(const a of [-1.25,-.62,0,.62,1.25]) {
+    const r=a?2:2.3,size=a?1.1:1.35;
+    shell(bolts,[[-.2,0],[.2,0],[.06,.82],[.34,.78],[-.02,1.9],[.02,1.05],[-.3,1.1]].map(([x,y])=>[x*size,y*size]),bolt,Math.sin(a)*r,Math.cos(a)*r,0,.08,.03,0,0,-a);
+  }
+  bolts.finish(halo,'forked-bolt-halo',assetGlow);
+  const squalls=node(pose,'orbiting-squalls',0,4.35),sq=assetBatch();
+  for(let k=0;k<3;k++){const a=k*TAU/3+.5,x=Math.sin(a)*2.75,z=Math.cos(a)*2.75,y=k*.34-.3;
+    cumulus(sq,[[x,y,z,.95,.62,.8],[x+Math.cos(a)*.42,y+.14,z-Math.sin(a)*.42,.62,.5,.56],[x-Math.cos(a)*.42,y+.04,z+Math.sin(a)*.42,.56,.42,.5]],k===1?shade:cloud);}
+  sq.finish(squalls,'circling-squall-clouds',bossCloth);
+  return fitBoss(group,pose,2.9,10.4,(t,p,state={})=>{const a=attackPose(p),sway=walking(t,state,2.2),idle=state.stunned?0:1;hitPose(pose,t,state);
+    funnel.rotation.y=t*1.9*idle+a*1.4;squalls.rotation.y=-t*.7*idle-a*.9;
+    torso.position.y=3.75+Math.sin(t*1.6)*.1*idle;torso.rotation.z=sway*.035;torso.rotation.x=-a*.1+Math.abs(sway)*.03;
+    arms.forEach(({g,s})=>{g.rotation.x=-.2-a*.85+s*sway*.05;g.rotation.z=s*(.2+a*.55+Math.sin(t*1.6+1)*.03*idle);});
+    head.rotation.x=-a*.24;head.rotation.y=Math.sin(t*.5)*.1*idle;jaw.rotation.x=.04+a*.52;
+    halo.rotation.z=Math.sin(t*.8)*.1*idle;halo.scale.setScalar(1+a*.32+Math.sin(t*9)*.035*idle);
   });
 }
 
@@ -374,7 +450,7 @@ export function buildSculptedCore(type) {
     case 'robot': return robot();
     case 'moon': return moon();
     case 'dragon': return dragon();
-    case 'storm': return dragon(true);
+    case 'storm': return djinn();
     default: return null;
   }
 }

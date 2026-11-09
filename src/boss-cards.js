@@ -8,7 +8,7 @@ export const BOSS_CARDS = [
   ['The Mecha Boss', 'Neon war machine'],
   ['The Jelly King', 'Sweetest tyrant in the land'],
   ['The Moon Golem', 'Guardian of the base'],
-  ['The Storm Dragon', 'Wings over the citadel'],
+  ['The Tempest Djinn', 'Breath of the citadel'],
   ['The Titan', 'Colossus of the void'],
   ['The Drill Mech', 'It bores through armies'],
   ['The High Roller', 'The house always wins'],
