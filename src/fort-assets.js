@@ -17,6 +17,8 @@ const FAMILY = {
   coral: 'reef', crystal: 'prism', storm: 'prism', casino: 'casino',
   ...LATE_FORT_FAMILY,
 };
+/** Architecture family of a biome; the roadside fences follow it. */
+export const fortFamily = (theme) => FAMILY[theme] || 'bastion';
 const TRIM = {
   candy: 0xffe8f2, tomb: 0xe9c47c, jungle: 0xd7b06a, sky: 0xffe2a0, frost: 0xe8f4ff, moon: 0xc6ccd8,
   factory: 0x9aa3ad, neon: 0x8d92c4, casino: 0xffd21a, coral: 0xffd8c2, crystal: 0xb9b0ff, storm: 0xaab4c8,
