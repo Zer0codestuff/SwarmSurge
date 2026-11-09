@@ -534,7 +534,7 @@ export const LEVELS = prepareCampaign([
         ],
       },
       {
-        tip: 'STORM DRAGON! Ladder, then stars. Go absolutely crazy!',
+        tip: 'TEMPEST DJINN! Ladder, then stars. Go absolutely crazy!',
         boss: { type: 'storm', hp: 2000000000, speed: 0.5 },
         waves: { every: 3.0, swarm: 12, bomber: 3, shielder: 3, splitter: 3, ramp: 0.4 },
         gates: [

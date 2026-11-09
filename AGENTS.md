@@ -110,7 +110,7 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 - Rank forms and sculpted weapons cost +2% to +7% rendered triangles against the box-built troops in the same seeded scenes (for example 1.21M to 1.29M at world 20 stage 2). Draw calls rose by at most six.
 - Sculpted vehicles cost 8.7k to 13.5k triangles per cannon with one barrel (previously 2.3k to 6.2k). Same seeded scenes: world 1 opening 216k to 227k rendered triangles, world 16 with two Titans and eight barrels 403k to 455k; draw calls within two.
 - Sculpted defenses: turret 5.3k, igloo 3.4k, dome 4.7k, crusher 3.2k, pillar 4.4k and a 12-unit divider 1.0k triangles (previously 0.7k to 2.4k). `assetBatch().add` accepts a color function of the placed vertex.
-- Storm still reuses the dragon rig with sky wings; it is the next candidate for a separate silhouette.
+- The storm boss (worlds 9 and 28) is now the Tempest Djinn: a cloud-mantled torso on a spinning lofted funnel with helical cloud bands, cloud beard and topknot, forged bracers, a forked-bolt halo and three circling squalls (19 meshes, 33.9k triangles, contract 2.9 radius and 10.4 height unchanged). It no longer shares the dragon rig; the dragon's unused sky variant was removed. Inspected in a six-view contact sheet and in the world 9 introduction.
 - Physical mobile devices, sustained hardware performance and human difficulty remain unvalidated. Keep further checks focused.
 
 - Soundtrack: 78 engine checks and 17 tutorial checks pass. An offline render of eight bars gave finite output at every intensity (peak 0.02 calm, 0.09 full, 0.12 boss before the bus gain was lowered from 0.2 to 0.14), and all 50 worlds have distinct scores. Nobody has listened to it yet: mix levels and musical taste are unjudged.
