@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sculptIceWall, sculptFence, sculptStatue, sculptSaw } from './obstacle-assets.js';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
 import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
@@ -254,15 +255,7 @@ export function buildGate(w, hex, mega = false) {
 
 export function buildIceWall(w) {
   const g = new THREE.Group();
-  const iceMat = new THREE.MeshLambertMaterial({ color: 0xa8ecff, transparent: true, opacity: 0.82, emissive: 0x1b5f80 });
-  const box = mesh(new THREE.BoxGeometry(w, 1.9, 0.9), iceMat, 0, 0.95, 0);
-  g.add(box);
-  const chunkGeo = new THREE.OctahedronGeometry(0.45);
-  for (let i = 0; i < 4; i++) {
-    const c = mesh(chunkGeo, iceMat, (i / 3 - 0.5) * (w - 0.6), 2.0, (i % 2) * 0.2 - 0.1);
-    c.rotation.set(i, i * 2, 0); c.scale.y = 1.5;
-    g.add(c);
-  }
+  const iceMat = sculptIceWall(g, w);
   const label = makeCanvasLabel();
   const tw = Math.min(w * 1.05, 4.2);
   const text = textPlane(label, tw, tw / 2, false);
@@ -288,11 +281,7 @@ function chainTexture() {
 export function buildFence(w) {
   const g = new THREE.Group();
   const H = 2.6;
-  const metal = lam(0x9aa2ae), dark = lam(0x5a616c);
-  const postGeo = new THREE.CylinderGeometry(0.1, 0.1, H, 8);
-  for (const x of [-w / 2, 0, w / 2]) g.add(mesh(postGeo, metal, x, H / 2, 0));
-  const bar = new THREE.CylinderGeometry(0.07, 0.07, w, 8); bar.rotateZ(Math.PI / 2);
-  g.add(mesh(bar, dark, 0, H - 0.05, 0), mesh(bar, dark, 0, 0.1, 0));
+  sculptFence(g, w, H);
   const tex = chainTexture().clone(); tex.needsUpdate = true;
   tex.repeat.set(w * 2.2, H * 2.2);
   const panelMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.9, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false, color: 0xdde4ee });
@@ -310,21 +299,7 @@ export function buildFence(w) {
 // sand golem statue on a pedestal (reference screenshot 3)
 export function buildStatue(w, small) {
   const g = new THREE.Group();
-  const sand = lam(0xd9b27a, { flatShading: true }), sandDark = lam(0xb98d55, { flatShading: true });
-  if (small) {
-    g.add(mesh(new THREE.BoxGeometry(w, 1.0, 1.6), sandDark, 0, 0.5, 0));
-    g.add(mesh(new THREE.BoxGeometry(w * 0.8, 0.5, 1.2), sand, 0, 1.25, 0));
-  } else {
-    g.add(mesh(new THREE.BoxGeometry(w, 0.7, 2.0), sandDark, 0, 0.35, 0));
-    const s = new THREE.Group(); s.position.y = 0.7; g.add(s);
-    const body = mesh(new THREE.DodecahedronGeometry(0.95), sand, 0, 1.7, 0); body.scale.set(1.25, 1.05, 0.9); s.add(body);
-    s.add(mesh(new THREE.DodecahedronGeometry(0.55), sand, 0, 3.0, 0.15));
-    for (const sx of [-1, 1]) {
-      s.add(mesh(new THREE.DodecahedronGeometry(0.5), sandDark, sx * 1.25, 2.2, 0));
-      s.add(mesh(new THREE.DodecahedronGeometry(0.55), sand, sx * 1.35, 1.05, 0.25));
-      s.add(mesh(new THREE.DodecahedronGeometry(0.45), sandDark, sx * 0.55, 0.45, 0));
-    }
-  }
+  sculptStatue(g, w, small);
   const label = makeCanvasLabel();
   const tw = Math.min(w * 1.05, 3.6);
   const text = textPlane(label, tw, tw / 2, false);
@@ -432,23 +407,7 @@ export function buildPortalExit() {
 // ---------- obstacles ----------
 export function buildSaw(r) {
   const g = new THREE.Group();
-  const blade = new THREE.Group();
-  const metal = lam(0xd5dbe4), red = lam(0xe8333a);
-  const disc = new THREE.CylinderGeometry(r, r, 0.1, 28); disc.rotateX(Math.PI / 2);
-  blade.add(mesh(disc, metal));
-  const toothGeo = new THREE.ConeGeometry(0.13, 0.32, 4);
-  for (let k = 0; k < 14; k++) {
-    const a = (k / 14) * Math.PI * 2;
-    const t = mesh(toothGeo, metal, Math.cos(a) * (r + 0.1), Math.sin(a) * (r + 0.1), 0);
-    t.rotation.z = a - Math.PI / 2;
-    blade.add(t);
-  }
-  const hub = new THREE.CylinderGeometry(r * 0.32, r * 0.32, 0.16, 14); hub.rotateX(Math.PI / 2);
-  blade.add(mesh(hub, red));
-  blade.position.y = r * 0.75;
-  g.add(blade);
-  g.add(mesh(new THREE.BoxGeometry(r * 2.4, 0.1, 0.5), lam(0x333333), 0, 0.03, 0, false));
-  return { group: g, blade };
+  return { group: g, blade: sculptSaw(g, r) };
 }
 // ---------- bosses ----------
 export function buildBoss(type) {
