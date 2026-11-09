@@ -63,6 +63,33 @@ const VAULTS = [
   { world: 16, stage: 1, x: -5.65, d: 31.5, hp: 3000, t: 'ice', prizes: [35, 38, 41] },
 ];
 
+// Split gates replace an existing multiplier of the same strength, so stage totals stay as tuned:
+// a prism takes a x3 and spreads its copies over three exits, a mirror takes a x2 and adds a twin
+// across the road. Entries are [world, stage, x, d, prism exit distance and lanes]. The exit nearest
+// the prism keeps the original troop, so a full pool folds its power into the lane it was already in.
+const PRISMS = [
+  [9, 1, 0, 11, 13.2, [-4.6, 0, 4.6]], [16, 2, 0, 10, 12.6, [-4.45, 0, 4.45]], [20, 1, 0, 16, 18.4, [-4.45, 0, 4.45]],
+  [24, 2, 0, 10, 12.2, [-4.4, 0, 4.4]], [25, 2, 0, 10, 12.6, [-4.2, 0, 4.2]], [26, 3, 0, 12, 14.6, [-4.45, 0, 4.45]],
+  [30, 3, 0, 10, 12.6, [-4.45, 0, 4.45]], [46, 2, -3.3, 10, 11.6, [-4.7, -1.9, 3.3]], [49, 2, 0, 9, 11.6, [-3.3, 0, 3.3]],
+];
+const MIRRORS = [
+  [14, 1, 3.3, 9], [18, 2, -5.2, 18], [18, 2, 5.2, 18],
+  [27, 2, -4.45, 10], [27, 2, 4.45, 10], [28, 3, -4.6, 11], [28, 3, 4.6, 11], [29, 2, -4.45, 10], [29, 2, 4.45, 10],
+  [31, 2, -5, 12], [31, 2, 5, 12], [40, 1, -4.6, 9], [40, 1, 4.6, 9], [50, 1, -4.6, 9], [50, 1, 4.6, 9],
+];
+function addSplitGates(s, world, stage) {
+  const swap = (x, d, v, change) => {
+    const gate = s.gates.find(g => g.t === 'mul' && g.v === v && g.x === x && g.d === d && !g.slide && !g.phase && !g.requires);
+    if (!gate) throw new Error(`No x${v} gate at ${x},${d} in world ${world} stage ${stage}`);
+    delete gate.v; delete gate.color; delete gate.mega;
+    Object.assign(gate, change);
+  };
+  for (const [w, st, x, d, exitD, lanes] of PRISMS) {
+    if (w === world && st === stage) swap(x, d, 3, { t: 'prism', w: Math.min(4.6, s.gates.find(g => g.x === x && g.d === d).w), to: [...lanes].sort((a, b) => Math.abs(a - x) - Math.abs(b - x)).map(lane => ({ x: lane, d: exitD })) });
+  }
+  for (const [w, st, x, d] of MIRRORS) if (w === world && st === stage) swap(x, d, 2, { t: 'mirror' });
+}
+
 function addVault(s, world, stage) {
   const vault = VAULTS.find(v => v.world === world && v.stage === stage);
   if (!vault) return;
@@ -124,6 +151,7 @@ function prepareLate(level, li, original, si) {
   s.gates.unshift({ t: 'upgrade', up, need: Math.round((12 + ci + si * 5) * supplyScale), x: si % 2 ? 3.4 : -3.4, d: 5.5, w: 4.7 });
   s.tip = `${LESSONS[up]} ${original.tip}`;
   for (const b of s.balls || []) b.delay = Math.min(b.delay ?? 0, 5);
+  addSplitGates(s, li + 1, si + 1);
   return s;
 }
 
@@ -180,6 +208,7 @@ export function prepareCampaign(levels) {
         b.hp *= 0.7;
       }
       addVault(s, li + 1, si + 1);
+      addSplitGates(s, li + 1, si + 1);
       return s;
     }),
   }));

@@ -5,8 +5,11 @@ const TIPS = {
   chain: 'Line up gates in a row to multiply their numbers.',
   equipment: 'Fill a supply crate to equip your army for this level.',
 };
-// Late mechanics, in the order worlds 21 to 50 introduce them, with the world index of each first appearance.
+// One-time mechanic lessons with the world index of each first appearance: the two split gates,
+// then the late mechanics in the order worlds 21 to 50 introduce them.
 const MECHANICS = [
+  { id: 'prism', world: 8, text: 'A prism portal splits every troop into one copy per exit pad.', has: (def, gates) => gates.some(gate => gate?.t === 'prism') },
+  { id: 'mirror', world: 13, text: 'A mirror gate adds a twin of every troop on the far side of the road.', has: (def, gates) => gates.some(gate => gate?.t === 'mirror') },
   { id: 'bumper', world: 20, text: 'Bumpers double each troop once, then bounce it to the side it touched.', has: def => def.bumpers?.length },
   { id: 'hypno', world: 25, text: 'Fill the hypno gate. While it glows, enemies crossing it join your army.', has: (def, gates) => gates.some(gate => gate?.t === 'hypno') },
   { id: 'cart', world: 30, text: 'Troops that reach the mine cart push it up its rail. A full cart blasts the target.', has: def => def.carts?.length },

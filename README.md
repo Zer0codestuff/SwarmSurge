@@ -5,7 +5,7 @@ A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your canno
 - A winding map of 50 biome islands. Clear a world to unlock the next, replay earlier worlds for stars
 - 50 worlds with 3 stages each
 - Worlds 21 to 50 add a new mechanic every five worlds: pinball bumpers, hypno gates that turn enemies, mine carts, harvest banks that pay out troops later, dinosaur eggs and paired fusion cores
-- Gates (`+`, `x`, `÷`, flip, slot machine, phasing), barriers, ice vaults, portals, jump pads, loops and conveyor belts
+- Gates (`+`, `x`, `÷`, flip, slot machine, phasing), barriers, ice vaults, portals, prism portals, mirror gates, jump pads, loops and conveyor belts
 - Equipment crates unlock Bulldog and Siege tanks, armor, blasters, splash rockets, chain-lightning rifles and repeated air strikes
 - Rapid doubles rate up to x8, Power triples output, and barrel crates add two guns
 - Escort cannons mirror your volleys and add armor. Their crates appear in Moon Base, Lucky Casino and Spooky Hollow
