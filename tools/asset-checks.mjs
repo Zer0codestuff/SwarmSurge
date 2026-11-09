@@ -87,14 +87,28 @@ try {
     late.forEach(m=>dispose(m.group));
     const used = new Set(LEVELS.flatMap(l=>l.stages.map(s=>s.boss?.type).filter(Boolean)));
     const rosterPass = [...used].every(type=>contracts.some(([t])=>t===type)) && LEVELS.every(l=>THEMES[l.theme]);
-    return {bosses,forts,props,propPass,lateProps,latePass,rosterPass,worlds:LEVELS.length};
+    // Roadside fences: one post and one span design per family, instanced along the road.
+    const RA = await import('/src/road-assets.js'), FA = await import('/src/fort-assets.js');
+    const kerb = new THREE.MeshBasicMaterial();
+    const roadsides = RA.ROAD_FAMILIES.map(family => {
+      const group = RA.buildRoadside(family, 400, -170, {post:0x8a6a4a,accent:0xd83140,stone:0xc9b08a,light:0x3afff0}, kerb), stats = inspect(group);
+      let unit = 0; const seen = new Set();
+      group.traverse(o => { if (o.isInstancedMesh && !seen.has(o.geometry)) { seen.add(o.geometry); unit += o.geometry.attributes.position.count / 3; } });
+      const bounds = new THREE.Box3().setFromObject(group);
+      dispose(group);
+      return {family, unit, meshes: stats.meshes, finite: stats.finite, lights: stats.lights, pass: stats.finite && stats.lights===0 && unit<=220 && stats.meshes<=14 && bounds.min.y>=-.01 && bounds.max.y<1.8};
+    });
+    kerb.dispose();
+    const roadPass = roadsides.every(r=>r.pass) && Object.keys(THEMES).every(theme=>RA.ROAD_FAMILIES.includes(FA.fortFamily(theme)));
+    return {bosses,forts,props,propPass,lateProps,latePass,rosterPass,roadsides,roadPass,worlds:LEVELS.length};
   });
   for (const boss of report.bosses) console.log(`${boss.pass?'PASS':'FAIL'} ${boss.type}: ${boss.meshes} meshes, ${boss.triangles} triangles, top ${boss.top.toFixed(2)}/${boss.height}`);
   console.log(`${report.forts.every(f=>f.pass)?'PASS':'FAIL'} all ${report.forts.length} biome fort bounds`);
   console.log(`${report.propPass?'PASS':'FAIL'} defense and obstacle contracts`);
   console.log(`${report.latePass?'PASS':'FAIL'} late mechanic models: ${report.lateProps.map(p=>p.triangles).join(', ')} triangles`);
+  console.log(`${report.roadPass?'PASS':'FAIL'} roadside fences: ${report.roadsides.map(r=>`${r.family} ${r.unit}`).join(', ')} triangles per post and span`);
   console.log(`${report.rosterPass?'PASS':'FAIL'} every boss and theme in the ${report.worlds} worlds has a contract`);
   fs.mkdirSync(new URL('./out/',import.meta.url),{recursive:true});
   fs.writeFileSync(new URL('./out/asset-checks.json',import.meta.url),JSON.stringify({...report,errors},null,2));
-  if (errors.length || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass) { console.error(errors.join('\n')); process.exitCode=1; }
+  if (errors.length || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass || !report.roadPass) { console.error(errors.join('\n')); process.exitCode=1; }
 } finally { await browser.close(); }

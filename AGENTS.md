@@ -14,6 +14,7 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 - `src/asset-kit.js`, `src/boss-shapes.js`: batched surfaces, continuous anatomical lofts, swept forms, domed armor and folded cloth.
 - `src/boss-sculpted-core.js`, `src/boss-sculpted-late.js`, `src/boss-sculpted-royal.js`, `src/boss-sculpted-carnival.js`, `src/boss-sculpted-wild.js`: the full sculpted boss roster (32 types, including jack, flipper, ringmaster, mesmer, locomotive, scarecrow, panda, shogun, trex, roc, clockwork and overlord). `src/bosses.js` adapts the late builders.
 - `src/fort-assets.js`: sculpted biome forts (curved curtain wall, pillowed stone courses, arched gatehouse, one tower design per family). `src/battlefield-assets.js` re-exports it and builds the lathe-and-loft turret, vaulted igloo and ribbed dome bunkers, jersey-barrier divider, toothed hydraulic crusher and fluted falling pillar.
+- `src/road-assets.js`: rounded kerb and eight roadside fence designs (one per fort family through `fortFamily`), instanced in 100-unit chunks by `buildRoadside`.
 - `src/scenery-assets.js`: sculpted roadside props (saguaros, rock clusters, pines, palms, coral, lollipops, columns, gears, crates, mountains, crystals and more) used by `models.buildWorld` and `src/worlds.js`.
 - `src/map.js`, `src/map.css`: biome island map and progressive unlocks.
 - `src/records.js`: personal bests and medals per world under `swarm-records` (pure `recordRun`, `medalsOf`, `clock`). Stars stay in `swarm-progress`.
@@ -90,6 +91,8 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 - Shader link logs are not read unless `?shaderdebug=1` is set; `warmShaders` compiles all three stages when a level opens. Static world scenery composes its matrices once, hidden stage groups skip matrix updates, and late mechanic labels redraw at 12 Hz. Frame JavaScript in a 316-troop world 20 scene dropped from 2.41 ms to 1.57 ms and draw calls from 194 to 171.
 - Tracers use 128 reusable slots; splash rings use 64. Halo and combo effects are capped. Shared geometry/material templates live for the module lifetime. Level cleanup releases instance buffers without disposing borrowed templates, including grouped effects.
 
+- The roadside is sculpted in every world: a rounded kerb with a footing lip, plus posts and spans by fort family: bastion (capped bollards, timber rails), temple (square pylons, lintel beam), crown (onion finials, garland), station (steel posts, corrugated guard rail, reflector), gothic (pinnacle columns, spear pickets), reef (coral stubs, slack rope), prism (crystal posts, light bar) and casino (gold stanchions, velvet rope). Posts and spans cost 74 to 212 triangles per pair and cast no shadows; the fence never affects collision (the road limit is still `XLIM`). World 1's opening went from 172k to 203k rendered triangles and 97 to 102 draw calls.
+
 ## Latest evidence and next steps
 - Battle feel: 77 engine checks, 17 tutorial checks and asset contracts pass. Boss introductions were inspected on desktop, 390 x 844 and 844 x 390 (worlds 3, 13, 18, 50); staged kills and a staged clear confirmed the toss and the cheer. Motion quality itself was judged from stills only.
 - World 18 boss: the loop gate was 4 wide between two sliding-wall lanes, so most of the army missed it and the smart bot lost 3 of 8 seeds (2 of 5 before this session too). At 5.6 wide the smart and naive bots win 8 of 8 in 13.5 s to 30.4 s. The user then asked to stop tuning balance: reachable overpowered states are welcome, so the remaining bimodal stages (world 8 stages 1 and 3, world 29 stage 1, world 16 boss) were left alone.
@@ -120,6 +123,8 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 - Records and medals: 79 engine checks and 17 tutorial checks pass. Results, map and pause dialog were inspected on 1280 x 720 and 390 x 844 with seeded records. The 65 s and 12 s thresholds come from smart-bot runs (50 to 67 s per world, boss fights mostly 15 to 30 s); no human has tried to earn them.
 
 - HUD polish: 79 engine checks and 17 tutorial checks pass; the HUD and pause dialog were inspected on 1280 x 720 and 390 x 844 at world 9's boss with two hearts.
+
+- Sculpted roadside: asset contracts (now including the eight fence families), 79 engine checks pass. Six restarts each of worlds 1, 7, 12 and 16 hold steady geometry, texture and program counts. Closeups of worlds 1, 3, 5, 6, 7, 12, 13 and 16 were inspected from the game camera only.
 
 ## Preferences and do not
 - The product name is ThatAdGame (title, title screen, map header, README). The `swarm-*` localStorage keys and the Railway project name SwarmSurge are identifiers, not branding: keep them so saves and deployment survive. Gameplay uses of "swarm" (enemy swarms, Swarm Master) are thematic and stay.

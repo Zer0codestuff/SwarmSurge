@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { THEMES } from './levels.js';
 import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
+import { buildRoadside } from './road-assets.js';
+import { fortFamily } from './fort-assets.js';
 import * as S from './scenery-assets.js';
 import { raiderGeometry } from './troop-forms.js';
 import { sculptedWeaponGeometry } from './weapon-assets.js';
@@ -517,18 +519,7 @@ export function buildWorld(theme, len) {
   // rails + posts on both sides
   const railMat = glowRoad ? new THREE.MeshBasicMaterial({ color: T.rail }) : lam(T.rail);
   const postColor = LATE_POSTS[theme] ?? (theme === 'mob' ? 0x8a8f99 : theme === 'candy' ? 0xff6ab0 : theme === 'sky' ? 0xe0c070 : 0x8a6a4a);
-  for (const sx of [-1, 1]) {
-    const r = mesh(new THREE.BoxGeometry(0.4, 0.75, total), railMat, sx * 7.6, 0.37, zc); r.receiveShadow = true; g.add(r);
-    g.add(mesh(new THREE.BoxGeometry(0.14, 0.14, total), lam(postColor), sx * 8.2, 1.0, zc, false));
-  }
-  const nPost = Math.floor(total / 2.5);
-  const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.18, 1.1, 0.18), lam(postColor), nPost * 2);
-  const m = new THREE.Matrix4();
-  for (let i = 0; i < nPost; i++) for (let s = 0; s < 2; s++) {
-    m.makeTranslation(s ? 8.2 : -8.2, 0.55, zc - total / 2 + i * 2.5);
-    posts.setMatrixAt(i * 2 + s, m);
-  }
-  g.add(posts);
+  g.add(buildRoadside(fortFamily(theme), total, zc, { post: postColor, accent: T.roof, stone: T.tower, light: glowRoad ? T.rail : T.roof }, railMat));
 
   const vc = (flat = true) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: flat });
   if (theme === 'desert') {
