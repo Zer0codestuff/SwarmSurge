@@ -68,6 +68,8 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 
 - Records and medals: a win stores the world's best army, combo, kills and battle time. Three medals per world: Flawless (no hearts lost), Swift (under 65 s of battle) and Overpowered (boss beaten in under 12 s). Times and medals need a run that started at stage one; a stage retry continues the same run (clock, tallies and lost hearts carry over). The results screen shows a time tile, "NEW BEST" or the standing best per tile and the medal row; the map shows three medal pips beside the stars, a gold number for a mastered world and the medal total in the header; the pause dialog lists the goals and strikes out the ones the run can no longer reach.
 
+- HUD polish: the target row names the boss from its card (without "The") instead of "Boss"; a pale ghost bar trails the health fill on the way down and snaps on refills or new targets; a battle clock sits under the stage pips and dims once Swift is out of reach; a pulsing red edge shows at two hearts or fewer during play (static with reduced motion, hidden in the boss introduction). The pause dialog has Sound, Music and Glow toggles that share state with the title settings and the HUD mute button.
+
 ## Visuals and resource ownership
 - Allied troops change body form with rank: Surge bot (ranks 1 to 3), Trooper (4 to 6), Paladin (7 to 9) and Ascended (10 to 13). Each form has near and far instanced meshes; empty meshes are hidden. All forms share the hip pivot, hand anchors and footprint, so weapons, stride and collision are unchanged. Enemies use a horned raider with sculpted bomb, shield, tank helmet, drone jetpack and crab carapace overlays.
 - Near troops cast shadows through shadow-only proxies (layer 1, rendered only by the sun's shadow camera) that reuse the far geometry and share the near instance buffers. Troop shadow triangles dropped from about 1.55M to 0.57M in an 850-troop scene with no visible difference. Distant troops also use low-detail weapons and enemy gear (`detail = 'low'`). The near/far threshold (24 px, 20 px hysteresis) was kept because the far body is visibly blockier up close.
@@ -116,6 +118,8 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 - Soundtrack: 78 engine checks and 17 tutorial checks pass. An offline render of eight bars gave finite output at every intensity (peak 0.02 calm, 0.09 full, 0.12 boss before the bus gain was lowered from 0.2 to 0.14), and all 50 worlds have distinct scores. Nobody has listened to it yet: mix levels and musical taste are unjudged.
 
 - Records and medals: 79 engine checks and 17 tutorial checks pass. Results, map and pause dialog were inspected on 1280 x 720 and 390 x 844 with seeded records. The 65 s and 12 s thresholds come from smart-bot runs (50 to 67 s per world, boss fights mostly 15 to 30 s); no human has tried to earn them.
+
+- HUD polish: 79 engine checks and 17 tutorial checks pass; the HUD and pause dialog were inspected on 1280 x 720 and 390 x 844 at world 9's boss with two hearts.
 
 ## Preferences and do not
 - The product name is ThatAdGame (title, title screen, map header, README). The `swarm-*` localStorage keys and the Railway project name SwarmSurge are identifiers, not branding: keep them so saves and deployment survive. Gameplay uses of "swarm" (enemy swarms, Swarm Master) are thematic and stay.

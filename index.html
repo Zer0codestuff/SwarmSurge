@@ -137,6 +137,11 @@
   .medal.fresh i, .medal.fresh small { color: #ffd23a; text-shadow: 0 0 10px rgba(255,210,58,.8); }
   @keyframes medalIn { from { opacity: 0; transform: scale(2.2) rotate(-12deg); } }
   @media (max-width: 420px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  #pauseopts { display: flex; gap: 8px; margin-top: 14px; }
+  #pauseopts button { flex: 1; font-family: var(--font); font-size: 12px; padding: 9px 4px; border-radius: 10px; border: 1px solid #5d8198; background: #10283b; color: #8fa8b8; cursor: pointer; }
+  #pauseopts button::before { content: '○ '; }
+  #pauseopts button[aria-pressed="true"] { background: #24506b; border-color: #9fdcf2; color: #fff; }
+  #pauseopts button[aria-pressed="true"]::before { content: '● '; color: #7fe9ff; }
   #pausemedals { list-style: none; margin: -8px 0 16px; padding: 0; font-family: system-ui, sans-serif; font-size: 11px; line-height: 1.7; color: #9fb6c6; text-align: left; }
   #pausemedals li { display: flex; gap: 8px; align-items: baseline; }
   #pausemedals i { font-style: normal; width: 14px; text-align: center; opacity: .55; }
@@ -173,9 +178,20 @@
   #lives { border: 1px solid #c8eaff; background: var(--glass); font-size: 17px; }
   #shieldcount { color: #c1f5ff; font-size: 11px; min-height: 14px; text-shadow: 0 1px 3px #142c46; }
   #target { position: absolute; top: 79px; left: 50%; transform: translateX(-50%); width: min(180px, 37vw); text-align: center; }
-  #targettrack { height: 5px; background: #142c4677; border: 1px solid #ffffff88; border-radius: 8px; overflow: hidden; }
-  #targetfill { height: 100%; background: #ff7181; transition: width .15s; }
-  #targetname { display: block; min-height: 18px; line-height: 18px; font-size: 10px; text-shadow: 0 1px 3px #142c46; }
+  #targettrack { position: relative; height: 6px; background: #142c4677; border: 1px solid #ffffff88; border-radius: 8px; overflow: hidden; }
+  #targetfill, #targetghost { position: absolute; left: 0; top: 0; height: 100%; }
+  #targetfill { background: linear-gradient(#ff8f9b, #ff5c70); transition: width .15s; }
+  /* The pale bar trails behind, so a burst of damage stays readable for a moment. */
+  #targetghost { background: #fff3c4; transition: width .55s ease-out .28s; }
+  #targetghost.snap { transition: none; }
+  #targetname { display: block; min-height: 18px; line-height: 18px; font-size: 10px; text-shadow: 0 1px 3px #142c46; white-space: nowrap; width: max-content; position: relative; left: 50%; transform: translateX(-50%); }
+  #clock { font-size: 11px; letter-spacing: .4px; color: #ffe9a6; font-variant-numeric: tabular-nums; }
+  #clock.late { color: #c9d6e2; opacity: .75; }
+  #danger { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; box-shadow: inset 0 0 14vmin 2vmin rgba(255, 36, 58, .5); }
+  #hud.danger #danger { opacity: 1; animation: dangerPulse .9s ease-in-out infinite alternate; }
+  @keyframes dangerPulse { from { opacity: .45; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #hud.danger #danger { animation: none; opacity: .7; } }
+  #hud.cine #danger { opacity: 0; animation: none; }
   #bottom { width: min(440px, 90vw); bottom: max(10px, env(safe-area-inset-bottom)); }
   #ups { gap: 4px; margin-bottom: 7px; }
   .up { font-family: system-ui, sans-serif; font-weight: 800; border: 1px solid #ffffffbb; font-size: 10px; padding: 2px 7px; border-radius: 6px; box-shadow: 0 2px 0 #142c4633; }
@@ -242,7 +258,7 @@
 
 <div id="hud" class="hidden">
   <div id="topbar">
-    <div id="left" class="stroke"><div id="lvlname"></div><div id="pips"></div></div>
+    <div id="left" class="stroke"><div id="lvlname"></div><div id="pips"></div><div id="clock" aria-label="Battle time"></div></div>
     <div id="armybox" class="stroke"><div class="dot"></div><div id="army">0</div></div>
     <div id="right">
       <div id="btns"><button id="mute" aria-label="Toggle sound">🔊</button><button id="menubtn" aria-label="Pause game">Ⅱ</button></div>
@@ -250,13 +266,14 @@
       <div id="shieldcount"></div>
     </div>
   </div>
-  <div id="target"><div id="targettrack"><div id="targetfill"></div></div><span id="targetname"></span></div>
+  <div id="target"><div id="targettrack"><div id="targetghost"></div><div id="targetfill"></div></div><span id="targetname"></span></div>
   <div id="bottom" class="stroke">
     <div id="surge"></div>
     <div id="ups"></div>
     <div id="rank"><i id="rankdot"></i><span id="rankname">Recruit</span></div>
     <div id="charge"><div id="chargefill"></div><span>GIANT</span></div>
   </div>
+  <div id="danger"></div>
   <div id="white"></div>
   <div id="banner"></div>
   <div id="tip" class="stroke"></div>
@@ -306,6 +323,9 @@
   <button id="resume" class="btn" autofocus>Resume</button>
   <button id="pauseretry" class="btn alt">Retry stage</button>
   <button id="pausemap" class="btn grey">World map</button>
+  <div id="pauseopts" role="group" aria-label="Settings">
+    <button data-opt="sound" aria-pressed="true">Sound</button><button data-opt="music" aria-pressed="true">Music</button><button data-opt="glow" aria-pressed="true">Glow</button>
+  </div>
   <small>Your run stays available on the map until you start another world.</small>
 </dialog>
 

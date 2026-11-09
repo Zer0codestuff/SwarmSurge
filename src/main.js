@@ -3558,8 +3558,17 @@ function renderWorld(dt) {
   $('rankdot').style.backgroundColor = '#' + rank.color.toString(16).padStart(6, '0');
   const target = G.stage?.tower?.alive ? G.stage.tower : G.stage?.boss;
   const health = target ? Math.max(0, target.hp / target.max) : 0;
+  // The ghost bar only trails on the way down; refills and new targets snap.
+  if (hudCache.targetHealth !== `${health * 100}%`) $('targetghost').classList.toggle('snap', health >= (hudCache.targetLevel ?? 0));
+  hudCache.targetLevel = health;
+  setHud('targetGhost', $('targetghost'), `${health * 100}%`, 'width');
   setHud('targetHealth', $('targetfill'), `${health * 100}%`, 'width');
-  setHud('targetText', $('targetname'), `${G.stage?.boss ? 'Boss' : 'Fort'} ${fmtHp(Math.max(0, target?.hp || 0))} · ${Math.ceil(health * 100)}%`);
+  setHud('targetText', $('targetname'), `${G.stage?.boss ? BOSS_CARDS[G.levelIdx][0].replace(/^The /, '') : 'Fort'} · ${fmtHp(Math.max(0, target?.hp || 0))} · ${Math.ceil(health * 100)}%`);
+  const seconds = Math.floor(G.time);
+  setHud('clock', $('clock'), `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
+  setHud('clockLate', $('clock'), !G.fullRun || G.time >= SWIFT_SECONDS ? 'late' : '', 'className');
+  const danger = G.lives <= 2 && G.phase === 'play';
+  if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
   setHud('surge', $('surge'), G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : '');
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
@@ -3667,6 +3676,14 @@ $('rretry').addEventListener('click', () => {
 $('rrestart').addEventListener('click', () => startLevel(G.levelIdx));
 $('rmenu').addEventListener('click', showMenu);
 $('menubtn').addEventListener('click', () => { if (!pauseGame() && ['won','lost'].includes(G.phase)) showMenu(); });
+// Quick settings in the pause dialog share their state with the title settings.
+const pauseOptions = {
+  sound: { on: () => !sound.muted, flip: () => { sound.unlock(); muteBtn.textContent = sound.toggle() ? '🔇' : '🔊'; } },
+  music: { on: () => prefs.get('music'), flip: () => prefs.set('music', !prefs.get('music')) },
+  glow: { on: () => prefs.get('glow'), flip: () => prefs.set('glow', !prefs.get('glow')) },
+};
+function syncPauseOptions() { for (const button of $('pauseopts').children) button.setAttribute('aria-pressed', String(!!pauseOptions[button.dataset.opt].on())); }
+for (const button of $('pauseopts').children) button.addEventListener('click', () => { pauseOptions[button.dataset.opt].flip(); syncPauseOptions(); });
 const muteBtn = $('mute');
 muteBtn.textContent = sound.muted ? '🔇' : '🔊';
 muteBtn.addEventListener('click', () => { sound.unlock(); muteBtn.textContent = sound.toggle() ? '🔇' : '🔊'; });
@@ -3684,6 +3701,7 @@ function pauseGame() {
   resetInput(); G.paused = true; acc = 0; sound.setPaused(true);
   document.body.classList.add('game-paused');
   $('pausewhere').textContent = `${LEVELS[G.levelIdx].name} / Stage ${G.stageIdx+1}`;
+  syncPauseOptions();
   // Medal goals for this world: earned ones are lit, ones this run can no longer reach are struck out.
   const held = medalsOf(records, G.levelIdx);
   const gone = { flawless: !G.fullRun || G.hurt > 0, swift: !G.fullRun || G.time >= SWIFT_SECONDS, overpowered: !G.fullRun || (!!G.stage.boss && G.stage.time >= CRUSH_SECONDS) };
