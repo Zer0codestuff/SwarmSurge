@@ -54,7 +54,19 @@
   .map-name { font-size: 10px; min-height: 25px; }
   .map-number { left: 9px; top: 51px; width: 24px; height: 24px; font-size: 11px; }
 }
-@media (prefers-reduced-motion: reduce) { .map-stop > svg { transition: none; } }
+/* Map life: the next island bobs, its ring breathes and the finished trail flows forward. */
+.current > svg { animation: islandBob 2.8s ease-in-out infinite; }
+.current::before { animation: ringBreath 2.8s ease-in-out infinite; }
+.trail-done { animation: trailFlow 1.4s linear infinite; }
+.mastered .map-number { animation: masteredGlow 2.4s ease-in-out infinite alternate; }
+@keyframes islandBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes ringBreath { 0%, 100% { opacity: .55; transform: translateX(-50%) scale(1); } 50% { opacity: 1; transform: translateX(-50%) scale(1.12); } }
+@keyframes trailFlow { to { stroke-dashoffset: -9; } }
+@keyframes masteredGlow { from { box-shadow: 0 2px 0 #102a40, 0 0 6px #ffd23a66; } to { box-shadow: 0 2px 0 #102a40, 0 0 16px #ffd23acc; } }
+#worldcard[open] { animation: cardIn .22s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+@media (prefers-reduced-motion: reduce) { .map-stop > svg { transition: none; } .current > svg, .current::before, .trail-done, .mastered .map-number, #worldcard[open] { animation: none; } }
+.menu-still .current > svg, .menu-still .current::before, .menu-still .trail-done, .menu-still .mastered .map-number, .menu-still #worldcard[open] { animation: none; }
 
 #pause { width: min(330px, calc(100% - 36px)); padding: 26px; border: 1px solid #b9d9e9; border-radius: 20px; background: #173249; color: #fff; text-align: center; box-shadow: 0 18px 70px #081a3055; }
 #pause::backdrop { background: #081a30a6; }
