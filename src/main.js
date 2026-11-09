@@ -9,7 +9,7 @@ import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
 import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, TANK_EVOLUTION_CAP, sweptCircle } from './arsenal.js';
-import { campaignProgress, renderCampaignMap } from './map.js';
+import { biomeArt, campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { BOSS_CARDS } from './boss-cards.js';
 import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
@@ -572,7 +572,7 @@ function recordVictory() {
     progress.stars[G.levelIdx] = stars;
     try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
   }
-  const outcome = recordRun(records, G.levelIdx, { army: G.maxArmy, combo: G.bestCombo, kills: G.kills, time: G.time, bossTime: G.stage.boss ? G.stage.time : 0, heartsLost: G.hurt, full: G.fullRun });
+  const outcome = recordRun(records, G.levelIdx, { army: G.maxArmy, combo: G.bestCombo, kills: G.kills, time: G.time, bossTime: G.stage.boss ? G.stage.time : 0, heartsLost: G.hurt, full: G.fullRun, hardcore: G.hardcore });
   saveRecords(records);
   return outcome;
 }
@@ -844,7 +844,7 @@ function applyTheme(theme) {
   post.setLook(lum(T.ground) * 0.5 + lum(T.fog) * 0.3 + lum(T.road) * 0.2);
 }
 
-function startLevel(idx, stageIdx = 0) {
+function startLevel(idx, stageIdx = 0, hardcore = false) {
   titleScreen?.hide();
   if ($('pause').open) $('pause').close();
   document.body.classList.remove('game-paused');
@@ -879,7 +879,7 @@ function startLevel(idx, stageIdx = 0) {
   G.effects.length = 0;
   Object.assign(G, {
     paused: false, resumePhase: null, weaponCursor: 0, t: 0,
-    log: [], lives: BASE_LIVES, hurt: 0, fullRun: stageIdx === 0, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
+    log: [], hardcore, lives: hardcore ? 1 : BASE_LIVES, hurt: 0, fullRun: stageIdx === 0, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, army: 0, armyShown: 0, armyPrev: 0, pumpT: 0, squad: 0, nextMile: 1000, armyAvg: 0,
     recoil: 0, cannonPulse: 0, kick: 0,
     chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
@@ -892,7 +892,7 @@ function startLevel(idx, stageIdx = 0) {
   hud.root.classList.remove('hidden');
   $('menu').classList.add('hidden');
   $('result').classList.add('hidden');
-  setHud('lvl', hud.level, `LEVEL ${idx + 1} · ${def.name.toUpperCase()}`);
+  setHud('lvl', hud.level, `LEVEL ${idx + 1} · ${def.name.toUpperCase()}${hardcore ? ' · HARDCORE' : ''}`);
   renderUps();
   canvas.focus({ preventScroll: true });
   warmShaders();
@@ -1540,9 +1540,11 @@ function absorb(S, g, i) {
       } else if (t === 'nuke') detonateNuke(S, g);
       else if (t === 'heart') {
         const v = g.def.v ?? 1;
-        G.lives = Math.min(MAX_LIVES, G.lives + v);
-        banner(`+${v} ♥`, 'pink', 1.2);
-        popup(`+${v} ♥`, 'combo c3', G.cx, 2.5, G.cannonZ - 2, 1.2);
+        // A one-heart run cannot heal: its hearts are forged into armor instead.
+        if (G.hardcore) G.shield = Math.min(6, G.shield + v); else G.lives = Math.min(MAX_LIVES, G.lives + v);
+        const gain = G.hardcore ? `+${v} ARMOR` : `+${v} ♥`;
+        banner(gain, 'pink', 1.2);
+        popup(gain, 'combo c3', G.cx, 2.5, G.cannonZ - 2, 1.2);
         if (!TURBO) { sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.pink, 50, 0.5, 1.2); hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit'); }
         sound.play('upgrade');
         g.need = Math.round(g.need * 2.5); g.prog = 0;
@@ -3551,8 +3553,9 @@ function renderWorld(dt) {
   }
   G.armyPrev = G.armyPrev * 0.9 + G.army * 0.1;
   setHud('armyTier', hud.army, G.army >= 1e9 ? 't4' : G.army >= 1e6 ? 't3' : G.army >= 1000 ? 't2' : '', 'className');
-  setHud('lives', hud.lives, `<span class="heart">❤</span>${Math.max(0, G.lives)}`, 'innerHTML');
-  if (hudCache.livesLow !== G.lives <= 3) { hudCache.livesLow = G.lives <= 3; hud.lives.classList.toggle('low', G.lives <= 3); }
+  setHud('lives', hud.lives, `<span class="heart">${G.hardcore ? '☠' : '❤'}</span>${Math.max(0, G.lives)}`, 'innerHTML');
+  const low = G.lives <= 3 && !G.hardcore;
+  if (hudCache.livesLow !== low) { hudCache.livesLow = low; hud.lives.classList.toggle('low', low); }
   const rank = RANKS[G.rank];
   setHud('rank', $('rankname'), rank.name);
   $('rankdot').style.backgroundColor = '#' + rank.color.toString(16).padStart(6, '0');
@@ -3567,7 +3570,7 @@ function renderWorld(dt) {
   const seconds = Math.floor(G.time);
   setHud('clock', $('clock'), `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
   setHud('clockLate', $('clock'), !G.fullRun || G.time >= SWIFT_SECONDS ? 'late' : '', 'className');
-  const danger = G.lives <= 2 && G.phase === 'play';
+  const danger = G.lives <= 2 && !G.hardcore && G.phase === 'play';
   if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
   setHud('surge', $('surge'), G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : '');
@@ -3577,6 +3580,30 @@ function renderWorld(dt) {
 }
 
 // ---------------------------------------------------------------- menus
+// Tapping an island opens its card: boss, stars, personal bests, medal goals and the two ways to play.
+let cardWorld = 0;
+function openWorldCard(index) {
+  const level = LEVELS[index], stars = Number(progress.stars[index]) || 0, best = records.worlds[index] || {}, held = medalsOf(records, index);
+  const [boss, epithet] = BOSS_CARDS[index], resumable = G.resumePhase && index === G.levelIdx;
+  const stat = (label, value) => `<span>${label}<b>${value || '-'}</b></span>`;
+  cardWorld = index;
+  $('wc-body').innerHTML = `<div class="wc-art">${biomeArt(level.theme, THEMES[level.theme])}</div>
+    <small>WORLD ${index + 1}</small><h2 id="wc-title">${level.name}</h2>
+    <p class="wc-boss">Boss: <b>${boss}</b><i>${epithet}</i></p>
+    <div class="wc-stars" aria-label="${stars} of 3 stars">${starsHtml(stars)}</div>
+    <div class="wc-stats">${stat('BEST ARMY', best.army && fmt(best.army))}${stat('BEST COMBO', best.combo > 1 && 'x' + fmt(best.combo))}${stat('BEST TIME', best.time && clock(best.time))}</div>
+    <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medal.icon}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
+  $('wc-play').textContent = resumable ? `RESUME ${index + 1}.${G.stageIdx + 1}` : 'PLAY';
+  $('wc-hard').disabled = !stars;
+  $('wc-hard').textContent = stars ? '☠ HARDCORE' : '☠ Clear the world first';
+  $('wc-hard').title = 'One heart, no healing: hearts turn into armor.';
+  if (!$('worldcard').open) $('worldcard').showModal();
+}
+function closeWorldCard() { if ($('worldcard').open) $('worldcard').close(); }
+$('wc-play').addEventListener('click', () => { closeWorldCard(); sound.unlock(); if (G.resumePhase && cardWorld === G.levelIdx) resumeRun(); else startLevel(cardWorld); });
+$('wc-hard').addEventListener('click', () => { closeWorldCard(); sound.unlock(); startLevel(cardWorld, 0, true); });
+$('wc-close').addEventListener('click', closeWorldCard);
+$('worldcard').addEventListener('click', (event) => { if (event.target === $('worldcard')) closeWorldCard(); });
 function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
 function showMenu(preserveRun = false) {
   titleScreen?.hide();
@@ -3589,7 +3616,7 @@ function showMenu(preserveRun = false) {
   G.phase = 'menu';
   hud.root.classList.add('hidden');
   $('result').classList.add('hidden');
-  const status = renderCampaignMap($('levels'), LEVELS, THEMES, progress, records, index => { sound.unlock(); if (G.resumePhase && index === G.levelIdx) resumeRun(); else startLevel(index); });
+  const status = renderCampaignMap($('levels'), LEVELS, THEMES, progress, records, openWorldCard);
   const earned = medalTotal(records);
   $('mapcount').textContent = `${status.cleared} / ${LEVELS.length} worlds cleared` + (earned ? ` · ${earned} / ${LEVELS.length * MEDALS.length} medals` : '');
   $('mapresume').textContent = G.resumePhase ? `Resume / ${G.levelIdx+1}.${G.stageIdx+1}` : status.complete ? 'Replay the finale' : `${status.unlocked ? 'Continue' : 'Play'} / ${status.unlocked + 1}`;
@@ -3662,9 +3689,9 @@ $('rretry').addEventListener('click', () => {
   const snap = G.snap;
   // A retry continues the same run: its clock, tallies and lost hearts carry over.
   const run = { time: G.time, kills: G.kills, maxArmy: G.maxArmy, bestCombo: G.bestCombo, hurt: G.hurt, fullRun: G.fullRun };
-  startLevel(G.levelIdx, snap.stage);
+  startLevel(G.levelIdx, snap.stage, G.hardcore);
   Object.assign(G, run);
-  Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, weaponMask: snap.weaponMask, aircraft: snap.aircraft, shield: snap.shield, lives: Math.max(snap.lives, 5) });
+  Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, weaponMask: snap.weaponMask, aircraft: snap.aircraft, shield: snap.shield, lives: G.hardcore ? 1 : Math.max(snap.lives, 5) });
   setBarrels(G.barrels);
   cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
   G.abilityT = ABILITY_SPECS[CHASSIS_SPECS[G.chassis]?.ability]?.first ?? 0;
@@ -3673,7 +3700,7 @@ $('rretry').addEventListener('click', () => {
   G.snap = { ...snap, lives: G.lives };
   priceStageSupplies(G.stage, snap.supplyFlux);
 });
-$('rrestart').addEventListener('click', () => startLevel(G.levelIdx));
+$('rrestart').addEventListener('click', () => startLevel(G.levelIdx, 0, G.hardcore));
 $('rmenu').addEventListener('click', showMenu);
 $('menubtn').addEventListener('click', () => { if (!pauseGame() && ['won','lost'].includes(G.phase)) showMenu(); });
 // Quick settings in the pause dialog share their state with the title settings.
@@ -3704,7 +3731,7 @@ function pauseGame() {
   syncPauseOptions();
   // Medal goals for this world: earned ones are lit, ones this run can no longer reach are struck out.
   const held = medalsOf(records, G.levelIdx);
-  const gone = { flawless: !G.fullRun || G.hurt > 0, swift: !G.fullRun || G.time >= SWIFT_SECONDS, overpowered: !G.fullRun || (!!G.stage.boss && G.stage.time >= CRUSH_SECONDS) };
+  const gone = { flawless: !G.fullRun || G.hurt > 0, swift: !G.fullRun || G.time >= SWIFT_SECONDS, overpowered: !G.fullRun || (!!G.stage.boss && G.stage.time >= CRUSH_SECONDS), hardcore: !G.fullRun || !G.hardcore };
   $('pausemedals').innerHTML = MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : gone[medal.id] ? 'gone' : ''}"><i>${medal.icon}</i><span>${medal.name}: ${medal.hint}${held.includes(medal) ? ' (earned)' : ''}</span></li>`).join('');
   $('pause').showModal();
   return true;

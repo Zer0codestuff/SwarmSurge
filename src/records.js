@@ -5,6 +5,7 @@ export const MEDALS = [
   { id: 'flawless', name: 'Flawless', hint: 'Lose no hearts', icon: '♥' },
   { id: 'swift', name: 'Swift', hint: `Win in under ${SWIFT_SECONDS} s of battle`, icon: '⚡' },
   { id: 'overpowered', name: 'Overpowered', hint: `Beat the boss in under ${CRUSH_SECONDS} s`, icon: '♛' },
+  { id: 'hardcore', name: 'Hardcore', hint: 'Win a one-heart run', icon: '☠' },
 ];
 const clean = (value) => (Number.isFinite(value) && value > 0 ? value : 0);
 
@@ -30,7 +31,7 @@ export function clock(seconds) {
   return `${minutes}:${String(((tenths % 600) / 10).toFixed(1)).padStart(4, '0')}`;
 }
 /**
- * Merge one victory into the records. `run`: { army, combo, kills, time, bossTime, heartsLost, full }.
+ * Merge one victory into the records. `run`: { army, combo, kills, time, bossTime, heartsLost, full, hardcore }.
  * Times and medals only count for a run that started at stage one.
  * Returns the previous entry, which bests were beaten and which medals are new.
  */
@@ -49,6 +50,7 @@ export function recordRun(records, world, run) {
       flawless: run.heartsLost === 0,
       swift: time > 0 && time < SWIFT_SECONDS,
       overpowered: clean(run.bossTime) > 0 && run.bossTime < CRUSH_SECONDS,
+      hardcore: !!run.hardcore,
     };
     for (const medal of MEDALS) if (wins[medal.id] && !entry.medals.includes(medal.id)) { entry.medals.push(medal.id); earned.push(medal.id); }
   }

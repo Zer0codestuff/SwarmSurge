@@ -127,7 +127,7 @@
   .stats em { font-style: normal; font-size: 9px; line-height: 1.2; color: #cfd8ff; opacity: .85; white-space: nowrap; }
   .stats em.new { color: #7dffb0; opacity: 1; animation: newBest .7s ease-in-out 1.1s 3 alternate backwards; }
   @keyframes newBest { from { transform: scale(1); } to { transform: scale(1.18); color: #fff; } }
-  .medals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+  .medals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
   .medal { font-family: var(--font); font-size: 11px; display: flex; flex-direction: column; align-items: center; padding: 6px 4px; border-radius: 12px; border: 2px dashed rgba(255,255,255,.28); color: rgba(255,255,255,.55); }
   .medal i { font-style: normal; font-size: 20px; line-height: 1.1; filter: grayscale(1); opacity: .5; }
   .medal small { font-family: system-ui, sans-serif; font-size: 9px; line-height: 1.25; opacity: .8; margin-top: 2px; }
@@ -136,7 +136,7 @@
   .medal.fresh { border-color: #ffd23a; background: rgba(255,210,58,.2); animation: medalIn .6s cubic-bezier(.2,1.8,.4,1) calc(1.25s + var(--k) * .18s) backwards; }
   .medal.fresh i, .medal.fresh small { color: #ffd23a; text-shadow: 0 0 10px rgba(255,210,58,.8); }
   @keyframes medalIn { from { opacity: 0; transform: scale(2.2) rotate(-12deg); } }
-  @media (max-width: 420px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 420px) { .stats, .medals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   #pauseopts { display: flex; gap: 8px; margin-top: 14px; }
   #pauseopts button { flex: 1; font-family: var(--font); font-size: 12px; padding: 9px 4px; border-radius: 10px; border: 1px solid #5d8198; background: #10283b; color: #8fa8b8; cursor: pointer; }
   #pauseopts button::before { content: '○ '; }
@@ -315,6 +315,13 @@
     <button id="rmenu" class="btn grey">MENU</button>
   </div>
 </div>
+
+<dialog id="worldcard" aria-labelledby="wc-title">
+  <div id="wc-body"></div>
+  <button id="wc-play" class="btn" autofocus>PLAY</button>
+  <button id="wc-hard" class="btn alt">☠ HARDCORE</button>
+  <button id="wc-close" class="btn grey">Back</button>
+</dialog>
 
 <dialog id="pause" aria-labelledby="pausetitle">
   <div id="pausetitle">Paused</div>

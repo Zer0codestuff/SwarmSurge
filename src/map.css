@@ -64,3 +64,27 @@
 #pause small { display: block; font-family: system-ui,sans-serif; color: #bfd3e0; font-size: 11px; line-height: 1.5; margin-top: 20px; }
 .game-paused #hud *, .game-paused #labels * { animation-play-state: paused !important; }
 #c:focus { outline: none; }
+
+#worldcard { width: min(360px, calc(100% - 28px)); max-height: calc(100% - 28px); padding: 18px 22px 20px; border: 1px solid #b9d9e9; border-radius: 22px; background: #173249; color: #fff; text-align: center; box-shadow: 0 18px 70px #081a3077; overflow-y: auto; }
+#worldcard::backdrop { background: #081a30b3; }
+.wc-art svg { width: 168px; height: 108px; margin: -6px auto -8px; display: block; filter: drop-shadow(0 5px 2px #0e253766); }
+#wc-body small { font-family: system-ui, sans-serif; font-size: 10px; letter-spacing: 1.6px; color: #9fc0d4; }
+#wc-body h2 { margin: 2px 0 4px; font-size: 26px; line-height: 1.1; }
+.wc-boss { margin: 0 0 8px; font-family: system-ui, sans-serif; font-size: 12px; color: #c4d9e6; }
+.wc-boss b { color: #ffb4a0; } .wc-boss i { display: block; font-size: 11px; opacity: .8; }
+.wc-stars span { font-size: 26px; color: #ffffff2e; margin: 0 2px; }
+.wc-stars span.on { color: #ffd23a; text-shadow: 0 2px 0 #6a4a00; }
+.wc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 8px 0 10px; }
+.wc-stats span { display: flex; flex-direction: column; padding: 5px 2px; border-radius: 10px; background: #10283b; border: 1px solid #3f647c; font-size: 9px; letter-spacing: .4px; color: #a9c3d3; }
+.wc-stats b { font-size: 17px; color: #ffd23a; white-space: nowrap; }
+.wc-medals { list-style: none; margin: 0 0 12px; padding: 0; text-align: left; font-family: system-ui, sans-serif; font-size: 12px; }
+.wc-medals li { display: grid; grid-template-columns: 22px auto 1fr; gap: 6px; align-items: baseline; padding: 4px 8px; border-radius: 8px; color: #91a9ba; }
+.wc-medals i { font-style: normal; text-align: center; opacity: .5; }
+.wc-medals b { font-family: var(--font); font-weight: 400; }
+.wc-medals span { text-align: right; font-size: 11px; opacity: .85; }
+.wc-medals .on { color: #e9fbff; background: #1f4a63; }
+.wc-medals .on i { color: #7fe9ff; opacity: 1; }
+#worldcard .btn { display: block; width: 100%; margin: 8px 0 0; font-size: 17px; border-width: 1px; padding: 11px; border-radius: 12px; }
+#wc-hard { background: #7a2338; box-shadow: 0 5px 0 #43101d; font-size: 14px !important; }
+#wc-hard:disabled { background: #2a4458; box-shadow: none; color: #8fa8b8; border-color: #4a6a80; cursor: default; }
+#wc-close { font-size: 14px !important; padding: 9px !important; }

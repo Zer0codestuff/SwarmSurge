@@ -237,7 +237,7 @@ window.runGameChecks = (g) => {
     const c=recordRun(r,3,{army:1e9,combo:5,kills:5,time:5,bossTime:1,heartsLost:0,full:false});
     const e=r.worlds[3];
     startLevel(0,1); const partial=G.fullRun; startLevel(0); const full=G.fullRun && G.hurt===0;
-    return {pass:a.earned.length===0 && !a.fresh.army && b.fresh.army && !b.fresh.combo && b.fresh.time && b.earned.join()==='flawless,swift,overpowered' && c.earned.length===0 && e.time===60 && e.army===1e9 && e.combo===20 && e.wins===3 && medalTotal(r)===3 && clock(65.04)==='1:05.0' && clock(9.96)==='0:10.0' && !partial && full,a,b,c,e,partial,full};
+    return {pass:a.earned.length===0 && !a.fresh.army && b.fresh.army && !b.fresh.combo && b.fresh.time && b.earned.join()==='flawless,swift,overpowered' && c.earned.length===0 && recordRun({worlds:{}},1,{time:90,bossTime:30,heartsLost:1,full:true,hardcore:true}).earned.join()==='hardcore' && e.time===60 && e.army===1e9 && e.combo===20 && e.wins===3 && medalTotal(r)===3 && clock(65.04)==='1:05.0' && clock(9.96)==='0:10.0' && !partial && full,a,b,c,e,partial,full};
   })()`);
   check('Every world has its own score and the arrangement grows with the battle', `(() => {
     const ids=new Set(LEVELS.map(L=>{music.setMode('battle',L.theme,THEMES[L.theme].sky);const s=music.score;return [s.root,s.bpm,s.scale,s.loop,s.arp,s.bass,s.melody].join('|');}));
@@ -362,8 +362,12 @@ window.runGameChecks = (g) => {
     try {
       progress={stars:[3]}; showMenu();
       const buttons=[...document.querySelectorAll('.map-stop')];
-      buttons[2].click(); const blocked=G.phase==='menu'; buttons[1].click();
-      return {pass:LEVELS.length===50 && buttons.length===LEVELS.length && buttons.filter(b=>!b.disabled).length===2 && blocked && G.levelIdx===1};
+      buttons[2].click(); const blocked=G.phase==='menu' && !$('worldcard').open; buttons[1].click();
+      const card=$('worldcard').open && G.phase==='menu' && $('wc-title').textContent===LEVELS[1].name && $('wc-hard').disabled;
+      $('wc-play').click(); const played=G.levelIdx===1 && !G.hardcore && G.lives===10 && !$('worldcard').open;
+      showMenu(); document.querySelectorAll('.map-stop')[0].click(); const unlocked=!$('wc-hard').disabled; $('wc-hard').click();
+      const hard=G.levelIdx===0 && G.hardcore && G.lives===1;
+      return {pass:LEVELS.length===50 && buttons.length===LEVELS.length && buttons.filter(b=>!b.disabled).length===2 && blocked && card && played && unlocked && hard,blocked,card,played,unlocked,hard};
     } finally { progress=saved; }
   })()`);
   check('Victory saves progress before the result animation', `(() => {
