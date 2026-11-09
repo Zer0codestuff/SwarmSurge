@@ -16,6 +16,7 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 - `src/fort-assets.js`: sculpted biome forts (curved curtain wall, pillowed stone courses, arched gatehouse, one tower design per family). `src/battlefield-assets.js` re-exports it and builds the lathe-and-loft turret, vaulted igloo and ribbed dome bunkers, jersey-barrier divider, toothed hydraulic crusher and fluted falling pillar.
 - `src/scenery-assets.js`: sculpted roadside props (saguaros, rock clusters, pines, palms, coral, lollipops, columns, gears, crates, mountains, crystals and more) used by `models.buildWorld` and `src/worlds.js`.
 - `src/map.js`, `src/map.css`: biome island map and progressive unlocks.
+- `src/records.js`: personal bests and medals per world under `swarm-records` (pure `recordRun`, `medalsOf`, `clock`). Stars stay in `swarm-progress`.
 - `src/music.js`: procedural soundtrack (no audio files). `scoreFor(theme, sky)` derives each biome's key, mode, chord loop, tempo, bass, arpeggio and melody; `Music.plan` is the pure arrangement and `Music.tick` schedules it from the frame loop.
 - `src/postfx.js`: glow, vignette, impact punch and damage flash as one post pass. `src/settings.js`: persisted on/off preferences shared by the title settings and the engine.
 - `src/boss-cards.js`: name and epithet per world for the boss introduction card.
@@ -65,6 +66,8 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 
 - Music: every world has its own generated score (bright skies get major or mixolydian, dark skies minor or phrygian). The arrangement follows battle heat from army power, enemy count and low hearts: pad and arpeggio first, then bass, kick, hats, snare and lead. Boss stages turn to the parallel minor, speed up by 12 BPM and add a downbeat boom. The title, map and results play a slow camp theme. Music ducks under the clear, victory and defeat jingles, uses its own gain bus behind a compressor, and stops with pause, lost focus, the Sound mute or the Music setting (`swarm-music`). The first gesture anywhere unlocks audio. Turbo runs never tick it.
 
+- Records and medals: a win stores the world's best army, combo, kills and battle time. Three medals per world: Flawless (no hearts lost), Swift (under 65 s of battle) and Overpowered (boss beaten in under 12 s). Times and medals need a run that started at stage one; a stage retry continues the same run (clock, tallies and lost hearts carry over). The results screen shows a time tile, "NEW BEST" or the standing best per tile and the medal row; the map shows three medal pips beside the stars, a gold number for a mastered world and the medal total in the header; the pause dialog lists the goals and strikes out the ones the run can no longer reach.
+
 ## Visuals and resource ownership
 - Allied troops change body form with rank: Surge bot (ranks 1 to 3), Trooper (4 to 6), Paladin (7 to 9) and Ascended (10 to 13). Each form has near and far instanced meshes; empty meshes are hidden. All forms share the hip pivot, hand anchors and footprint, so weapons, stride and collision are unchanged. Enemies use a horned raider with sculpted bomb, shield, tank helmet, drone jetpack and crab carapace overlays.
 - Near troops cast shadows through shadow-only proxies (layer 1, rendered only by the sun's shadow camera) that reuse the far geometry and share the near instance buffers. Troop shadow triangles dropped from about 1.55M to 0.57M in an 850-troop scene with no visible difference. Distant troops also use low-detail weapons and enemy gear (`detail = 'low'`). The near/far threshold (24 px, 20 px hysteresis) was kept because the far body is visibly blockier up close.
@@ -111,6 +114,8 @@ Browser crowd shooter with 50 worlds and three stages per world. Plain JavaScrip
 - Physical mobile devices, sustained hardware performance and human difficulty remain unvalidated. Keep further checks focused.
 
 - Soundtrack: 78 engine checks and 17 tutorial checks pass. An offline render of eight bars gave finite output at every intensity (peak 0.02 calm, 0.09 full, 0.12 boss before the bus gain was lowered from 0.2 to 0.14), and all 50 worlds have distinct scores. Nobody has listened to it yet: mix levels and musical taste are unjudged.
+
+- Records and medals: 79 engine checks and 17 tutorial checks pass. Results, map and pause dialog were inspected on 1280 x 720 and 390 x 844 with seeded records. The 65 s and 12 s thresholds come from smart-bot runs (50 to 67 s per world, boss fights mostly 15 to 30 s); no human has tried to earn them.
 
 ## Preferences and do not
 - The product name is ThatAdGame (title, title screen, map header, README). The `swarm-*` localStorage keys and the Railway project name SwarmSurge are identifiers, not branding: keep them so saves and deployment survive. Gameplay uses of "swarm" (enemy swarms, Swarm Master) are thematic and stay.

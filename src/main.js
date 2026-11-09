@@ -3,6 +3,7 @@ import { LEVELS, THEMES } from './levels.js';
 import * as M from './models.js';
 import { Sound } from './sound.js';
 import { Music } from './music.js';
+import { CRUSH_SECONDS, MEDALS, SWIFT_SECONDS, clock, loadRecords, medalTotal, medalsOf, recordRun, saveRecords } from './records.js';
 import * as FX from './fx.js';
 import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
@@ -563,11 +564,17 @@ function loadProgress() {
 }
 let progress = loadProgress();
 const tutorials = createTutorials();
+let records = loadRecords();
+// Stars stay in the legacy progress key; personal bests and medals live beside it.
 function recordVictory() {
   const stars = G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1;
-  if (stars <= (progress.stars[G.levelIdx] || 0)) return;
-  progress.stars[G.levelIdx] = stars;
-  try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
+  if (stars > (progress.stars[G.levelIdx] || 0)) {
+    progress.stars[G.levelIdx] = stars;
+    try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
+  }
+  const outcome = recordRun(records, G.levelIdx, { army: G.maxArmy, combo: G.bestCombo, kills: G.kills, time: G.time, bossTime: G.stage.boss ? G.stage.time : 0, heartsLost: G.hurt, full: G.fullRun });
+  saveRecords(records);
+  return outcome;
 }
 
 // ---------------------------------------------------------------- level construction
@@ -872,7 +879,7 @@ function startLevel(idx, stageIdx = 0) {
   G.effects.length = 0;
   Object.assign(G, {
     paused: false, resumePhase: null, weaponCursor: 0, t: 0,
-    log: [], lives: BASE_LIVES, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
+    log: [], lives: BASE_LIVES, hurt: 0, fullRun: stageIdx === 0, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, army: 0, armyShown: 0, armyPrev: 0, pumpT: 0, squad: 0, nextMile: 1000, armyAvg: 0,
     recoil: 0, cannonPulse: 0, kick: 0,
     chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
@@ -2429,7 +2436,7 @@ function damageCannon(amount) {
       sound.play('shield'); buzz(25);
     }
   }
-  if (damage > 0) { G.lives -= damage; hurtFlash(); }
+  if (damage > 0) { G.lives -= damage; G.hurt += damage; hurtFlash(); }
   return damage;
 }
 function hurtFlash() {
@@ -3573,8 +3580,9 @@ function showMenu(preserveRun = false) {
   G.phase = 'menu';
   hud.root.classList.add('hidden');
   $('result').classList.add('hidden');
-  const status = renderCampaignMap($('levels'), LEVELS, THEMES, progress, index => { sound.unlock(); if (G.resumePhase && index === G.levelIdx) resumeRun(); else startLevel(index); });
-  $('mapcount').textContent = `${status.cleared} / ${LEVELS.length} worlds cleared`;
+  const status = renderCampaignMap($('levels'), LEVELS, THEMES, progress, records, index => { sound.unlock(); if (G.resumePhase && index === G.levelIdx) resumeRun(); else startLevel(index); });
+  const earned = medalTotal(records);
+  $('mapcount').textContent = `${status.cleared} / ${LEVELS.length} worlds cleared` + (earned ? ` · ${earned} / ${LEVELS.length * MEDALS.length} medals` : '');
   $('mapresume').textContent = G.resumePhase ? `Resume / ${G.levelIdx+1}.${G.stageIdx+1}` : status.complete ? 'Replay the finale' : `${status.unlocked ? 'Continue' : 'Play'} / ${status.unlocked + 1}`;
   $('mapresume').onclick = () => { sound.unlock(); if (G.resumePhase) resumeRun(); else startLevel(status.unlocked); };
   $('menu').classList.remove('hidden');
@@ -3594,7 +3602,7 @@ function showMenu(preserveRun = false) {
 }
 function showResult(win) {
   const stars = win ? (G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1) : 0;
-  if (win) recordVictory();
+  const outcome = win ? recordVictory() : null;
   $('rtitle').textContent = win ? 'LEVEL COMPLETE!' : 'DEFEATED';
   $('rtitle').className = win ? 'win' : 'lose';
   $('rstars').innerHTML = win ? starsHtml(stars) : '';
@@ -3603,9 +3611,19 @@ function showResult(win) {
   const tip = bossLoss
     ? 'Tip: chain gates in a row and grab POWER/upgrades first. A huge army pushes the boss back!'
     : 'Tip: gates in a row multiply each other. Break fences, ice and barriers to reach the big ones!';
-  const stats = `<div class="stats"><span>MAX ARMY<b data-v="${G.maxArmy}">0</b></span><span>BEST COMBO<b data-v="${G.bestCombo}" data-p="x">x1</b></span><span>CRUSHED<b data-v="${G.kills}">0</b></span></div>`;
+  // Each tile shows the run; after a win it also shows the record it beat or still has to beat.
+  const tile = (label, value, prefix, stat, text) => {
+    const best = outcome?.before[stat], note = !outcome ? '' : outcome.fresh[stat] ? '<em class="new">NEW BEST</em>' : best ? `<em>best ${text(best)}</em>` : '';
+    return `<span>${label}<b ${value == null ? '' : `data-v="${value}" data-p="${prefix}"`}>${value == null ? text(G.time) : prefix + '0'}</b>${note}</span>`;
+  };
+  const stats = `<div class="stats">${tile('MAX ARMY', G.maxArmy, '', 'army', fmt)}${tile('BEST COMBO', G.bestCombo, 'x', 'combo', (v) => 'x' + fmt(v))}${tile('CRUSHED', G.kills, '', 'kills', fmt)}${tile('TIME', null, '', G.fullRun ? 'time' : 'none', clock)}</div>`;
+  const held = win ? medalsOf(records, G.levelIdx) : [];
+  const medals = win ? `<div class="medals">${MEDALS.map((medal, k) => {
+    const fresh = outcome.earned.includes(medal.id), has = held.includes(medal);
+    return `<span class="medal${has ? ' on' : ''}${fresh ? ' fresh' : ''}" style="--k:${k}" title="${medal.hint}"><i>${medal.icon}</i>${medal.name}<small>${fresh ? 'NEW!' : has ? 'earned' : medal.hint}</small></span>`;
+  }).join('')}</div>` : '';
   $('rmsg').innerHTML = win
-    ? stats + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
+    ? stats + medals + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
       (last ? `<br><b class="champ">ALL ${LEVELS.length} LEVELS CLEARED! You are the Swarm Master!</b>` : '')
     : stats + `${G.loseMsg}<br><small>${tip}</small>`;
   $('rretry').classList.toggle('hidden', win);
@@ -3614,6 +3632,7 @@ function showResult(win) {
   $('result').classList.remove('hidden');
   countUp();
   if (win) for (let k = 0; k < stars; k++) setTimeout(() => sound.play('combo', k + 1), 380 + k * 250);
+  if (outcome?.earned.length) setTimeout(() => { sound.play('evolve', 2); buzz([40, 40, 90]); }, 1300);
 }
 // result numbers roll up (log scale, so 1e20 counts as nicely as 200)
 function countUp() {
@@ -3632,7 +3651,10 @@ function countUp() {
 $('rnext').addEventListener('click', () => startLevel(G.levelIdx + 1));
 $('rretry').addEventListener('click', () => {
   const snap = G.snap;
+  // A retry continues the same run: its clock, tallies and lost hearts carry over.
+  const run = { time: G.time, kills: G.kills, maxArmy: G.maxArmy, bestCombo: G.bestCombo, hurt: G.hurt, fullRun: G.fullRun };
   startLevel(G.levelIdx, snap.stage);
+  Object.assign(G, run);
   Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, weaponMask: snap.weaponMask, aircraft: snap.aircraft, shield: snap.shield, lives: Math.max(snap.lives, 5) });
   setBarrels(G.barrels);
   cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
@@ -3662,6 +3684,10 @@ function pauseGame() {
   resetInput(); G.paused = true; acc = 0; sound.setPaused(true);
   document.body.classList.add('game-paused');
   $('pausewhere').textContent = `${LEVELS[G.levelIdx].name} / Stage ${G.stageIdx+1}`;
+  // Medal goals for this world: earned ones are lit, ones this run can no longer reach are struck out.
+  const held = medalsOf(records, G.levelIdx);
+  const gone = { flawless: !G.fullRun || G.hurt > 0, swift: !G.fullRun || G.time >= SWIFT_SECONDS, overpowered: !G.fullRun || (!!G.stage.boss && G.stage.time >= CRUSH_SECONDS) };
+  $('pausemedals').innerHTML = MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : gone[medal.id] ? 'gone' : ''}"><i>${medal.icon}</i><span>${medal.name}: ${medal.hint}${held.includes(medal) ? ' (earned)' : ''}</span></li>`).join('');
   $('pause').showModal();
   return true;
 }

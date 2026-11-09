@@ -26,6 +26,11 @@
 .map-stars { display: flex; gap: 2px; justify-content: center; margin-top: 3px; font-size: 12px; line-height: 1; }
 .map-stars i { font-style: normal; color: #688092; }
 .map-stars .earned { color: #ffdc8a; }
+.map-medals { display: flex; gap: 2px; align-items: center; margin-left: 4px; }
+.map-medals b { width: 6px; height: 6px; transform: rotate(45deg); border: 1px solid #688092; border-radius: 1px; }
+.map-medals .earned { background: #7fe9ff; border-color: #d9fbff; box-shadow: 0 0 5px #7fe9ffaa; }
+.mastered .map-number { background: #ffd23a; color: #3a2a05; border-color: #fff6cf; box-shadow: 0 2px 0 #102a40, 0 0 12px #ffd23a99; }
+.mastered .map-medals .earned { background: #ffd23a; border-color: #fff6cf; box-shadow: 0 0 5px #ffd23aaa; }
 .locked { cursor: default; color: #93aaba; }
 .locked > svg { filter: saturate(.72) brightness(.8); opacity: .85; }
 .locked .map-number { background: #223d51; border-color: #7291a2; color: #a2b9c7; }
