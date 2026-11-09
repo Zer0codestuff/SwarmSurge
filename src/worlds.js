@@ -125,7 +125,7 @@ const DECOR = {
     stars(g, zc, 900, 0xffffff, 0);
     scatter(g, S.asteroid(5, 0x4a3f52), vc(false), 140, 10, 50, zc, total, 0.4, 2.4, 2.5, false);
     scatter(g, S.asteroid(11, 0x342a3c), vc(false), 140, 10, 50, zc, total, 0.4, 1.8, 7, false);
-    const disk = new THREE.Mesh(new THREE.RingGeometry(26, 70, 64), new THREE.MeshBasicMaterial({ color: 0xff8a3a, transparent: true, opacity: 0.55, side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const disk = new THREE.Mesh(new THREE.RingGeometry(26, 70, 64), new THREE.MeshBasicMaterial({ color: 0xff8a3a, transparent: true, opacity: 0.55, side: THREE.DoubleSide, forceSinglePass: true, fog: false, blending: THREE.AdditiveBlending, depthWrite: false }));
     disk.rotation.x = -Math.PI / 2 + 0.3;
     far(g, disk, 0, 60, zc - 200);
     far(g, new THREE.Mesh(new THREE.SphereGeometry(24, 32, 20), new THREE.MeshBasicMaterial({ color: 0x000000, fog: false })), 0, 60, zc - 200);

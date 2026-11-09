@@ -104,7 +104,7 @@ function auroraRibbons(g, zc, total) {
       colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .38, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .38, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false });
     far(g, new THREE.Mesh(geo, mat), (r - 1) * 55, 34 + r * 7, zc - total / 2 - 50 - r * 30);
   }
 }
@@ -120,7 +120,7 @@ function nebulaBackdrop(g, zc, total) {
       colors[i * 3] = c.r * f; colors[i * 3 + 1] = c.g * f; colors[i * 3 + 2] = c.b * f;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false });
     far(g, new THREE.Mesh(geo, mat), x, y, zc - total / 2 - 120);
   }
 }
@@ -394,7 +394,7 @@ export const DECOR = {
     const ringZ = zc - total / 2 + 70, ringX = 30;
     const gold = new THREE.MeshLambertMaterial({ color: 0x8a6a1a, emissive: 0xffd86a, emissiveIntensity: .8, fog: false });
     far(g, new THREE.Mesh(new THREE.TorusGeometry(17, 1.6, 8, 44), gold), ringX, 6, ringZ);
-    far(g, new THREE.Mesh(new THREE.CircleGeometry(15.4, 40), new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })), ringX, 6, ringZ);
+    far(g, new THREE.Mesh(new THREE.CircleGeometry(15.4, 40), new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false })), ringX, 6, ringZ);
     const daisMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, fog: false });
     far(g, new THREE.Mesh(paint(new THREE.CylinderGeometry(9, 11, 2.4, 12).translate(0, 1.2, 0), 0x241430), daisMat), ringX, 0, ringZ + 8);
     const back = loftGeometry([[0, 2.2, .9, 0, 0, 4], [7.5, 1.7, .7, 0, 0, 4], [10.5, .5, .5, 0, 0, 4]], { segments: 10, steps: 3 });

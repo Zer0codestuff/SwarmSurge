@@ -82,6 +82,9 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 const maxPixelRatio = Math.min(devicePixelRatio, isTouch ? 1.75 : 2);
 const minPixelRatio = Math.min(1, maxPixelRatio);
 renderer.setPixelRatio(maxPixelRatio);
+// Reading a link log forces the driver to finish every new program synchronously, which
+// shows up as a hitch the first time an effect appears. `?shaderdebug=1` restores the check.
+renderer.debug.checkShaderErrors = params.has('shaderdebug');
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -570,6 +573,8 @@ function buildGateModel(gd, cur) {
 }
 function buildStage(sd, i, root, theme) {
   const group = new THREE.Group(); root.add(group); root = group;
+  // Two of the three stages are hidden at any time; skip their matrix updates until shown.
+  group.updateMatrixWorld = function (force) { if (this.visible) THREE.Object3D.prototype.updateMatrixWorld.call(this, force); };
   const z0 = -i * STAGE_GAP;
   const st = {
     def: sd, i, z0, group, gates: [], walls: [], saws: [], spawners: [], crushers: [], turrets: [], exits: [],
@@ -766,6 +771,9 @@ function startLevel(idx, stageIdx = 0) {
   const world = M.buildWorld(def.theme, def.stages.length * STAGE_GAP);
   W.decorate(def.theme, world, def.stages.length * STAGE_GAP);
   G.root.add(world);
+  // Ground, road and scenery never move: compose their matrices once instead of every frame.
+  world.updateMatrixWorld(true);
+  world.traverse((o) => { o.matrixAutoUpdate = false; });
   G.stages = def.stages.map((sd, i) => buildStage(sd, i, G.root, def.theme));
   for (let i = 0; i < stageIdx; i++) if (G.stages[i].tower) { G.stages[i].tower.alive = false; G.stages[i].tower.model.group.visible = false; }
   B.n = R.n = 0;
@@ -797,6 +805,16 @@ function startLevel(idx, stageIdx = 0) {
   setHud('lvl', hud.level, `LEVEL ${idx + 1} · ${def.name.toUpperCase()}`);
   renderUps();
   canvas.focus({ preventScroll: true });
+  warmShaders();
+}
+// Later stages are hidden until the cannon reaches them. Compiling their programs while the
+// level opens keeps the advance between stages free of shader hitches.
+function warmShaders() {
+  if (TURBO) return;
+  const hidden = G.stages.filter((S) => !S.group.visible);
+  for (const S of hidden) S.group.visible = true;
+  renderer.compile(scene, camera);
+  for (const S of hidden) S.group.visible = false;
 }
 function setBarrels(n) {
   cannon.setBarrels(n); twinCannon.setBarrels(n);
@@ -2566,6 +2584,9 @@ function updateLate(S, dt) {
   }
 }
 function renderLate(S, dt, cur) {
+  // Charge counters change every frame; redrawing their canvas textures at 12 Hz is enough.
+  const label = cur && G.t - (S.lateLabelT ?? -1) > 0.08;
+  if (label) S.lateLabelT = G.t;
   for (const b of S.bumpers) {
     const m = b.model;
     m.group.position.x = b.x;
@@ -2573,7 +2594,7 @@ function renderLate(S, dt, cur) {
     m.ring.scale.setScalar(1 + b.flash * 0.12);
     m.capMat.color.setHex(b.flash > 0.3 ? 0xffffff : b.def.color ?? 0xff3fae);
     m.lights.rotation.y += dt * (1.5 + b.flash * 8);
-    if (cur) M.drawLabel(m.label, 'x' + fmt(b.v), 'BUMPER', -1, '#ffd0f0');
+    if (label) M.drawLabel(m.label, 'x' + fmt(b.v), 'BUMPER', -1, '#ffd0f0');
   }
   for (const c of S.carts) {
     const m = c.model;
@@ -2582,7 +2603,7 @@ function renderLate(S, dt, cur) {
     m.body.position.x = Math.sin(G.t * 60) * c.flash * 0.04;
     for (const w of m.wheels) w.rotation.x -= c.speed * dt / 0.3;
     m.fuse.scale.setScalar(c.prog >= c.need ? 1.2 + Math.sin(G.t * 30) * 0.4 : 0.8 + Math.sin(G.t * 6) * 0.1);
-    if (cur) M.drawLabel(m.label, c.prog >= c.need ? 'FUSE LIT!' : 'PUSH THE CART', `${fmtHp(c.prog)}/${fmtHp(c.need)}`, c.prog / c.need, '#ffd28a');
+    if (label) M.drawLabel(m.label, c.prog >= c.need ? 'FUSE LIT!' : 'PUSH THE CART', `${fmtHp(c.prog)}/${fmtHp(c.need)}`, c.prog / c.need, '#ffd28a');
   }
   for (const e of S.eggs) {
     if (!e.alive) continue;
@@ -2590,7 +2611,7 @@ function renderLate(S, dt, cur) {
     m.body.rotation.z = Math.sin(G.t * (4 + urgency * 18)) * (0.02 + urgency * 0.1) + Math.sin(G.t * 60) * e.flash * 0.04;
     m.crackMat.opacity = Math.min(1, urgency * 1.4);
     m.shellMat.color.setHex(e.flash > 0.2 ? 0xffffff : urgency > 0.75 && Math.sin(G.t * 16) > 0 ? 0xffd0b0 : 0xf2ead2);
-    if (cur) M.drawLabel(m.label, fmtHp(e.hp), `HATCH IN ${Math.max(0, Math.ceil(e.t))}s`, Math.max(0, e.t) / hatch, urgency > 0.75 ? '#ff9a8a' : '#fff4d0');
+    if (label) M.drawLabel(m.label, fmtHp(e.hp), `HATCH IN ${Math.max(0, Math.ceil(e.t))}s`, Math.max(0, e.t) / hatch, urgency > 0.75 ? '#ff9a8a' : '#fff4d0');
   }
   for (const f of S.fusions) {
     for (const c of f.cores) {
@@ -2600,7 +2621,7 @@ function renderLate(S, dt, cur) {
       m.orb.scale.setScalar(0.7 + p * 0.5 + (c.full ? Math.sin(G.t * 14) * 0.12 : 0) + c.flash * 0.2);
       m.orbMat.color.setHex(!f.alive ? 0x4a5068 : c.full || f.active > 0 ? 0xffffff : 0x9af6ff);
       m.rings.forEach((r, k) => { r.rotation.y += dt * (1 + p * 5) * (k % 2 ? -1 : 1); r.position.y = 0.9 + k * 0.7 + Math.sin(G.t * 2 + k) * 0.06 * (1 + p); });
-      if (cur) {
+      if (label) {
         if (!f.alive) M.drawLabel(m.label, 'SPENT', '', -1, '#9aa4c0');
         else if (f.active > 0) M.drawLabel(m.label, 'FUSION', `BEAM ${Math.ceil(f.active)}s`, f.active / (f.def.dur ?? 5), '#bff6ff');
         else if (c.full) M.drawLabel(m.label, 'READY', `PAIR IT ${Math.ceil(c.holdT)}s`, c.holdT / (f.def.hold ?? 5), '#ffffff');
@@ -2611,7 +2632,7 @@ function renderLate(S, dt, cur) {
       const pulse = 1 + Math.sin(G.t * 24) * 0.12;
       f.beam.outer.scale.set(f.hi - f.lo, pulse, pulse);
       f.beam.outerMat.opacity = 0.25 + Math.min(1, f.active) * 0.2;
-      if (cur) M.drawLabel(f.beam.label, 'x' + fmt(f.def.v ?? 3), 'FUSION BEAM', -1, '#bff6ff');
+      if (label) M.drawLabel(f.beam.label, 'x' + fmt(f.def.v ?? 3), 'FUSION BEAM', -1, '#bff6ff');
     }
   }
 }
@@ -2953,6 +2974,7 @@ function defensePose(target) {
   return pose;
 }
 
+const starColor = new THREE.Color();
 function renderWorld(dt) {
   updateTroopMotion(G.t);
   labelLayer.style.visibility = G.phase === 'menu' || G.shown ? 'hidden' : 'visible';
@@ -3082,7 +3104,7 @@ function renderWorld(dt) {
       else if (t === 'nuke' && g.coolUntil > S.time) g.model.panelMat.opacity = 0.12 + Math.abs(Math.sin(G.t * 4)) * 0.2;
       else if (t !== 'statue') g.model.panelMat.opacity = (t === 'ice' ? 0.82 : t === 'fence' ? 0.9 : 0.55) + g.flash * 0.35;
       if (BLOCKERS.has(t) || REDGATES.has(t)) grp.position.x = g.x + Math.sin(G.t * 60) * g.flash * 0.08;
-      if (t === 'star') g.model.setColor(new THREE.Color().setHSL((G.t * 0.4) % 1, 1, 0.6));
+      if (t === 'star') g.model.setColor(starColor.setHSL((G.t * 0.4) % 1, 1, 0.6));
     }
     for (const ex of S.exits) ex.ring.rotation.z += dt * 2;
     renderLate(S, dt, cur);

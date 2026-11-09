@@ -120,7 +120,7 @@ export function buildTesla(w) {
   const H = 2.2;
   const postGeo = new THREE.BoxGeometry(0.26, H, 0.26);
   g.add(mesh(postGeo, metal, -w / 2, H / 2, 0), mesh(postGeo, metal, w / 2, H / 2, 0));
-  const panelMat = new THREE.MeshBasicMaterial({ color: 0x3ad0ff, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+  const panelMat = new THREE.MeshBasicMaterial({ color: 0x3ad0ff, transparent: true, opacity: 0.45, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, H - 0.1), panelMat); panel.position.y = H / 2; g.add(panel);
   const coil = new THREE.Group(); coil.position.set(w / 2, H, 0); g.add(coil);
   coil.add(mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.6, 10), copper, 0, 0.8, 0));
@@ -149,7 +149,7 @@ export function buildTornado(r) {
     g.add(strand); strands.push(strand);
   }
   const core = new THREE.Mesh(new THREE.ConeGeometry(r * 1.1, 5.4, 16, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xcfd8e4, transparent: true, opacity: .035, side: THREE.DoubleSide, depthWrite: false }));
+    new THREE.MeshBasicMaterial({ color: 0xcfd8e4, transparent: true, opacity: .035, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false }));
   core.rotation.x = Math.PI; core.position.y = 2.9; g.add(core);
   const footprint = new THREE.Mesh(new THREE.RingGeometry(r * .84, r, 40),
     new THREE.MeshBasicMaterial({ color: 0xbce5ff, transparent: true, opacity: .18, depthWrite: false }));
@@ -162,10 +162,10 @@ export function buildBlackHole(r) {
   const g = new THREE.Group();
   const core = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshBasicMaterial({ color: 0x000000 }));
   core.position.y = r + 0.2; g.add(core);
-  const diskMat = new THREE.MeshBasicMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+  const diskMat = new THREE.MeshBasicMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.85, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const disk = new THREE.Mesh(new THREE.RingGeometry(r * 1.15, r * 2.6, 48, 3), diskMat);
   disk.rotation.x = -Math.PI / 2 + 0.35; disk.position.y = r + 0.2; g.add(disk);
-  const halo = new THREE.Mesh(new THREE.RingGeometry(r * 1.02, r * 1.3, 48), new THREE.MeshBasicMaterial({ color: 0xffd0a0, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const halo = new THREE.Mesh(new THREE.RingGeometry(r * 1.02, r * 1.3, 48), new THREE.MeshBasicMaterial({ color: 0xffd0a0, transparent: true, opacity: 0.9, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   halo.position.y = r + 0.2; g.add(halo);
   const pull = new THREE.Mesh(new THREE.RingGeometry(r * 3.0, r * 3.2, 48), new THREE.MeshBasicMaterial({ color: 0x9a3aff, transparent: true, opacity: 0.35, depthWrite: false }));
   pull.rotation.x = -Math.PI / 2; pull.position.y = 0.05; g.add(pull);
