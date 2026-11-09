@@ -3,7 +3,7 @@
 // Labels, panels and collision stay with the callers. Placement uses a fixed hash, never
 // Math.random, so building a stage does not move the seeded simulation stream.
 import * as THREE from 'three';
-import { assetBatch, assetGlow } from './asset-kit.js';
+import { assetBatch, assetGlow, bevelBox } from './asset-kit.js';
 import { loftGeometry, sweepGeometry, headGeometry } from './boss-shapes.js';
 
 const TAU = Math.PI * 2;
@@ -212,4 +212,60 @@ export function sculptJumpPad(group, r) {
   b.add(lathe([[r * 0.8, 0.3], [r * 0.99, 0.29], [r * 1.05, 0.34], [r * 1.03, 0.4], [r * 0.95, 0.43], [r * 0.83, 0.4], [r * 0.8, 0.36]], 28), FRAME);
   for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + Math.PI / 4; b.add(lathe([[0.1, 0], [0.11, 0.06], [0.07, 0.1], [0.001, 0.11]], 8), SPRING, Math.cos(a) * r * 1.06, 0.02, Math.sin(a) * r * 1.06); }
   b.finish(group, 'jump-frame').castShadow = false;
+}
+
+// ---------- portal ----------
+// Ribbon arms that fade at both ends; additive blending turns the dark vertices invisible.
+function vortexGeometry(r, arms = 3) {
+  const positions = [], colors = [], indices = [], steps = 18;
+  for (let k = 0; k < arms; k++) {
+    const start = positions.length / 3;
+    for (let j = 0; j <= steps; j++) {
+      const t = j / steps, radius = r * (0.1 + 0.72 * t), a = k * TAU / arms + t * 2.7, half = r * 0.1 * Math.sin(Math.PI * t) + 0.004;
+      const glow = Math.sin(Math.PI * t) ** 0.7;
+      for (const s of [-1, 1]) { positions.push(Math.cos(a) * (radius + s * half), Math.sin(a) * (radius + s * half), 0); colors.push(glow, glow, glow); }
+      if (j < steps) { const n = start + j * 2; indices.push(n, n + 1, n + 2, n + 1, n + 3, n + 2); }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(indices);
+  return geo;
+}
+// A banded ring held by dark clamps on a stepped plinth, with a bright inner lip. Returns the
+// spinning vortex mesh; the caller adds the pane and the label.
+export function sculptPortal(group, w, r, color) {
+  const cy = r + 0.25, tint = new THREE.Color(color), DARK = 0x2b2140;
+  const pale = tint.clone().lerp(new THREE.Color(0xffffff), 0.6);
+  const ringMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: tint.clone().multiplyScalar(0.45) });
+  const ring = assetBatch();
+  ring.add(new THREE.TorusGeometry(r, 0.15, 10, 44), (x, y) => (Math.floor((Math.atan2(y - cy, x) / TAU + 1) * 16) % 2 ? tint : pale), 0, cy, 0);
+  ring.finish(group, 'portal-ring', ringMat);
+  const frame = assetBatch(), glow = assetBatch();
+  for (let k = 0; k < 8; k++) {
+    const a = k / 8 * TAU + Math.PI / 8;
+    if (Math.sin(a) < -0.5) continue;
+    frame.add(bevelBox(0.3, 0.44, 0.42, 0.05), DARK, Math.cos(a) * r, cy + Math.sin(a) * r, 0, 0, 0, a);
+    glow.sphere(0.06, Math.cos(a) * (r + 0.02), cy + Math.sin(a) * (r + 0.02), 0.22, pale);
+  }
+  frame.add(upright([[0, Math.min(w / 2, r + 0.3), 0.3, 0, 0.8], [0.1, Math.min(w / 2, r + 0.3) - 0.06, 0.26, 0, 0.8], [0.2, r * 0.72, 0.22, 0, 0.8], [0.36, r * 0.5, 0.2, 0, 0.8], [0.44, r * 0.3, 0.16, 0, 0.8]], 16), DARK);
+  glow.add(new THREE.TorusGeometry(r - 0.13, 0.035, 5, 44), pale, 0, cy, 0.06);
+  glow.add(new THREE.OctahedronGeometry(0.12, 0).scale(1, 1.6, 1), pale, 0, cy + r + 0.36, 0);
+  frame.finish(group, 'portal-frame');
+  glow.finish(group, 'portal-lights', assetGlow);
+  const swirl = new THREE.Mesh(vortexGeometry(r - 0.1), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false }));
+  swirl.name = 'portal-vortex'; swirl.position.set(0, cy, 0.02); group.add(swirl);
+  return swirl;
+}
+// Landing pad: a low rim, and the geometry of the spinning ring with outward chevrons.
+export function sculptPortalExit(group) {
+  const b = assetBatch();
+  b.add(lathe([[1.22, 0.01], [1.3, 0], [1.36, 0.05], [1.3, 0.09], [1.24, 0.05]], 32), 0x2b2140);
+  b.finish(group, 'exit-rim').castShadow = false;
+  const parts = [new THREE.RingGeometry(0.9, 1.0, 40), new THREE.RingGeometry(1.12, 1.2, 40)];
+  for (let k = 0; k < 6; k++) parts.push(new THREE.ShapeGeometry(new THREE.Shape([[-0.13, 0.94], [0, 1.16], [0.13, 0.94], [0.13, 1.02], [0, 1.24], [-0.13, 1.02]].map(([x, y]) => new THREE.Vector2(x, y)))).rotateZ(k * TAU / 6));
+  const ring = assetBatch();
+  for (const part of parts) ring.add(part, 0xffffff);
+  return ring;
 }
