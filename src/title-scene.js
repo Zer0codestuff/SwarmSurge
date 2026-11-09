@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { troopFormGeometry } from './troop-forms.js';
 import { buildCannon, troopWeaponGeo } from './models.js';
 import { pine, crate } from './scenery-assets.js';
+import { prefs } from './settings.js';
 
 // A separate, bounded diorama. It never advances the campaign simulation.
 function buildCamp() {
@@ -83,7 +84,7 @@ function buildCamp() {
     cloud.position.set(i * 8 - 30, 10 + i % 3, -12 - i % 2 * 10); scene.add(cloud); clouds.push(cloud);
   }
   const camera = new THREE.PerspectiveCamera(42, 1, .1, 120);
-  function render(renderer, time) {
+  function render(draw, time) {
     const portrait = innerWidth < innerHeight;
     camera.aspect = innerWidth / innerHeight;
     camera.position.set(portrait ? 16 : 14, portrait ? 23 : 17, portrait ? 34 : 25);
@@ -105,19 +106,20 @@ function buildCamp() {
     tank.animateVehicle(time, 0, 0, 0, 0); tank.barrels.rotation.y = Math.sin(time * .3) * .18;
     shots.forEach((beam, i) => { beam.visible = (time * 4 - i * 2 + Math.PI * 8) % (Math.PI * 2) < .3 && time > .1; });
     clouds.forEach((cloud, i) => { cloud.position.x = ((i * 8 + time * .24) % 64) - 32; });
-    renderer.render(scene, camera);
+    draw(scene, camera);
   }
   return { render };
 }
 
-export function createTitleScreen(renderer, sound) {
+export function createTitleScreen(sound, draw) {
   const root = document.getElementById('welcome'), settings = document.getElementById('settings');
-  const motion = document.getElementById('setting-motion'), audio = document.getElementById('setting-audio');
+  const motion = document.getElementById('setting-motion'), audio = document.getElementById('setting-audio'), glow = document.getElementById('setting-glow');
   let camp, visible = false, time = 0, elapsed = 0, dirty = true, focused = document.hasFocus();
   const preference = matchMedia('(prefers-reduced-motion: reduce)');
   let animated = !preference.matches;
   try { const stored = localStorage.getItem('swarm-menu-motion'); if (stored !== null) animated = stored === '1'; } catch {}
-  function sync() { motion.checked = animated; audio.checked = !sound.muted; root.classList.toggle('still', !animated || preference.matches); }
+  glow.onchange = () => { prefs.set('glow', glow.checked); dirty = true; };
+  function sync() { motion.checked = animated; audio.checked = !sound.muted; glow.checked = prefs.get('glow'); root.classList.toggle('still', !animated || preference.matches); }
   document.getElementById('welcome-settings').onclick = () => { sync(); settings.showModal(); };
   document.getElementById('settings-close').onclick = () => settings.close();
   audio.onchange = () => { if (audio.checked === sound.muted) sound.toggle(); document.getElementById('mute').textContent = sound.muted ? '🔇' : '🔊'; };
@@ -138,7 +140,7 @@ export function createTitleScreen(renderer, sound) {
       if (!dirty && (!moving || elapsed < 1 / 30)) return;
       camp ||= buildCamp();
       if (moving) time += Math.min(elapsed, .1);
-      elapsed = 0; dirty = false; camp.render(renderer, moving ? time : 0);
+      elapsed = 0; dirty = false; camp.render(draw, moving ? time : 0);
     },
   };
 }

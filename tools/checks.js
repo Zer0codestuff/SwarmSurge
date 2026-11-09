@@ -291,12 +291,12 @@ window.runGameChecks = (g) => {
     return {pass:G.phase==='intro' && G.effects.length===0};
   })()`);
   check('New runs clear old army counters, recoil and screen feedback', `(() => {
-    G.armyShown=G.armyPrev=1e30; G.pumpT=G.recoil=G.kick=G.cannonPulse=G.dmgT=1;
+    G.armyShown=G.armyPrev=1e30; G.pumpT=G.recoil=G.kick=G.cannonPulse=G.dmgT=G.hurtT=1;
     popups[0].life=3; popups[0].el.style.display='block';
-    hud.white.classList.add('on'); hud.flash.classList.add('on'); hud.armybox.classList.add('pump'); hud.lives.classList.add('hit');
+    hud.white.classList.add('on'); hud.armybox.classList.add('pump'); hud.lives.classList.add('hit');
     startLevel(0); G.paused=true; renderWorld(0);
-    const reset=[G.armyShown,G.armyPrev,G.pumpT,G.recoil,G.kick,G.cannonPulse,G.dmgT].every(v=>v===0);
-    const clear=!hud.white.classList.contains('on') && !hud.flash.classList.contains('on') && !hud.armybox.classList.contains('pump') && !hud.lives.classList.contains('hit');
+    const reset=[G.armyShown,G.armyPrev,G.pumpT,G.recoil,G.kick,G.cannonPulse,G.dmgT,G.hurtT].every(v=>v===0);
+    const clear=!hud.white.classList.contains('on') && !hud.armybox.classList.contains('pump') && !hud.lives.classList.contains('hit');
     return {pass:reset && clear && popups.every(p=>p.life===0 && p.el.style.display==='none') && hud.army.textContent==='0'};
   })()`);
   check('Tracer effects reuse a bounded pool and expire cleanly', `(() => {

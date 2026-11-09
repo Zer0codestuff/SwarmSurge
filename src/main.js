@@ -14,6 +14,8 @@ import { TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './
 import { createTitleScreen } from './title-scene.js';
 import { LATE_LIGHTS } from './biomes-late.js';
 import * as PL from './props-late.js';
+import { createPostFX } from './postfx.js';
+import { prefs } from './settings.js';
 
 // ---------------------------------------------------------------- constants
 const params = new URLSearchParams(location.search);
@@ -77,7 +79,8 @@ const fmtHp = (n) => (n < 100000 ? String(Math.max(0, Math.ceil(n))) : fmt(n));
 const canvas = document.getElementById('c');
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// The scene is drawn into a multisampled target (see postfx.js), so the canvas itself needs no MSAA.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 // Reduce mobile resolution only when frame timing shows sustained load.
 const maxPixelRatio = Math.min(devicePixelRatio, isTouch ? 1.75 : 2);
 const minPixelRatio = Math.min(1, maxPixelRatio);
@@ -89,6 +92,9 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
+renderer.info.autoReset = false; // one frame spans several passes
+const post = createPostFX(renderer);
+prefs.watch('glow', (on) => { post.state.glow = on; });
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 400);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8a9a, 1.7);
@@ -119,7 +125,7 @@ function resize() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   updateGlowScale();
-  if (sceneReady && G.paused && G.phase !== 'menu') { renderWorld(0); renderer.render(scene,camera); }
+  if (sceneReady && G.paused && G.phase !== 'menu') { renderWorld(0); renderer.info.reset(); post.render(scene, camera); }
 }
 addEventListener('resize', resize);
 resize();
@@ -430,7 +436,7 @@ function updatePopups(dt) {
 
 const hud = {
   root: $('hud'), army: $('army'), armybox: $('armybox'), lives: $('lives'), level: $('lvlname'), pips: $('pips'),
-  charge: $('chargefill'), ups: $('ups'), banner: $('banner'), tip: $('tip'), hint: $('hint'), flash: $('flash'), white: $('white'),
+  charge: $('chargefill'), ups: $('ups'), banner: $('banner'), tip: $('tip'), hint: $('hint'), white: $('white'),
 };
 if (typeof ResizeObserver !== 'undefined') {
   const bounds = new ResizeObserver(() => { labelBoundsDirty = true; });
@@ -755,6 +761,9 @@ function applyTheme(theme) {
   ambient.setTheme(theme);
   const L = LIGHTS[theme];
   hemi.color.set(L[0]); hemi.groundColor.set(L[1]); hemi.intensity = L[2]; sun.color.set(L[3]); sun.intensity = L[4];
+  // Glow strength follows how bright the biome already is.
+  const lum = (hex) => { const c = new THREE.Color(hex).convertLinearToSRGB(); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
+  post.setLook(lum(T.ground) * 0.5 + lum(T.fog) * 0.3 + lum(T.road) * 0.2);
 }
 
 function startLevel(idx, stageIdx = 0) {
@@ -783,7 +792,7 @@ function startLevel(idx, stageIdx = 0) {
   G.splits.length = 0;
   G.revives = [];
   clearPopups();
-  hud.white.classList.remove('on'); hud.flash.classList.remove('on');
+  hud.white.classList.remove('on'); G.hurtT = 0;
   hud.armybox.classList.remove('pump'); hud.lives.classList.remove('hit');
   // disposeLevel traverses effects too, including mushroom clouds made of nested groups.
   G.effects.length = 0;
@@ -2172,7 +2181,7 @@ function damageCannon(amount) {
 function hurtFlash() {
   buzz(70);
   if (TURBO) return;
-  hud.flash.classList.remove('on'); void hud.flash.offsetWidth; hud.flash.classList.add('on');
+  G.hurtT = 1;
   hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit');
   sound.play('hit');
 }
@@ -3012,6 +3021,9 @@ function renderWorld(dt) {
     camera.fov = fov; camera.updateProjectionMatrix();
     updateGlowScale();
   }
+  G.hurtT = Math.max(0, (G.hurtT || 0) - dt * 2.4);
+  post.flash.setRGB(0.85 * G.hurtT, 0.02 * G.hurtT, 0.1 * G.hurtT);
+  post.state.punch = reducedMotion ? 0 : Math.max(0, Math.min(1.2, G.shake - 0.5));
   sky.position.copy(camera.position);
   ambient.update(G.t, G.camZ);
   sun.position.set(12, 34, G.camZ + 4);
@@ -3421,12 +3433,15 @@ function updateMobileQuality(dt) {
   // A steady 30 Hz display is indistinguishable from a steady 30 fps workload.
   // Preserve sharpness in that case; only react to less regular slow frames.
   const steadyThirty = fps >= 27 && fps <= 33 && qualityThirtyFrames / qualityFrames >= 0.8;
+  // Glow is the first thing to go under load and the last to return.
   if (fps < 45 && !steadyThirty) {
-    next = Math.max(minPixelRatio, current - 0.25);
+    if (post.state.glow) post.state.glow = false;
+    else next = Math.max(minPixelRatio, current - 0.25);
     qualityGoodWindows = 0;
   } else if (fps > 56 || steadyThirty) {
     if (++qualityGoodWindows >= 4) {
-      next = Math.min(maxPixelRatio, current + 0.25);
+      if (current < maxPixelRatio) next = Math.min(maxPixelRatio, current + 0.25);
+      else post.state.glow = prefs.get('glow');
       qualityGoodWindows = 0;
     }
   } else qualityGoodWindows = 0;
@@ -3442,6 +3457,7 @@ function frame(now) {
   const elapsed = (now - last) / 1000;
   const dt = Math.min(0.1, elapsed);
   last = now;
+  renderer.info.reset();
   if (titleScreen?.visible) { acc = 0; titleScreen.render(dt); return; }
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { G.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
@@ -3468,12 +3484,15 @@ function frame(now) {
     if (n >= 6 * SPEED) acc = 0;
     renderWorld(dt * SPEED * slow);
   }
-  renderer.render(scene, camera);
+  post.render(scene, camera);
 }
 
 // Build the battlefield only when a run starts. Opening the map must not consume onboarding.
 showMenu();
-titleScreen = createTitleScreen(renderer, sound);
+titleScreen = createTitleScreen(sound, (titleScene, titleCamera) => {
+  post.setLook(0.62); post.state.punch = 0; post.flash.setRGB(0, 0, 0);
+  post.render(titleScene, titleCamera);
+});
 $('welcome-play').onclick = () => { titleScreen.hide(); $('menu').classList.remove('hidden'); $('mapresume').focus({ preventScroll: true }); };
 $('maphome').onclick = () => titleScreen.show();
 titleScreen.show();
