@@ -92,6 +92,8 @@ export class Sound {
       case 'combo': [0, 4, 7, 12].slice(0, 1 + p).forEach((s, i) => this.tone(523 * 2 ** ((s + p * 2) / 12), 0.12, 'square', 0.05, 0, i * 0.05)); break;
       case 'nuke': this.burst(1.2, 0.8, 300); this.tone(60, 1.0, 'sine', 0.5, -30); this.tone(900, 0.5, 'sawtooth', 0.06, -800); break;
       case 'star': [784, 988, 1175, 1568, 1976].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.1, 0, i * 0.05)); break;
+      case 'roar': this.tone(95, .9, 'sawtooth', .16, -45); this.tone(142, .8, 'square', .07, -70, .04); this.burst(.7, .22, 420); break;
+      case 'evolve': [0, 4, 7, 12, 16].forEach((st, i) => this.tone(392 * 2 ** ((st + p * 2) / 12), .16, 'triangle', .09, 0, i * .055)); break;
       case 'warp': this.tone(300, 0.15, 'sine', 0.08, 900); break;
       case 'zap': this.tone(1400, 0.08, 'sawtooth', 0.04, -1100); break;
       case 'crush': this.burst(0.3, 0.45, 400); this.tone(70, 0.25, 'square', 0.15, -30); break;

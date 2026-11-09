@@ -9,6 +9,7 @@ import * as W from './worlds.js';
 import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, TANK_EVOLUTION_CAP, sweptCircle } from './arsenal.js';
 import { campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
+import { BOSS_CARDS } from './boss-cards.js';
 import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
 import { TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
@@ -193,6 +194,59 @@ overlays[6] = overlaysFar[6] = gearMesh(M.spikesGeo());
 overlays[9] = overlaysFar[9] = gearMesh(ghostKitGeometry());
 const overlayMeshes = [...new Set([...Object.values(overlays), ...Object.values(overlaysFar)])];
 const partMesh = instanced(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), MAX_PART, false);
+// Defeated units are flung away as tumbling bodies instead of vanishing on the spot. Each pool
+// reuses a far body and its material; rows hold x y z, velocity, tumble axis, spin, angle, age, scale.
+const TOSS_MAX = 72, TOSS_ROW = 12, TOSS_LIFE = 0.75;
+const tossQ = new THREE.Quaternion(), tossAxis = new THREE.Vector3(), tossM = new THREE.Matrix4(), tossP = new THREE.Vector3(), tossS = new THREE.Vector3();
+function makeToss(far) {
+  const geometry = new THREE.BufferGeometry();
+  for (const [name, attribute] of Object.entries(far.geometry.attributes)) if (name !== 'unitMotion') geometry.setAttribute(name, attribute);
+  geometry.setIndex(far.geometry.index);
+  // Full stride with spread phases: the limbs flail while the body tumbles.
+  const motion = new Float32Array(TOSS_MAX * 2);
+  for (let k = 0; k < TOSS_MAX; k++) { motion[k * 2] = k * 1.7; motion[k * 2 + 1] = 1; }
+  geometry.setAttribute('unitMotion', new THREE.InstancedBufferAttribute(motion, 2));
+  return { mesh: instanced(geometry, far.material, TOSS_MAX, false), n: 0, data: new Float32Array(TOSS_MAX * TOSS_ROW), color: new Float32Array(TOSS_MAX * 3) };
+}
+const redToss = makeToss(redFarMesh), blueToss = blueForms.map(form => makeToss(form.far));
+function toss(pool, x, y, z, scale, col, dir) {
+  if (TURBO || pool.n >= TOSS_MAX) return;
+  const d = pool.data, o = pool.n * TOSS_ROW, a = rand(0, 6.283);
+  d[o] = x; d[o + 1] = y; d[o + 2] = z;
+  d[o + 3] = rand(-3.5, 3.5); d[o + 4] = rand(6, 10.5); d[o + 5] = dir * rand(3, 9);
+  d[o + 6] = Math.cos(a); d[o + 7] = Math.sin(a); d[o + 8] = rand(9, 16) * (Math.random() < 0.5 ? -1 : 1);
+  d[o + 9] = 0; d[o + 10] = 0; d[o + 11] = scale;
+  pool.color.set(col, pool.n * 3);
+  pool.n++;
+}
+function updateToss(pool, dt) {
+  const d = pool.data, mesh = pool.mesh, m = mesh.instanceMatrix.array, c = mesh.instanceColor.array;
+  let n = 0;
+  for (let k = 0; k < pool.n; k++) {
+    const from = k * TOSS_ROW;
+    d[from + 10] += dt;
+    if (d[from + 10] > TOSS_LIFE) continue;
+    const o = n * TOSS_ROW;
+    if (n !== k) { d.copyWithin(o, from, from + TOSS_ROW); pool.color.copyWithin(n * 3, k * 3, k * 3 + 3); }
+    d[o + 4] -= 26 * dt;
+    d[o] += d[o + 3] * dt; d[o + 1] += d[o + 4] * dt; d[o + 2] += d[o + 5] * dt; d[o + 9] += d[o + 8] * dt;
+    if (d[o + 1] < 0.1 && d[o + 4] < 0) {
+      // One soft bounce, then the body skids to a stop and shrinks away.
+      d[o + 1] = 0.1; d[o + 4] *= -0.3; d[o + 3] *= 0.5; d[o + 5] *= 0.5; d[o + 8] *= 0.35;
+      if (n % 3 === 0) spark(d[o], 0.2, d[o + 2], PCOL.dust, 2, 2, 0.9, 0.35, 1);
+    }
+    const age = d[o + 10], s = d[o + 11] * (age > 0.5 ? Math.max(0.02, 1 - (age - 0.5) / (TOSS_LIFE - 0.5)) : 1);
+    tossQ.setFromAxisAngle(tossAxis.set(d[o + 6], 0, d[o + 7]), d[o + 9]);
+    // Tumble around the chest, not the feet.
+    tossP.set(0, -0.55 * s, 0).applyQuaternion(tossQ);
+    tossM.compose(tossP.set(tossP.x + d[o], tossP.y + d[o + 1] + 0.55 * s, tossP.z + d[o + 2]), tossQ, tossS.setScalar(s));
+    tossM.toArray(m, n * 16);
+    c[n * 3] = pool.color[n * 3]; c[n * 3 + 1] = pool.color[n * 3 + 1]; c[n * 3 + 2] = pool.color[n * 3 + 2];
+    n++;
+  }
+  pool.n = n; mesh.count = n; mesh.visible = n > 0;
+  uploadUsed(mesh.instanceMatrix, n); uploadUsed(mesh.instanceColor, n);
+}
 
 // ---------------------------------------------------------------- unit pools (struct of arrays)
 function makePool(N) {
@@ -801,6 +855,9 @@ function startLevel(idx, stageIdx = 0) {
   B.n = R.n = 0;
   PT.life.fill(0);
   sparks.clear(); debris.clear(); tracers.clear(); impactRings.clear(); G.shatters = [];
+  for (const pool of [redToss, ...blueToss]) { pool.n = 0; pool.mesh.count = 0; pool.mesh.visible = false; }
+  endCine(true); G.hitStop = 0;
+  if (stageIdx === 0) cineSeen = -1;
   G.explosions.length = 0;
   G.splits.length = 0;
   G.revives = [];
@@ -863,7 +920,7 @@ function priceStageSupplies(S, inheritedFlux) {
 }
 function enterStage(i) {
   G.snap = { stage: i, barrels: G.barrels, rate: G.rate, power: G.power, twin: G.twin, squad: G.squad, lives: G.lives, chassis: G.chassis, weapon: G.weapon, weaponMask: G.weaponMask, aircraft: G.aircraft, shield: G.shield, supplyFlux: cannonFlux(false) };
-  G.rad = 0; G.armyAvg = 0; G.overdrive = 0; G.airPass = 0; G.airTier = 0; G.airT = 2;
+  G.rad = 0; G.armyAvg = 0; G.overdrive = 0; G.airPass = 0; G.airTier = 0; G.airT = 2; G.formBest = 0;
   G.abilityT = ABILITY_SPECS[CHASSIS_SPECS[G.chassis]?.ability]?.first ?? 0;
   for (const zn of G.zones) if (zn.mesh) { G.root.remove(zn.mesh); zn.mesh.geometry.dispose(); }
   G.zones.length = 0;
@@ -876,13 +933,38 @@ function enterStage(i) {
   G.phase = 'intro';
   G.phaseT = 0;
   const isBoss = !!G.stage.boss;
-  banner(isBoss ? 'BOSS FIGHT!' : `STAGE ${i + 1}`, isBoss ? 'boss' : '', 1.5);
+  // The boss gets an introduction the first time a run reaches it; retries go straight to the fight.
+  if (isBoss && !TURBO && !reducedMotion && cineSeen !== G.levelIdx) startCine();
+  else banner(isBoss ? 'BOSS FIGHT!' : `STAGE ${i + 1}`, isBoss ? 'boss' : '', 1.5);
   const tip = tutorials.stageTip({ stage:G.stage,levelIndex:G.levelIdx,stageIndex:i,progress,debug:TURBO || params.has('level') || params.has('stage') });
   showTip(tip?.text);
   hud.hint.classList.toggle('hidden',tip?.id!=='aim');
-  if (isBoss) sound.play('warn');
+  if (isBoss && !G.cine) sound.play('warn');
   spawnHordes(G.stage);
   renderPips();
+}
+// Boss introduction: the simulation waits while the camera circles the boss and its name card shows.
+const CINE_TIME = 2.6, cinePos = new THREE.Vector3(), cineLook = new THREE.Vector3(), cineEnd = new THREE.Vector3(), cineEndLook = new THREE.Vector3();
+let cineSeen = -1;
+function startCine() {
+  cineSeen = G.levelIdx;
+  G.cine = CINE_TIME; G.cineRoared = G.cineOut = false;
+  const card = BOSS_CARDS[G.levelIdx] || ['The Boss', ''];
+  $('cineworld').textContent = `World ${G.levelIdx + 1} boss`;
+  $('cinename').textContent = card[0];
+  $('cinetitle').textContent = card[1];
+  $('cine').classList.add('on');
+  hud.root.classList.add('cine');
+}
+function endCine(silent = false) {
+  if (!G.cine && !$('cine').classList.contains('on')) return;
+  G.cine = 0;
+  $('cine').classList.remove('on');
+  hud.root.classList.remove('cine');
+  if (!silent) { banner('BOSS FIGHT!', 'boss', 1.5); sound.play('warn'); }
+}
+function hitStop(seconds) {
+  if (!TURBO && !reducedMotion) G.hitStop = Math.max(G.hitStop || 0, seconds);
 }
 function renderPips() {
   const n = G.stages.length;
@@ -1254,7 +1336,11 @@ function sawHit(S, x, z) {
 }
 
 function killBlue(i, fx = true) {
-  if (fx) burst(B.x[i], 0.5, B.z[i], PCOL.blue, B.kind[i] || B.hp[i] > 30 ? 10 : 3, 3.5);
+  if (fx) {
+    burst(B.x[i], 0.5, B.z[i], PCOL.blue, B.kind[i] || B.hp[i] > 30 ? 10 : 3, 3.5);
+    const rank = rankOf(B.hp[i] > 0 ? B.hp[i] : B.mx[i]);
+    toss(blueToss[troopForm(rank)], B.x[i], 0.2, B.z[i], B.sc[i], TIER_RGB[rank], 1);
+  }
   B.hp[i] = 0;
 }
 // damage that scales with unit power: big units survive, but traps still bite
@@ -1268,7 +1354,8 @@ function killRed(i) {
   burst(R.x[i], 0.5, R.z[i], k === 1 ? PCOL.gold : k === 6 ? PCOL.pink : k === 9 ? PCOL.white : k === 10 ? PCOL.sand : PCOL.red, big ? 14 : 3, big ? 5 : 3.5);
   R.hp[i] = 0;
   G.kills++;
-  if (big) spark(R.x[i], 1.2, R.z[i], PCOL.gold, 10, 6, 1, 0.5);
+  if (!T.ghost) toss(redToss, R.x[i], T.fly ? redLift(i) : 0.2, R.z[i], R.sc[i], RED_RGB[k], -1);
+  if (big) { spark(R.x[i], 1.2, R.z[i], PCOL.gold, 10, 6, 1, 0.5); if (G.t - (G.bigStopT || -9) > 1.2) { G.bigStopT = G.t; hitStop(0.035); } }
   if (T.boom) G.explosions.push(R.x[i], R.z[i], R.mx[i]);
   if (T.split) G.splits.push(R.x[i], R.z[i], R.mx[i]);
   if (T.revive) G.revives.push({ x: R.x[i], z: R.z[i], hp: R.mx[i], t: 1.3 });
@@ -1358,7 +1445,7 @@ function upgradeCannon(up) {
 // NUKE: wipes every enemy (and irradiates the field so new ones melt for a few seconds), flattens turrets, spawners,
 // enemy gates and swarm balls, blasts half the fort/boss, stuns the boss and pumps your army x5
 function detonateNuke(S, g, mult = 5, label = 'NUKE! ARMY x5') {
-  whiteFlash();
+  whiteFlash(); hitStop(0.1);
   buzz([120, 60, 220]);
   for (let i = 0; i < R.n; i++) if (R.hp[i] > 0) { burst(R.x[i], 0.6, R.z[i], PCOL.orange, 2, 6); R.hp[i] = 0; G.kills++; }
   G.explosions.length = 0; G.splits.length = 0; G.revives.length = 0;
@@ -1572,7 +1659,7 @@ function moveBlue(S, dt) {
   const boss = S.boss && S.boss.alive ? S.boss : null;
   const tower = S.tower && S.tower.alive ? S.tower : null;
   const late = S.bumpers.length + S.carts.length + S.eggs.length + S.fusions.length > 0;
-  const k = Math.min(1, dt * 5);
+  const k = Math.min(1, dt * 5), halt = G.phase === 'clear' || G.phase === 'won';
   for (let i = 0; i < B.n; i++) {
     if (B.hp[i] <= 0) continue;
     if (B.adur[i] > 0) {
@@ -1583,6 +1670,13 @@ function moveBlue(S, dt) {
       B.z[i] = B.pz[i] = B.az0[i] + (B.az1[i] - B.az0[i]) * p;
       B.phase[i] += dt * 20;
       if (p >= 1) { B.adur[i] = 0; B.vx[i] = 0; B.vz[i] = -BLUE_SPEED; if (i % 3 === 0) burst(B.x[i], 0.3, B.z[i], PCOL.ice, 2, 2.5); }
+      continue;
+    }
+    if (halt) {
+      // The fight is over: stop, turn to the camera and celebrate.
+      B.vx[i] -= B.vx[i] * k; B.vz[i] += (0.05 - B.vz[i]) * k;
+      B.px[i] = B.x[i]; B.pz[i] = B.z[i];
+      B.x[i] += B.vx[i] * dt; B.z[i] += B.vz[i] * dt;
       continue;
     }
     const giant = B.kind[i] === 1;
@@ -2337,7 +2431,7 @@ function damageCannon(amount) {
 function hurtFlash() {
   buzz(70);
   if (TURBO) return;
-  G.hurtT = 1;
+  G.hurtT = 1; hitStop(0.06);
   hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit');
   sound.play('hit');
 }
@@ -2918,6 +3012,15 @@ function step(dt) {
   G.army = army;
   G.rank = 0;
   for (let i = 0; i < B.n; i++) G.rank = Math.max(G.rank, rankOf(B.hp[i]));
+  const form = troopForm(G.rank);
+  if (form > G.formBest && G.phase === 'play') {
+    // The army's first troop of a new body form is worth a moment.
+    G.formBest = form;
+    popup(`EVOLVED: ${TROOP_FORMS[form].toUpperCase()}`, 'combo c3', G.cx, 4.2, G.z0 - 3, 1.6);
+    addRing(G.cx, G.cannonZ - 2, 4.5, RANKS[G.rank].color, 0.6);
+    sound.play('evolve', form);
+    G.kick = Math.max(G.kick || 0, 0.4);
+  }
   G.armyAvg += (army - G.armyAvg) * Math.min(1, dt / 3);
   if (army > G.maxArmy) G.maxArmy = army;
   if (army >= G.nextMile && G.phase === 'play') {
@@ -2977,6 +3080,8 @@ function stageCleared(S) {
   }
   G.kick = 0.8;
   popAllRed();
+  hitStop(0.09);
+  for (let k = 0; k < 8; k++) spark(G.cx + rand(-5, 5), rand(1.5, 3.5), G.z0 - rand(3, 22), [PCOL.gold, PCOL.ice, PCOL.pink][k % 3], 8, 5, 1.1, 0.8);
   G.phase = 'clear'; G.phaseT = 0; G.shake = 0.8;
   banner('STAGE CLEAR!', 'gold', 1.6);
   if (overkill > T.max) popup(`OVERKILL x${fmt(1 + overkill / T.max)}!`, 'combo c3', 0, 6, T.z, 1.8);
@@ -2997,6 +3102,7 @@ function bossDefeated(S) {
   }
   G.kick = 1.2;
   popAllRed();
+  hitStop(0.14);
   for (const e of G.effects) if (e.kind === 'tele') { e.life = Math.min(e.life, 0.01); e.onHit = () => {}; }
   G.phase = 'won'; G.phaseT = 0; G.shake = 1.4; G.shown = false; G.slow = 1.3;
   whiteFlash();
@@ -3066,6 +3172,8 @@ function writeBlue() {
   }
   for (const form of blueForms) finishTroopMeshes(form.near, form.far);
 }
+// Victory hop strength for allied troops, set by the renderer while a stage is cleared.
+let cheer = 0;
 // unit matrix: heading + forward lean while running, squash & stretch on each step, pop-in when spawned
 function writeMatrix(m, i, P, s, lean, instance = i) {
   const vx = P.vx[i], vz = P.vz[i];
@@ -3079,6 +3187,7 @@ function writeMatrix(m, i, P, s, lean, instance = i) {
   const st = Math.sin(ph * 2) * 0.07 * (0.4 + run);
   const sy = s * pop * (1 + st), sxz = s * pop * (1 - st * 0.5);
   let y = Math.abs(Math.sin(ph)) * 0.14 * s * (0.3 + run);
+  if (cheer > 0 && P === B) y += Math.abs(Math.sin(G.t * 9 + ph * 5)) * 0.6 * s * cheer;
   if (P === R && (RED_TYPES[P.kind[i]].fly || RED_TYPES[P.kind[i]].ghost)) y = redLift(i);
   if (P.adur[i] > 0) { const p = P.air[i] / P.adur[i]; y += Math.sin(Math.PI * Math.min(1, p)) * (2.5 + P.adur[i] * 4); }
   const o = instance * 16;
@@ -3142,7 +3251,8 @@ function defensePose(target) {
 const starColor = new THREE.Color();
 function renderWorld(dt) {
   updateTroopMotion(G.t);
-  labelLayer.style.visibility = G.phase === 'menu' || G.shown ? 'hidden' : 'visible';
+  labelLayer.style.visibility = G.phase === 'menu' || G.shown || G.cine > 0 ? 'hidden' : 'visible';
+  cheer = G.phase === 'clear' || G.phase === 'won' ? Math.min(1, G.phaseT / 0.3) : 0;
   if (labelBoundsDirty && G.phase !== 'menu') {
     labelTop = Math.max($('topbar').getBoundingClientRect().bottom, $('target').getBoundingClientRect().bottom) + 8;
     labelBottom = $('bottom').getBoundingClientRect().top - 8;
@@ -3162,9 +3272,26 @@ function renderWorld(dt) {
   const push = win * win * (3 - 2 * win) * 16;
   G.camLag = (G.camLag ?? G.cx) + (G.cx - (G.camLag ?? G.cx)) * Math.min(1, dt * 4);
   camera.position.set(G.camLag * 0.22 + rand(-sh, sh), 18 + t * 4 + swoop * 9 - push * 0.25 + rand(-sh, sh), G.camZ + 13.5 + t * 6.5 + swoop * 10 - push);
-  camera.lookAt(G.camLag * 0.12, 0, G.camZ - 23 + t * 1 - push);
-  let framedFov = vf;
+  cineEndLook.set(G.camLag * 0.12, 0, G.camZ - 23 + t * 1 - push);
+  camera.lookAt(cineEndLook);
+  let framedFov = vf, cineBlend = 1;
   const framingBoss = G.stage?.boss;
+  if (G.cine > 0 && framingBoss) {
+    // Sweep across the front of the boss, then ease into the opening shot of the fight.
+    // Stand far enough back for the boss to fit the narrower of the two view angles.
+    const u = 1 - G.cine / CINE_TIME, H = framingBoss.model.height, lens = Math.tan(Math.min(88, vf) * 0.86 * Math.PI / 360);
+    const orbit = -0.6 + u * 0.95, dist = Math.max(H * 0.8 / lens, framingBoss.model.radius * 1.9 / (lens * aspect)) * (1.12 - 0.22 * u);
+    const e = clamp((u - 0.76) / 0.24, 0, 1);
+    cineBlend = e * e * (3 - 2 * e);
+    cineEnd.copy(camera.position);
+    cinePos.set(framingBoss.x + Math.sin(orbit) * dist, H * (0.2 + 0.16 * u), framingBoss.z + Math.cos(orbit) * dist);
+    cineLook.set(framingBoss.x, H * 0.52, framingBoss.z);
+    camera.position.lerpVectors(cinePos, cineEnd, cineBlend);
+    camera.lookAt(cineLook.lerp(cineEndLook, cineBlend));
+    // The bars and the card leave as the camera starts to pull back.
+    if (cineBlend > 0.02 && !G.cineOut) { G.cineOut = true; $('cine').classList.remove('on'); }
+    if (!G.cineRoared && u > 0.22) { G.cineRoared = true; G.shake = Math.max(G.shake, 0.7); sound.play('roar'); }
+  }
   if (framingBoss?.alive) {
     camera.updateMatrixWorld();
     // Fit a conservative upper corner below the HUD without moving the road.
@@ -3172,7 +3299,9 @@ function renderWorld(dt) {
     const ceiling = Math.max(.3, 1 - 2 * (labelTop + 12) / innerHeight);
     if (tmpV.z < -1) framedFov = Math.max(vf, 2 * Math.atan2(Math.max(0, tmpV.y), -tmpV.z * ceiling) * 180 / Math.PI);
   }
-  const fov = Math.min(88, framedFov) + (reducedMotion ? 0 : G.kick * 2);
+  // The advance between stages opens the lens a little, like a burst of speed.
+  const rush = !reducedMotion && G.phase === 'move' ? Math.sin(Math.min(1, G.phaseT / 2.2) * Math.PI) * 6 : 0;
+  const fov = (Math.min(88, framedFov) - Math.min(88, vf) * 0.86) * cineBlend + Math.min(88, vf) * 0.86 + (reducedMotion ? 0 : G.kick * 2) + rush;
   if (Math.abs(camera.fov - fov) > 0.01) {
     camera.fov = fov; camera.updateProjectionMatrix();
     updateGlowScale();
@@ -3245,6 +3374,8 @@ function renderWorld(dt) {
         continue;
       }
       grp.position.x = g.x;
+      // Gates standing between the introduction camera and the boss step out of the shot.
+      if (cur && S.boss && (G.cine > 0 || g.cineHidden)) { g.cineHidden = G.cine > 0 && g.z < camera.position.z + 1; grp.visible = !g.cineHidden; }
       if (g.dirty && G.t - g.refT > 0.08) { g.refT = G.t; refreshGate(g); }
       const t = g.def.t;
       if (g.model.icon) { g.model.icon.rotation.y = Math.sin(G.t * 1.5 + g.ph) * .35; g.model.icon.position.y = 2.8 + Math.sin(G.t * 2 + g.ph) * .12; }
@@ -3357,7 +3488,8 @@ function renderWorld(dt) {
         pose.health = Math.max(0, b.hp / b.max);
         pose.hit = b.flash;
         pose.stunned = b.stun > 0;
-        const attack = b.atk > 0 ? Math.min(1, b.atk / (b.model.normalizedAttack ? 1.25 : 1)) : 0;
+        const roar = G.cine > 0 ? (CINE_TIME - G.cine - 0.45) / 1.25 : 0;
+        const attack = roar > 0 && roar < 1 ? roar : b.atk > 0 ? Math.min(1, b.atk / (b.model.normalizedAttack ? 1.25 : 1)) : 0;
         b.model.animate(G.t, attack, pose);
         grp.scale.copy(b.visualScale).multiplyScalar(1 + b.flash * 0.025);
         hideLabel(b.label);
@@ -3376,6 +3508,8 @@ function renderWorld(dt) {
   tracers.update(dt);
   impactRings.update(dt);
   debris.update(dt);
+  updateToss(redToss, dt);
+  for (const pool of blueToss) updateToss(pool, dt);
   M.shineTexture().offset.x = (G.t * 0.45) % 1;
   for (let k = G.shatters.length - 1; k >= 0; k--) {
     const sh = G.shatters[k];
@@ -3425,6 +3559,7 @@ function showMenu(preserveRun = false) {
   titleScreen?.hide();
   if (preserveRun === true && ['intro','play','clear','move'].includes(G.phase)) G.resumePhase = G.phase;
   else G.resumePhase = null;
+  endCine(true);
   if ($('pause').open) $('pause').close();
   document.body.classList.remove('game-paused');
   resetInput(); sound.setPaused(true);
@@ -3547,6 +3682,7 @@ addEventListener('blur', () => { resetInput(); pauseGame(); });
 canvas.addEventListener('pointerdown', (e) => {
   if (drag || G.paused || !['intro','play'].includes(G.phase) || (e.pointerType === 'mouse' && e.button !== 0)) return;
   sound.unlock();
+  if (G.cine > 0.6) G.cine = 0.6;
   drag = { id: e.pointerId, x: e.clientX, aim: G.aim };
   try { canvas.setPointerCapture(e.pointerId); } catch {}
   hud.hint.classList.add('hidden');
@@ -3568,6 +3704,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
   if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
   if (keys.left || keys.right) hud.hint.classList.add('hidden');
+  if ((keys.left || keys.right || e.key === ' ' || e.key === 'Enter') && G.cine > 0.6) G.cine = 0.6;
 });
 addEventListener('keyup', (e) => {
   if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
@@ -3634,13 +3771,24 @@ function frame(now) {
   if (G.phase !== 'menu') {
     if (keys.left) G.aim = Math.max(-XLIM + 0.2, G.aim - 11 * dt);
     if (keys.right) G.aim = Math.min(XLIM - 0.2, G.aim + 11 * dt);
-    const slow = G.slow > 0 ? 0.3 : 1;
-    if (G.slow > 0) G.slow -= dt;
-    acc += dt * SPEED * slow;
-    let n = 0;
-    while (acc >= STEP && n < 6 * SPEED) { step(STEP); acc -= STEP; n++; }
-    if (n >= 6 * SPEED) acc = 0;
-    renderWorld(dt * SPEED * slow);
+    if (G.cine > 0) {
+      // The battle holds its breath for the introduction; only the clock for animation runs.
+      G.cine -= dt; G.t += dt; acc = 0;
+      if (G.cine <= 0) endCine();
+      renderWorld(dt);
+    } else if (G.hitStop > 0) {
+      // A few frozen frames give the heaviest hits their weight.
+      G.hitStop -= dt; acc = 0;
+      renderWorld(dt * 0.05);
+    } else {
+      const slow = G.slow > 0 ? 0.3 : 1;
+      if (G.slow > 0) G.slow -= dt;
+      acc += dt * SPEED * slow;
+      let n = 0;
+      while (acc >= STEP && n < 6 * SPEED) { step(STEP); acc -= STEP; n++; }
+      if (n >= 6 * SPEED) acc = 0;
+      renderWorld(dt * SPEED * slow);
+    }
   }
   post.render(scene, camera);
 }
