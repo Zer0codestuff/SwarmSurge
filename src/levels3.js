@@ -270,7 +270,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 27
   {
-    name: 'Big Top Circus', theme: 'circus', threat: 3.72, route: ['squad', 'rockets', 'air'],
+    name: 'Big Top Circus', theme: 'circus', threat: 3.72, route: ['squad', 'mortar', 'air'],
     feature: 'Hypno rings + circus bumpers',
     blurb: 'Hypno hoops turn the clowns, bumpers juggle your troops and charge gates grow with every act.',
     enemy: 'Splitters and runners',
@@ -536,7 +536,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 33
   {
-    name: 'Ghost Town', theme: 'ghosttown', threat: 3.84, route: ['flame', 'hover', 'arc'],
+    name: 'Ghost Town', theme: 'ghosttown', threat: 3.84, route: ['shock', 'hover', 'arc'],
     feature: 'Ghost carts + fading gates',
     blurb: 'Spectral gates fade in and out over the old rails. Ghosts walk right through the walls.',
     enemy: 'Ghosts: phase through walls',
@@ -664,7 +664,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 36
   {
-    name: 'Harvest Fields', theme: 'farm', threat: 3.90, route: ['rifle', 'tank', 'rapid'],
+    name: 'Harvest Fields', theme: 'farm', threat: 3.90, route: ['mortar', 'tank', 'rapid'],
     feature: 'Harvest banks',
     blurb: 'Plant troops in a harvest bank. A few seconds later it returns everything inside, multiplied!',
     enemy: 'Drones: crows over the fields',
@@ -794,7 +794,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 39
   {
-    name: 'Autumn Woods', theme: 'autumn', threat: 3.96, route: ['flame', 'hover', 'arc'],
+    name: 'Autumn Woods', theme: 'autumn', threat: 3.96, route: ['flame', 'lancer', 'arc'],
     feature: 'Banks + hypno + leaf whirlwinds',
     blurb: 'Leaf whirlwinds toss troops into the harvest banks, and hypno trees turn the spider swarm.',
     enemy: 'Shielders and splitters',
@@ -882,7 +882,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 41
   {
-    name: 'Dino Valley', theme: 'dino', threat: 4.00, route: ['rifle', 'tank', 'rockets'],
+    name: 'Dino Valley', theme: 'dino', threat: 4.00, route: ['shock', 'tank', 'rockets'],
     feature: 'Dinosaur eggs',
     blurb: 'Eggs hatch into raging brutes when their timer runs out. Smash them first and the hatchlings join you!',
     enemy: 'Brutes: hatchling dinos',
@@ -968,7 +968,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 43
   {
-    name: 'Tar Pits', theme: 'tarpit', threat: 4.04, route: ['scatter', 'siege', 'flame'],
+    name: 'Tar Pits', theme: 'tarpit', threat: 4.04, route: ['scatter', 'dread', 'flame'],
     feature: 'Tar nests + bubbling meteors',
     blurb: 'Eggs sink in the tar while burning rocks rain down. Crack them before they hatch.',
     enemy: 'Imps: fast little bombs',
@@ -1097,7 +1097,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 46
   {
-    name: 'Prism Labs', theme: 'prismlab', threat: 4.10, route: ['rifle', 'titan', 'plasma'],
+    name: 'Prism Labs', theme: 'prismlab', threat: 4.10, route: ['rifle', 'lancer', 'plasma'],
     feature: 'Fusion cores',
     blurb: 'Charge both cores of a pair within a few seconds and a fusion beam multiplies everything crossing it.',
     enemy: 'Shielders and drones',
@@ -1181,7 +1181,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 48
   {
-    name: 'Chrono Clockworks', theme: 'chrono', threat: 4.14, route: ['arc', 'spider', 'titan'],
+    name: 'Chrono Clockworks', theme: 'chrono', threat: 4.14, route: ['arc', 'spider', 'dread'],
     feature: 'Clock cores + crushers + flip gates',
     blurb: 'Crushers tick like clockwork and flip gates swing on the beat. Fuse the cores between the slams.',
     enemy: 'Crabs and shielders',
@@ -1271,7 +1271,7 @@ const WORLDS = [
   },
   // ------------------------------------------------------------------ 50
   {
-    name: 'Singularity Throne', theme: 'throne', threat: 4.18, route: ['siege', 'titan', 'air'],
+    name: 'Singularity Throne', theme: 'throne', threat: 4.18, route: ['siege', 'lancer', 'dread'],
     feature: 'Every late mechanic at once',
     blurb: 'Bumpers, hypno gates, carts, banks, eggs and fusion cores guard the throne of the Overlord.',
     enemy: 'Every enemy, the Overlord',
@@ -1343,14 +1343,14 @@ const HP = [
   [1.91e4, 5.02e5, 6e6], // 40
   [8.37e3, 9.83e3, 1e6], // 41
   [1e4, 2.23e4, 4.13e6], // 42
-  [9.09e3, 1.7e5, 9.82e5], // 43
+  [9.09e3, 1.7e5, 4e6], // 43
   [1.51e4, 3.44e4, 2.54e5], // 44
   [1.28e5, 1.92e5, 4.35e6], // 45
   [2.09e4, 2.88e5, 4.51e6], // 46
   [9.07e3, 1.12e6, 1.96e5], // 47
   [3.42e4, 2.18e4, 1.33e6], // 48
   [4.14e4, 9.81e3, 3.09e5], // 49
-  [2.75e4, 1.42e6, 1.06e8], // 50
+  [2.75e4, 1.42e6, 2.6e8], // 50
 ];
 
 export const LATE_LEVELS = WORLDS.map((world, k) => ({
