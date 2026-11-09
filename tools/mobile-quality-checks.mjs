@@ -24,26 +24,35 @@ try {
       resetQualitySample(); qualityGoodWindows = 0;
       const ratio = () => renderer.getPixelRatio();
       const feed = (dt, count) => { for (let i = 0; i < count; i++) updateMobileQuality(dt); };
-      const initial = ratio();
+      const initial = ratio(), glowAtStart = post.state.glow;
       feed(1 / 30, 200);
       const stableThirty = ratio();
       updateMobileQuality(5);
       const afterSuspension = ratio();
-      feed(1 / 20, 130);
+      // Each phase starts from a clean sample so window boundaries do not leak between them.
+      const fresh = () => { resetQualitySample(); qualityGoodWindows = 0; };
+      fresh(); feed(1 / 20, 62);
+      const glowUnderLoad = post.state.glow, ratioAfterGlow = ratio();
+      fresh(); feed(1 / 20, 124);
       const underLoad = ratio();
       const loadedPixels = canvas.width * canvas.height;
-      feed(1 / 30, 1000);
+      fresh(); feed(1 / 30, 1000);
       const recoveredThirty = ratio();
-      feed(1 / 20, 130);
-      feed(1 / 60, 1800);
+      fresh(); feed(1 / 20, 124);
+      fresh(); feed(1 / 60, 1800);
       const recoveredSixty = ratio();
-      return { initial, stableThirty, afterSuspension, underLoad, loadedPixels, recoveredThirty, recoveredSixty };
+      fresh(); feed(1 / 60, 1000);
+      const glowRecovered = post.state.glow;
+      return { initial, glowAtStart, glowUnderLoad, ratioAfterGlow, glowRecovered, stableThirty, afterSuspension, underLoad, loadedPixels, recoveredThirty, recoveredSixty };
     })()`);
   });
+  if (process.env.VERBOSE) console.log(JSON.stringify(result));
   const checks = [
     ['Touch devices start at the configured resolution', result.initial === 1.75],
     ['A stable 30 Hz cadence keeps its resolution', result.stableThirty === result.initial],
     ['A long suspension does not reduce resolution', result.afterSuspension === result.initial],
+    ['Slow frames switch glow off before lowering resolution', result.glowAtStart === true && result.glowUnderLoad === false && result.ratioAfterGlow === result.initial],
+    ['Glow returns after resolution has recovered', result.glowRecovered === true],
     ['Sustained slow frames lower the pixel count', result.underLoad === 1.25 && result.loadedPixels === 487 * 1055],
     ['Stable 30 Hz restores resolution', result.recoveredThirty === result.initial],
     ['Stable 60 Hz restores resolution', result.recoveredSixty === result.initial],
