@@ -5,6 +5,7 @@ import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, buildGa
 import { WEAPON_IDS, CHASSIS_IDS } from './arsenal.js';
 import { createVehicleRig } from './vehicle-assets.js';
 import { createSupportAircraft } from './air-assets.js';
+import { sculptJumpPad, sculptHangar, sculptTesla } from './obstacle-assets.js';
 export { buildBattlePillar as buildPillar } from './battlefield-assets.js';
 
 function stripeTexture(a, b, n = 8, w = 128, h = 32) {
@@ -50,19 +51,14 @@ export function buildBelt(w, len, dir) {
 export function buildJumpPad(w) {
   const g = new THREE.Group();
   const r = Math.min(w / 2 - 0.1, 1.5);
-  const frame = lam(0x2a6aff);
-  const pad = mesh(new THREE.CylinderGeometry(r, r * 1.05, 0.35, 28), frame, 0, 0.18, 0, false);
-  g.add(pad);
+  sculptJumpPad(g, r);
   const panelMat = new THREE.MeshBasicMaterial({ color: 0x3affd0, transparent: true, opacity: 0.85 });
   const top = new THREE.Mesh(new THREE.CircleGeometry(r * 0.82, 28), panelMat);
-  top.rotation.x = -Math.PI / 2; top.position.y = 0.37; g.add(top);
-  const springGeo = new THREE.TorusGeometry(r * 0.95, 0.07, 6, 28); springGeo.rotateX(Math.PI / 2);
-  const springs = new THREE.Group(); g.add(springs);
-  for (let k = 0; k < 3; k++) springs.add(mesh(springGeo, lam(0xffcc1a), 0, 0.08 + k * 0.1, 0, false));
+  top.rotation.x = -Math.PI / 2; top.position.y = 0.39; g.add(top);
   const arrow = new THREE.Shape();
   arrow.moveTo(0, 0.7); arrow.lineTo(0.5, 0.05); arrow.lineTo(0.2, 0.05); arrow.lineTo(0.2, -0.6); arrow.lineTo(-0.2, -0.6); arrow.lineTo(-0.2, 0.05); arrow.lineTo(-0.5, 0.05);
   const ar = new THREE.Mesh(new THREE.ShapeGeometry(arrow), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  ar.rotation.x = -Math.PI / 2; ar.position.y = 0.39; ar.scale.setScalar(r * 0.9); g.add(ar);
+  ar.rotation.x = -Math.PI / 2; ar.position.y = 0.41; ar.scale.setScalar(r * 0.9); g.add(ar);
   const L = label(g, w, 1.6, 0);
   return { group: g, panelMat, ...L, top, setColor() {} };
 }
@@ -102,10 +98,7 @@ export function buildArmory(w, upgrade) {
 // Fill the hangar to unlock repeated bombing runs.
 export function buildHangar(w) {
   const g = new THREE.Group();
-  const crate = lam(0x2a4aa8), crateDark = lam(0x1a2a6a);
-  g.add(mesh(new THREE.BoxGeometry(w, 1.5, 1.8), crate, 0, 0.75, 0));
-  for (const x of [-w / 2 + 0.25, w / 2 - 0.25]) g.add(mesh(new THREE.BoxGeometry(0.2, 1.55, 1.85), crateDark, x, 0.77, 0, false));
-  g.add(mesh(new THREE.BoxGeometry(w + 0.1, 0.2, 1.9), crateDark, 0, 1.55, 0, false));
+  sculptHangar(g, w);
   const plane = buildSupportPlane().group; plane.position.set(0, 2.2, 0); g.add(plane);
   plane.scale.setScalar(Math.min(.75, w / 5));
   const panelMat = new THREE.MeshBasicMaterial({ color: 0xffc21a, transparent: true, opacity: 0.0 });
@@ -116,18 +109,12 @@ export function buildHangar(w) {
 // tesla coil gate: feed it and it becomes an allied lightning tower
 export function buildTesla(w) {
   const g = new THREE.Group();
-  const metal = lam(0x5a6070), copper = lam(0xd07a3a);
   const H = 2.2;
-  const postGeo = new THREE.BoxGeometry(0.26, H, 0.26);
-  g.add(mesh(postGeo, metal, -w / 2, H / 2, 0), mesh(postGeo, metal, w / 2, H / 2, 0));
   const panelMat = new THREE.MeshBasicMaterial({ color: 0x3ad0ff, transparent: true, opacity: 0.45, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, H - 0.1), panelMat); panel.position.y = H / 2; g.add(panel);
-  const coil = new THREE.Group(); coil.position.set(w / 2, H, 0); g.add(coil);
-  coil.add(mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.6, 10), copper, 0, 0.8, 0));
-  for (let k = 0; k < 4; k++) coil.add(mesh(new THREE.TorusGeometry(0.34 - k * 0.03, 0.06, 6, 16), metal, 0, 0.3 + k * 0.35, 0, false).rotateX(Math.PI / 2));
+  const coil = sculptTesla(g, w, H);
   const orbMat = new THREE.MeshBasicMaterial({ color: 0x6af0ff });
   const orb = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10), orbMat); orb.position.y = 1.9; coil.add(orb);
-  g.add(mesh(new THREE.BoxGeometry(w + 0.26, 0.2, 0.26), metal, 0, H, 0));
   const L = label(g, w, H * 0.56, 0.1);
   return { group: g, panelMat, ...L, coil, orb, orbMat, setColor(c) { panelMat.color.set(c); } };
 }
