@@ -9,6 +9,7 @@ A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your canno
 - Personal bests and four medals per world (Flawless, Swift, Overpowered, Hardcore) on the results screen, the map and each world's card
 - Hardcore replays: one heart, no healing
 - A generated soundtrack: every world has its own key, tempo and melody, and the arrangement builds with the battle
+- Field armories open their loading jaws as you fund them and display the equipment you will receive. From World 3 on, the first equipment pickup in stage two calls a supply drop in the opposite lane. Catch it for one armor and three reserve giants. You have one second to line up their first shot, and a charging reactor holds them until release.
 - Equipment crates unlock Bulldog and Siege tanks, armor, blasters, splash rockets, chain-lightning rifles and repeated air strikes
 - Rapid doubles rate up to x8, Power triples output, and barrel crates add two guns
 - Escort cannons mirror your volleys and add armor. Their crates appear in Moon Base, Lucky Casino and Spooky Hollow

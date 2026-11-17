@@ -45,6 +45,36 @@ window.runGameChecks = (g) => {
     buildGrid(gB,B); moveBlue(S,.2); B.N=capacity;
     return {pass:B.hp[i]===30 && B.mask[i]===7 && S.gates.every(g=>g.passes===1)};
   })()`);
+  check('Middle-stage supply drops pay once, hold reserve fire, and reset on retry', `(() => {
+    startLevel(2,1); G.paused=true; G.phase='play'; G.fireT=Infinity; B.n=R.n=0;
+    const S=G.stage, r=S.drop, g=S.gates.find(q=>q.cur.up==='rifle');
+    const i=spawn(B,g.x,g.z,g.need,0); absorb(S,g,i);
+    const called=r.phase==='incoming' && !callSupplyDrop(r,G.cx);
+    G.cx=G.aim=r.x; for(let i=0;i<150;i++)step(STEP);
+    const caught=G.shield===1 && r.phase==='loaded' && r.remaining===3;
+    triggerReactor(S.reactor); for(let i=0;i<120;i++)step(STEP);
+    const held=r.remaining===3; triggerReactor(S.reactor);
+    for(let i=0;i<120;i++)step(STEP);
+    const fired=r.phase==='spent' && r.remaining===0 && !callSupplyDrop(r,G.cx);
+    $('rretry').click();
+    return {pass:called && caught && held && fired && G.stage.drop.phase==='packed',called,caught,held,fired};
+  })()`);
+  check('An uncollected drop expires and crossing its lane early does not collect it', `(() => {
+    const r=createSupplyDrop(false); callSupplyDrop(r,-2);
+    stepSupplyDrop(r,r.x,1,false); const early=r.phase==='incoming';
+    stepSupplyDrop(r,0,3.1,false); const expired=r.phase==='missed';
+    return {pass:early && expired && !stepSupplyDrop(r,r.x,2,false) && !callSupplyDrop(r,2)};
+  })()`);
+  check('Field armories preview inherited equipment and installation restores the exact mounts', `(() => {
+    startLevel(0,1); const g=G.stage.gates.find(q=>q.def.up==='tank');
+    G.chassis=2; syncSupplyPreviews(G.stage);
+    const preview=g.rewardName===CHASSIS[3].toUpperCase() && !!g.model.icon.getObjectByName('vehicle-form-3');
+    cannon.setChassis(4,2); cannon.animateVehicle(2.2,.01,0,0,0);
+    const mid=cannon.rig.group.scale.y<1 && cannon.barrels.position.y<cannon.rig.barrelAnchor.y;
+    cannon.animateVehicle(3,.01,0,0,0);
+    const exact=cannon.barrels.position.equals(cannon.rig.barrelAnchor) && cannon.glow.position.equals(cannon.rig.glowAnchor) && !cannon.group.getObjectByName('fitting-collar').visible;
+    return {pass:preview && mid && exact};
+  })()`);
   check('Stationary delayed balls absorb contact damage', `(() => {
     const b=addBall(G.stage,G.root,0,-4,10,1,0,{delay:5});
     const i=spawn(B,0,-2,4,0); B.vz[i]=-9; buildGrid(gB,B); moveBlue(G.stage,.3);

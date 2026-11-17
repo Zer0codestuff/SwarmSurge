@@ -8,11 +8,13 @@ import * as FX from './fx.js';
 import * as P from './props.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
-import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, TANK_EVOLUTION_CAP, sweptCircle } from './arsenal.js';
+import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, chassisReward, sweptCircle } from './arsenal.js';
 import { biomeArt, campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { BOSS_CARDS } from './boss-cards.js';
 import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
+import { TREAD_PITCH } from './conveyor-assets.js';
+import { createSupplyDrop, callSupplyDrop, stepSupplyDrop, supplyMessage, poseSupplyDrop } from './supply-drop.js';
 import { newReactor, chargePower, triggerReactor, tickReactor, VENT_TIME, BURST_TIME } from './reactor.js';
 import { SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
@@ -607,7 +609,7 @@ function refreshGate(g) {
     else M.drawLabel(L, fmtHp(g.hp), 'SMASH!');
   }
   else if (t === 'statue') M.drawLabel(L, fmtHp(g.hp));
-  else if (t === 'upgrade') M.drawLabel(L, UP_NAMES[c.up], `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
+  else if (t === 'upgrade') M.drawLabel(L, g.rewardName ?? UP_NAMES[c.up], `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
   else if (t === 'nuke') M.drawLabel(L, 'NUKE', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#9aff5a');
   else if (t === 'star') M.drawLabel(L, 'GATES x2', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffd0ff');
   else if (t === 'charge') {
@@ -786,6 +788,10 @@ function buildStage(sd, i, root, theme) {
   const line = M.buildStartLine();
   line.position.set(0, 0.015, z0 - 2.2);
   root.add(line);
+  if (G.levelIdx >= 2 && i === 1) {
+    st.drop = createSupplyDrop(!TURBO);
+    if (st.drop.model) { st.drop.model.group.visible = false; group.add(st.drop.model.group); }
+  }
   return st;
 }
 
@@ -927,7 +933,18 @@ function addBall(S, root, x, z, hp, r, speed, def = {}) {
 function cannonFlux(includeSupport = true) {
   return G.barrels * G.rate * G.power / BASE_INTERVAL * (includeSupport ? (G.twin ? 2 : 1) + G.squad : 1);
 }
+function syncSupplyPreviews(S) {
+  for (const g of S.gates) {
+    if (!g.alive || !g.model?.setTier) continue;
+    const up = g.def.up;
+    const tier = up === 'air' ? Math.min(3,G.aircraft+1) : chassisReward(G.chassis,up);
+    g.model.setTier(tier);
+    g.rewardName = up === 'air' ? AIRCRAFT_SPECS[tier].label.toUpperCase() : CHASSIS[tier].toUpperCase();
+    g.dirty = true;
+  }
+}
 function priceStageSupplies(S, inheritedFlux) {
+  syncSupplyPreviews(S);
   // Fix prices at entry. A reward never raises other prices midway through the stage.
   const seconds = S.i === 0 ? 1.6 : S.i === 1 ? 3.2 : 4;
   for (const g of S.gates) if (g.def.t === 'upgrade' || g.def.t === 'hangar') {
@@ -1046,6 +1063,12 @@ function fireFrom(cx, actor = cannon, power = volleyPower(), kind = G.stage.reac
     }
   }
 }
+function launchGiant(power,kind) {
+  const i = cannonUnit(G.cx, GIANT_HP * power, GIANT | kind);
+  if (i >= 0) { B.vz[i] = -GIANT_SPEED; B.flash[i] = 1; }
+  burst(G.cx, 1.5, G.z0 - 1.5, PCOL.blue, 12, 5);
+  sound.play('heavy');
+}
 function fireCannon(dt) {
   G.fireT -= dt;
   const interval = BASE_INTERVAL / G.rate;
@@ -1061,10 +1084,7 @@ function fireCannon(dt) {
     G.charge++;
     if (G.charge >= CHARGE_MAX) {
       G.charge = 0;
-      const i = cannonUnit(G.cx, GIANT_HP * power, GIANT | kind);
-      if (i >= 0) { B.vz[i] = -GIANT_SPEED; B.flash[i] = 1; }
-      burst(G.cx, 1.5, G.z0 - 1.5, PCOL.blue, 12, 5);
-      sound.play('heavy');
+      launchGiant(power,kind);
     }
     G.recoil = 1;
     sound.play('shoot');
@@ -1445,7 +1465,7 @@ function upgradeCannon(up) {
   else if (up === 'power') { G.power = Math.min(243, G.power * 3); banner(`POWER x${G.power}!`, 'gold'); }
   else if (up === 'twin') { G.twin = true; twinCannon.group.visible = true; G.shield = Math.min(6, G.shield + 1); banner('TWIN CANNON!', 'gold'); }
   else if (up === 'tank' || CHASSIS_IDS[up]) {
-    G.chassis = Math.min(CHASSIS.length - 1, Math.max(G.chassis, up === 'tank' ? Math.min(TANK_EVOLUTION_CAP, G.chassis + 1) : CHASSIS_IDS[up]));
+    G.chassis = chassisReward(G.chassis,up);
     const spec = CHASSIS_SPECS[G.chassis];
     G.power = Math.min(243, G.power * spec.power);
     G.barrels = Math.min(6, G.barrels + spec.guns); G.shield = Math.min(6, G.shield + spec.armor);
@@ -1466,6 +1486,7 @@ function upgradeCannon(up) {
     unlockWeapon(weapon);
     banner(WEAPONS[G.weapon].toUpperCase() + ' ONLINE!', 'gold');
   }
+  if (up === 'air' || up === 'tank' || CHASSIS_IDS[up]) syncSupplyPreviews(G.stage);
   G.cannonPulse = 1; renderUps();
 }
 // NUKE: wipes every enemy (and irradiates the field so new ones melt for a few seconds), flattens turrets, spawners,
@@ -1548,6 +1569,7 @@ function absorb(S, g, i) {
       if (t === 'upgrade' || t === 'hangar') {
         g.alive = false; g.dying = 1;
         upgradeCannon(t === 'hangar' ? 'air' : g.cur.up);
+        if (G.phase === 'play' && callSupplyDrop(S.drop,G.cx)) sound.play('drop');
         burst(G.cx, 1.5, G.z0, PCOL.gold, 30, 6);
         if (!TURBO) sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.gold, 60, 0.5, 1.2);
         G.cannonPulse = 1;
@@ -2991,6 +3013,20 @@ function step(dt) {
       else if (r.phase === 'charging' && power !== chargePower(r)) sound.play('reactor', chargePower(r));
     }
     if (r.phase !== 'charging') fireCannon(dt);
+    if (S.drop) {
+      const event = stepSupplyDrop(S.drop,G.cx,dt,r.phase === 'charging');
+      if (event === 'catch') {
+        G.shield = Math.min(6,G.shield+1);
+        G.guardFlash = 1;
+        popup('RESERVES READY!', 'combo c2',G.cx,3,G.z0-2);
+        sound.play('supply');
+      } else if (event === 'fire') {
+        // Each shell takes its lane and equipment when it fires. A reactor
+        // release can turn a loaded reserve into a Sunwing giant.
+        launchGiant(volleyPower(),r.phase === 'burst' ? SUNWING : 0);
+        G.recoil = 1;
+      } else if (event === 'miss') popup('DROP MISSED', 'combo c1',S.drop.x,2,G.z0-2,.8);
+    }
   }
   updateObstacles(S, dt);
   updateMechanics(S, dt);
@@ -3438,6 +3474,7 @@ function renderWorld(dt) {
     }
     S.group.visible = visible;
     if (!visible) continue;
+    if (S.drop?.model) poseSupplyDrop(S.drop,S.z0,cur && G.phase==='play',reducedMotion);
     for (const g of S.gates) {
       const grp = g.model.group;
       if (!g.alive) {
@@ -3485,7 +3522,7 @@ function renderWorld(dt) {
     }
     for (const ex of S.exits) ex.ring.rotation.z += dt * 2;
     renderLate(S, dt, cur);
-    for (const bt of S.belts) bt.model.tex.offset.x -= dt * 0.9;
+    for (const bt of S.belts) bt.model.tex.offset.x = -(G.t * Math.abs(bt.v) / TREAD_PITCH % 1);
     for (const tn of S.tornados) {
       tn.model.group.position.x = tn.x;
       tn.model.strands.forEach((strand, k) => {
@@ -3508,7 +3545,7 @@ function renderWorld(dt) {
       b.model.group.position.set(b.x, b.r, b.z);
       b.model.spin.scale.setScalar(b.r * (1 + b.flash * 0.05));
       b.model.inst.count = Math.max(12, Math.ceil(b.model.count * Math.max(0, b.hp / b.max)));
-      b.model.material.color.set(b.flash > 0.1 ? 0xffc7a0 : b.chill > 0 ? 0x93e7ff : 0xe8222a);
+      b.model.material.color.set(b.flash > 0.1 ? 0xffc7a0 : b.chill > 0 ? 0xb4efff : 0xffe1d7);
       b.model.warning.material.color.setHex(b.chill > 0 ? 0x80eaff : 0xff6644);
       b.model.warning.position.y = -b.r + 0.035;
       b.model.warning.scale.setScalar(b.r + 0.5);
@@ -3634,7 +3671,9 @@ function renderWorld(dt) {
   const danger = G.lives <= 2 && !G.hardcore && G.phase === 'play';
   if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
-  setHud('surge', $('surge'), G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : '');
+  const supply = G.phase === 'play' ? supplyMessage(G.stage.drop,G.cx) : '';
+  setHud('supplyStatus', $('surge'), supply ? 'supply' : '', 'className');
+  setHud('surge', $('surge'), supply || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
   renderReactor(reactor);
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) hud.banner.className = ''; }
@@ -3682,7 +3721,7 @@ function openWorldCard(index) {
     <div class="wc-stars" aria-label="${stars} of 3 stars">${starsHtml(stars)}</div>
     <div class="wc-stats">${stat('BEST ARMY', best.army && fmt(best.army))}${stat('BEST COMBO', best.combo > 1 && 'x' + fmt(best.combo))}${stat('BEST TIME', best.time && clock(best.time))}</div>
     <details class="field-notes"><summary>Scout the stages</summary><ol>${level.stages.map((stage, i) =>
-      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}</p></li>`).join('')}</ol></details>
+      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}</p></li>`).join('')}</ol></details>
     <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medal.icon}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
   $('wc-play').textContent = resumable ? `RESUME ${index + 1}.${G.stageIdx + 1}` : 'PLAY';
   $('wc-hard').disabled = !stars;
