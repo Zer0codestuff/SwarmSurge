@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { sculptIceWall, sculptFence, sculptStatue, sculptSaw, sculptPortal, sculptPortalExit } from './obstacle-assets.js';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
+import { assetBatch } from './asset-kit.js';
 import { THEMES } from './levels.js';
 import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
 import { buildRoadside } from './road-assets.js';
@@ -251,6 +252,25 @@ export function buildGate(w, hex, mega = false) {
     group: g, panel, panelMat, frameMat, label, text,
     setColor(c) { panelMat.color.set(c); capMat.color.set(c); frameMat.color.set(c).multiplyScalar(0.55); },
   };
+}
+
+// A cast brass sun wheel above the existing multiplier. The swept vanes,
+// copper rim and ceramic hub rotate together in a single draw.
+export function buildSunforge(w, mega) {
+  const gate = buildGate(w, 0xffa631, mega);
+  const wheel = assetBatch().ring(.4,.055,0,0,0,0xf9ac49,'z')
+    .cylinder(.2,.16,0,0,0,0x85441d,'z').sphere(.14,0,0,.09,0xfff3ab,1,1,.55);
+  for (let n = 0; n < 8; n++) {
+    const angle = n * Math.PI / 4;
+    const shape = new THREE.Shape();
+    shape.moveTo(-.06,.18); shape.quadraticCurveTo(-.1,.48,.14,.65);
+    shape.quadraticCurveTo(.06,.4,.1,.2); shape.closePath();
+    const vane = new THREE.ExtrudeGeometry(shape,{depth:.04,bevelEnabled:false,curveSegments:4});
+    wheel.add(vane, n % 2 ? 0xffdb7a : 0xe99343, 0,0,0,0,0,angle);
+  }
+  gate.wheel = wheel.finish(gate.group,'sunforge-wheel');
+  gate.wheel.position.y = mega ? 3.22 : 2.72;
+  return gate;
 }
 
 export function buildIceWall(w) {

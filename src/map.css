@@ -100,3 +100,9 @@
 #wc-hard { background: #7a2338; box-shadow: 0 5px 0 #43101d; font-size: 14px !important; }
 #wc-hard:disabled { background: #2a4458; box-shadow: none; color: #8fa8b8; border-color: #4a6a80; cursor: default; }
 #wc-close { font-size: 14px !important; padding: 9px !important; }
+
+.field-notes { margin: 6px 0 10px; padding: 0 10px; background: #102b3f; border-radius: 8px;
+  font: 12px/1.45 system-ui, sans-serif; color: #d3e9ee; text-align: left; }
+.field-notes summary { padding: 9px 0; cursor: pointer; color: #96efdb; font-weight: 700; }
+.field-notes ol { margin: 0; padding: 0 0 1px 18px; }
+.field-notes p { margin: 2px 0 0; padding-bottom: 9px; }

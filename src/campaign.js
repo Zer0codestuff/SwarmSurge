@@ -77,7 +77,21 @@ const MIRRORS = [
   [27, 2, -4.45, 10], [27, 2, 4.45, 10], [28, 3, -4.6, 11], [28, 3, 4.6, 11], [29, 2, -4.45, 10], [29, 2, 4.45, 10],
   [31, 2, -5, 12], [31, 2, 5, 12], [40, 1, -4.6, 9], [40, 1, 4.6, 9], [50, 1, -4.6, 9], [50, 1, 4.6, 9],
 ];
-function addSplitGates(s, world, stage) {
+// Sunforges keep their ordinary multiplier. Sunwings get a second multiplier
+// on a chosen route, including the moving gate and two deliberately weaker lanes.
+const SUNFORGES = [
+  [2, 1, 4.2, 18.5], [3, 2, 4.45, 24], [7, 1, 0, 43], [12, 3, 0, 24],
+  [22, 2, 1.5, 24], [35, 1, 3.3, 9], [45, 2, 4.4, 20], [50, 3, .7, 36],
+];
+function addSpecialGates(s, world, stage) {
+  const forge = SUNFORGES.find(([w, st]) => w === world && st === stage);
+  if (forge) {
+    const [, , x, d] = forge;
+    const gate = s.gates.find(g => g.t === 'mul' && g.x === x && g.d === d);
+    if (!gate) throw new Error(`Missing Sunforge gate in world ${world} stage ${stage}`);
+    gate.sunforge = 10;
+    s.tip += ' Send Sunwings through the gold sun wheel for a further ×10.';
+  }
   const swap = (x, d, v, change) => {
     const gate = s.gates.find(g => g.t === 'mul' && g.v === v && g.x === x && g.d === d && !g.slide && !g.phase && !g.requires);
     if (!gate) throw new Error(`No x${v} gate at ${x},${d} in world ${world} stage ${stage}`);
@@ -151,7 +165,7 @@ function prepareLate(level, li, original, si) {
   s.gates.unshift({ t: 'upgrade', up, need: Math.round((12 + ci + si * 5) * supplyScale), x: si % 2 ? 3.4 : -3.4, d: 5.5, w: 4.7 });
   s.tip = `${LESSONS[up]} ${original.tip}`;
   for (const b of s.balls || []) b.delay = Math.min(b.delay ?? 0, 5);
-  addSplitGates(s, li + 1, si + 1);
+  addSpecialGates(s, li + 1, si + 1);
   return s;
 }
 
@@ -208,7 +222,7 @@ export function prepareCampaign(levels) {
         b.hp *= 0.7;
       }
       addVault(s, li + 1, si + 1);
-      addSplitGates(s, li + 1, si + 1);
+      addSpecialGates(s, li + 1, si + 1);
       return s;
     }),
   }));

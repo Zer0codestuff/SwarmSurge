@@ -5,7 +5,8 @@ import { loftGeometry, sweepGeometry, patchGeometry } from './boss-shapes.js';
 // Allied troops change body form as their rank rises. Every form keeps the hip
 // pivot, hand anchors and footprint of the original infantry, so weapon overlays,
 // stride animation, shadows and collision stay valid across ranks.
-export const TROOP_FORMS = ['Surge bot', 'Trooper', 'Paladin', 'Ascended'];
+export const TROOP_FORMS = ['Surge bot', 'Trooper', 'Paladin', 'Ascended', 'Sunwing'];
+export const SUNWING_FORM = TROOP_FORMS.indexOf('Sunwing');
 const FORM_OF_RANK = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3];
 export function troopForm(rank) {
   return FORM_OF_RANK[Math.max(0, Math.min(FORM_OF_RANK.length - 1, rank | 0))];
@@ -239,7 +240,38 @@ function raider(low) {
   return finish(k, 'Raider');
 }
 
-const BUILDERS = [surgeBot, trooper, paladin, ascended];
+// A flight suit with a swept, split solar sail. Only the outer vanes flex with
+// the stride shader. The breastplate and arms keep the normal weapon anchors.
+function sunwing(low) {
+  const k = sculptKit(low);
+  const enamel = 0xffedcf, copper = 0xca6b28, ceramic = 0x273550, plasma = 0x91fffa;
+  k.loft([[.27,.07,.07], [.37,.14,.11], [.55,.2,.13], [.64,.17,.12], [.7,.07,.07]], enamel);
+  k.loft([[.65,.06,.07], [.72,.15,.13], [.85,.17,.16], [.95,.12,.12], [1.04,.025,.04,0,-.035]], copper);
+  k.blob(1,[.14,.058,.07],[0,.82,.104],ceramic);
+  k.blob(1,[.108,.018,.035],[0,.83,.16],plasma);
+  k.ring(.095,.024,[0,.52,-.15],copper,[0,0,0]);
+  k.gem(.068,[0,.52,-.18],plasma,1.1);
+  for (const side of [-1,1]) {
+    const x = side * .1;
+    k.limb([[x,.35,0],[x,.21,.025],[x,.1,-.055]], [.067,.064,.046], ceramic);
+    k.loft([[.02,.035,.07],[.055,.062,.1],[.13,.055,.06]], enamel, [x,0,-.04]);
+    arm(k,side,.055,ceramic);
+    k.blob(.085,[1,.78,1],[side*.21,.59,0],enamel);
+    // Stagger the blades in depth so they read from the cannon camera.
+    for (let blade=0; blade<(low ? 2 : 3); blade++) {
+      const reach = .51 - blade*.09;
+      const vane = [[0,0],[side*.11,.16],[side*reach,.36-blade*.06],
+        [side*(reach-.09),.14-blade*.04],[side*.1,-.07]];
+      k.plate(vane,.034,.025,blade===1 ? copper : enamel,
+        [side*.13,.55-blade*.045,-.09-blade*.068],[-.55,side*.35,0],.28);
+    }
+    k.limb([[side*.11,.55,-.11],[side*.29,.72,-.18],[side*.56,.81,-.31]],
+      [.032,.023,.009],plasma,.28);
+  }
+  return finish(k,'Sunwing');
+}
+
+const BUILDERS = [surgeBot, trooper, paladin, ascended, sunwing];
 export function raiderGeometry(detail = 'high') { return raider(detail === 'low'); }
 export function troopFormGeometry(form, detail = 'high') {
   const build = BUILDERS[form];
