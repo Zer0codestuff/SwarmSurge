@@ -6,7 +6,7 @@ export { buildConveyor as buildBelt } from './conveyor-assets.js';
 import { swarmBallShell } from './swarm-ball-assets.js';
 import { sculptLoadingBay, drivePayload } from './supply-assets.js';
 import { WEAPON_IDS, CHASSIS_IDS } from './arsenal.js';
-import { createVehicleRig } from './vehicle-assets.js';
+import { vehicleDisplay } from './vehicle-assets.js';
 import { createSupportAircraft } from './air-assets.js';
 import { sculptJumpPad, sculptHangar, sculptTesla } from './obstacle-assets.js';
 export { buildBattlePillar as buildPillar } from './battlefield-assets.js';
@@ -45,7 +45,7 @@ export function buildArmory(w, upgrade) {
   const jaws = sculptLoadingBay(group,w);
   const vehicle = upgrade === 'tank' || !!CHASSIS_IDS[upgrade];
   const stand = new THREE.Group(); icon.add(stand); group.add(icon);
-  let displayedTier = 0, rig;
+  let displayedTier = 0;
   function mount(reward) {
     // Fit around the local origin first, independent of an animated parent's
     // world transform. Weapon geometry includes the troop's hand offset.
@@ -59,11 +59,9 @@ export function buildArmory(w, upgrade) {
   function setTier(tier) {
     if (displayedTier === tier) return;
     displayedTier = tier;
+    stand.traverse(part => { if (part.isInstancedMesh) part.dispose(); });
     stand.clear();
-    if (vehicle) {
-      rig ??= createVehicleRig();
-      rig.clear(); rig.setForm(tier); mount(rig.group);
-    } else mount(buildSupportPlane(tier).group);
+    mount(vehicle ? vehicleDisplay(tier) : buildSupportPlane(tier).group);
   }
   if (vehicle || upgrade === 'air') setTier(CHASSIS_IDS[upgrade] || 1);
   else if (WEAPON_IDS[upgrade]) {

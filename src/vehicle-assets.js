@@ -662,6 +662,40 @@ function getTemplate(id, tint) {
   return templates.get(key);
 }
 
+// Armory miniatures rotate as one piece. Bake the articulated nodes into
+// one mesh per material. Treads and rollers retain their instancing.
+const displayTemplates = new Map();
+export function vehicleDisplay(id) {
+  if (!displayTemplates.has(id)) {
+    const tint = 0x2f8bff, source = getTemplate(id,tint);
+    const display = new THREE.Group(); display.name = `vehicle-form-${id}`;
+    const solids = [cannonBarrelGeometry(tint).clone().translate(0,mounts[id][0],mounts[id][1])];
+    const lamps = [];
+    source.updateMatrixWorld(true);
+    source.traverse(part => {
+      if (!part.isMesh) return;
+      if (part.isInstancedMesh) {
+        const fixed = part.clone(false);
+        part.matrixWorld.decompose(fixed.position,fixed.quaternion,fixed.scale);
+        fixed.castShadow = false;
+        display.add(fixed);
+      } else {
+        const pieces = part.material === luminous ? lamps : solids;
+        pieces.push(part.geometry.clone().applyMatrix4(part.matrixWorld));
+      }
+    });
+    for (const [pieces,material] of [[solids,surface],[lamps,luminous]]) {
+      if (!pieces.length) continue;
+      const geometry = mergeGeometries(pieces,false);
+      pieces.forEach(piece => piece.dispose());
+      geometry.userData.shared = true;
+      display.add(new THREE.Mesh(geometry,material));
+    }
+    displayTemplates.set(id,display);
+  }
+  return displayTemplates.get(id).clone(true);
+}
+
 function instanceForm(id, tint) {
   const group = getTemplate(id, tint).clone(true);
   const parts = { legs: [], knees: [], arms: [], rotors: [], wheels: [], gatlings: [] };

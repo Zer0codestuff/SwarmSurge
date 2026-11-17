@@ -108,6 +108,9 @@ try {
     });
     const {sculptSupplyDrop} = await import('/src/supply-assets.js');
     const upgradeTypes = new Set(LEVELS.flatMap(l=>l.stages.flatMap(s=>s.gates.filter(g=>g.t==='upgrade').map(g=>g.up))));
+    const {vehicleDisplay} = await import('/src/vehicle-assets.js');
+    const displays = Array.from({length:8},(_,i)=>inspect(vehicleDisplay(i+1)));
+    const displayPass = displays.every(m=>m.finite && m.meshes<=4 && m.sharedMaterials);
     const bayPass = [...upgradeTypes].every(up=>{
       const m=P.buildArmory(4.7,up);
       m.pose(0,1); const closed=pose(m.group);
@@ -118,7 +121,7 @@ try {
     const ball=P.buildSwarmBall(2), drop=sculptSupplyDrop(), belt=P.buildBelt(5.6,6,-3);
     const tri=g=>(g.index?.count ?? g.attributes.position.count)/3;
     const ballTriangles=tri(ball.inst.geometry)*ball.count + tri(ball.spin.children[0].geometry);
-    const supplyPass=bayPass && ballTriangles<55000 && inspect(ball.group).finite && inspect(drop.group).finite && inspect(belt.group).finite && !!drop.group.getObjectByName('recovery-chute') && belt.tex.repeat.x>1;
+    const supplyPass=displayPass && bayPass && ballTriangles<55000 && inspect(ball.group).finite && inspect(drop.group).finite && inspect(belt.group).finite && !!drop.group.getObjectByName('recovery-chute') && belt.tex.repeat.x>1;
     [ball.group,drop.group,belt.group].forEach(dispose);
     return {projectiles,supplyPass,ballTriangles,armories:upgradeTypes.size,bosses,forts,props,propPass,lateProps,latePass,rosterPass,roadsides,roadPass,worlds:LEVELS.length};
   });
