@@ -35,6 +35,16 @@ window.runGameChecks = (g) => {
     writeBlue(); const form=blueForms[SUNWING_FORM];
     return {pass:normalPower===g.cur.v && Math.abs(total-64*g.cur.v*10)<.01 && B.kind.slice(0,B.n).every(k=>k===SUNWING) && B.weapon.slice(0,B.n).every(k=>k===4) && form.near.count+form.far.count===B.n && !!g.model.wheel};
   })()`);
+  check('Gate bands preserve overlapping gate order and fast crossings', `(() => {
+    const S=G.stage;
+    const gate=(t,v,z,bit)=>({def:{t,v},cur:{t,v},alive:true,on:true,z,x:0,w:4,bit,boost:1,flash:1});
+    // Suppress copies to keep all three crossings on the same troop.
+    S.gates.push(gate('div',2,-8,1),gate('mul',3,-8,2),gate('mul',2,-9,4));
+    const i=spawn(B,0,-7.9,10,0); B.vz[i]=-9;
+    const capacity=B.N; B.N=RESERVE+1;
+    buildGrid(gB,B); moveBlue(S,.2); B.N=capacity;
+    return {pass:B.hp[i]===30 && B.mask[i]===7 && S.gates.every(g=>g.passes===1)};
+  })()`);
   check('Stationary delayed balls absorb contact damage', `(() => {
     const b=addBall(G.stage,G.root,0,-4,10,1,0,{delay:5});
     const i=spawn(B,0,-2,4,0); B.vz[i]=-9; buildGrid(gB,B); moveBlue(G.stage,.3);

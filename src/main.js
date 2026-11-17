@@ -1681,10 +1681,19 @@ function collideBalls(S, i) {
     if (B.hp[i] <= 0) return;
   }
 }
+// Bucket the current gate references once per simulation step. Within a band,
+// preserve authored order for coincident gates. Long steps and crossings
+// between bands use the complete list so fast units cannot miss a gate.
+const gateBands = Array.from({length: CROWS}, () => []);
+function indexGateBands(S) {
+  for (const band of gateBands) band.length = 0;
+  for (const g of S.gates) gateBands[ccZ(g.z)].push(g);
+}
 function moveBlue(S, dt) {
   const boss = S.boss && S.boss.alive ? S.boss : null;
   const tower = S.tower && S.tower.alive ? S.tower : null;
   const late = S.bumpers.length + S.carts.length + S.eggs.length + S.fusions.length > 0;
+  if (B.n) indexGateBands(S);
   const k = Math.min(1, dt * 5), halt = G.phase === 'clear' || G.phase === 'won';
   for (let i = 0; i < B.n; i++) {
     if (B.hp[i] <= 0) continue;
@@ -1751,8 +1760,9 @@ function moveBlue(S, dt) {
     collideBalls(S, i);
     if (B.hp[i] <= 0) continue;
     // gates
-    const pz = B.pz[i];
-    for (const g of S.gates) {
+    const pz = B.pz[i], band = ccZ(z);
+    const crossed = ccZ(pz) === band ? gateBands[band] : S.gates;
+    for (const g of crossed) {
       if (!g.alive || !g.on || !(pz > g.z && z <= g.z) || Math.abs(x - g.x) > g.w / 2 + 0.05) continue;
       const t = g.def.t;
       if ((t === 'tesla' || t === 'hypno') && g.active) continue;
