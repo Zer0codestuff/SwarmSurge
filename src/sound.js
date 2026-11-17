@@ -93,6 +93,14 @@ export class Sound {
       case 'nuke': this.burst(1.2, 0.8, 300); this.tone(60, 1.0, 'sine', 0.5, -30); this.tone(900, 0.5, 'sawtooth', 0.06, -800); break;
       case 'star': [784, 988, 1175, 1568, 1976].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.1, 0, i * 0.05)); break;
       case 'roar': this.tone(95, .9, 'sawtooth', .16, -45); this.tone(142, .8, 'square', .07, -70, .04); this.burst(.7, .22, 420); break;
+      case 'reactor': {
+        const root = p === 1 ? 220 : p === 3 ? 330 : p === 8 ? 440 : 660;
+        this.tone(root,.14,'triangle',.09,root*.3);
+        this.tone(root*1.5,.15,'sine',.07,root*.2,.06);
+        break;
+      }
+      case 'launch': this.burst(.2,.18,1600); [330,495,660,990].forEach((f,i) => this.tone(f,.2,'triangle',.09,f*.5,i*.04)); break;
+      case 'vent': this.burst(.3,.18,900); this.tone(240,.26,'triangle',.12,-165); break;
       case 'evolve': [0, 4, 7, 12, 16].forEach((st, i) => this.tone(392 * 2 ** ((st + p * 2) / 12), .16, 'triangle', .09, 0, i * .055)); break;
       case 'warp': this.tone(300, 0.15, 'sine', 0.08, 900); break;
       case 'zap': this.tone(1400, 0.08, 'sawtooth', 0.04, -1100); break;

@@ -9,6 +9,32 @@ window.runGameChecks = (g) => {
       results.push({ name, pass: detail.pass, detail });
     } catch (error) { results.push({ name, pass: false, error: error.message }); }
   };
+  check('Reactor diverts fire, launches every cannon, then restores normal output', `(() => {
+    G.paused=false; G.overdrive=4; G.squad=1; G.twin=true; G.charge=CHARGE_MAX-1;
+    useReactor(); for(let n=0;n<50;n++) step(STEP);
+    const diverted=B.n===0 && G.charge===CHARGE_MAX-1;
+    useReactor(); step(STEP);
+    const launched=B.n===4 && B.hp[0]===6 && B.kind[0]===SUNWING && B.hp[3]===6*GIANT_HP && B.kind[3]===(SUNWING|GIANT);
+    const r=G.stage.reactor; tickReactor(r,BURST_TIME); useReactor();
+    return {pass:diverted && launched && r.phase==='spent' && r.power===1};
+  })()`);
+  check('Peak, overheat and retry use stage-local reactor state', `(() => {
+    const normal=newReactor(false), surge=newReactor(true);
+    for(const r of [normal,surge]) {triggerReactor(r);tickReactor(r,3.2);triggerReactor(r);}
+    const r=G.stage.reactor; triggerReactor(r); tickReactor(r,VENT_TIME); G.charge=0; G.fireT=0; step(STEP);
+    const vented=r.phase==='vented' && !triggerReactor(r) && B.n===1 && B.hp[0]===1;
+    $('rretry').click();
+    return {pass:normal.power===24 && surge.power===64 && vented && G.stage.reactor.phase==='ready'};
+  })()`);
+  check('Sunforge preserves the normal route and multiplies armed Sunwing copies', `(() => {
+    startLevel(1); const S=G.stage, g=S.gates.find(g=>g.def.sunforge); B.n=0;
+    const ordinary=spawn(B,g.x,g.z,1,0); applyGate(S,g,ordinary);
+    const normalPower=B.hp.slice(0,B.n).reduce((sum,n)=>sum+n,0);
+    B.n=0; const i=spawn(B,g.x,g.z,64,SUNWING); B.weapon[i]=4; applyGate(S,g,i);
+    const total=B.hp.slice(0,B.n).reduce((sum,n)=>sum+n,0);
+    writeBlue(); const form=blueForms[SUNWING_FORM];
+    return {pass:normalPower===g.cur.v && Math.abs(total-64*g.cur.v*10)<.01 && B.kind.slice(0,B.n).every(k=>k===SUNWING) && B.weapon.slice(0,B.n).every(k=>k===4) && form.near.count+form.far.count===B.n && !!g.model.wheel};
+  })()`);
   check('Stationary delayed balls absorb contact damage', `(() => {
     const b=addBall(G.stage,G.root,0,-4,10,1,0,{delay:5});
     const i=spawn(B,0,-2,4,0); B.vz[i]=-9; buildGrid(gB,B); moveBlue(G.stage,.3);

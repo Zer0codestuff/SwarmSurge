@@ -119,6 +119,21 @@
   @keyframes titleWin { to { transform: scale(1.05); text-shadow: 0 5px 0 #1b0a33, 0 0 22px rgba(255,210,58,.8); } }
   #lives.hit { animation: livesHit .4s ease-out; }
   @keyframes livesHit { 0% { transform: scale(1.35) rotate(-6deg); background: #ff3048; } 50% { transform: scale(.95) rotate(4deg); } 100% { transform: none; } }
+  #cannon-controls { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+  #reactor { position: relative; isolation: isolate; overflow: hidden; pointer-events: auto; touch-action: manipulation;
+    min-height: 44px; min-width: 122px; display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+    border: 1px solid #8cead9; border-radius: 10px; background: #123c43; color: #edfffa; cursor: pointer;
+    text-align: left; font: 700 13px/1.15 system-ui,sans-serif; box-shadow: 0 2px 0 #082a31; }
+  #reactor b, #reactor small { display: block; }
+  #reactor small { color: #c3e9e2; font-size: 10px; font-variant-numeric: tabular-nums; }
+  #reactor kbd { border: 1px solid #84abab; border-radius: 4px; padding: 2px 4px; font: inherit; font-size: 10px; }
+  #reactor-fill { position: absolute; z-index: -1; inset: auto auto 0 0; height: 4px; width: 0; background: #7bffe4; }
+  #reactor.peak, #reactor.burst { background: #613c19; border-color: #ffc873; color: #fff6cc; }
+  #reactor.peak #reactor-fill, #reactor.burst #reactor-fill { background: #ffd47b; }
+  #reactor:disabled { cursor: default; }
+  #reactor.spent, #reactor.vented { background: #213744; border-color: #75909c; }
+  #reactor:focus-visible { outline: 3px solid white; outline-offset: 2px; }
+  @media (pointer: coarse) { #reactor kbd { display: none; } #reactor { min-width: 110px; } }
   @media (min-width: 900px) { #title br { display: none; } #title { font-size: 72px; } #title b { margin-left: .3em; } #sub { margin-bottom: 12px; } }
   #sub { font-size: 14px; opacity: .9; margin-bottom: 16px; text-align: center; }
   .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
@@ -271,7 +286,13 @@
     <div id="surge"></div>
     <div id="ups"></div>
     <div id="rank"><i id="rankdot"></i><span id="rankname">Recruit</span></div>
-    <div id="charge"><div id="chargefill"></div><span>GIANT</span></div>
+    <div id="cannon-controls">
+      <div id="charge"><div id="chargefill"></div><span>GIANT</span></div>
+      <button type="button" id="reactor" aria-keyshortcuts="R" title="Tap or press R to divert cannon fire. Tap again to launch before overheat." disabled>
+        <span id="reactor-fill" aria-hidden="true"></span><kbd aria-hidden="true">R</kbd>
+        <span><b id="reactor-action">Charge reactor</b><small id="reactor-hint"></small></span>
+      </button>
+    </div>
   </div>
   <div id="danger"></div>
   <div id="white"></div>
@@ -326,6 +347,7 @@
 <dialog id="pause" aria-labelledby="pausetitle">
   <div id="pausetitle">Paused</div>
   <p id="pausewhere"></p>
+  <details class="field-notes"><summary>How to use the reactor</summary><p>Tap Charge reactor or press R to divert your cannon fire. Tap again to launch powered Sunwings for 2.4 seconds. Wait for a higher multiplier, but launch before the reactor vents. You get one charge per stage.</p></details>
   <ul id="pausemedals" aria-label="Medals for this world"></ul>
   <button id="resume" class="btn" autofocus>Resume</button>
   <button id="pauseretry" class="btn alt">Retry stage</button>
