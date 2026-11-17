@@ -6,6 +6,7 @@ import { Music } from './music.js';
 import { CRUSH_SECONDS, MEDALS, SWIFT_SECONDS, clock, loadRecords, medalTotal, medalsOf, recordRun, saveRecords } from './records.js';
 import * as FX from './fx.js';
 import * as P from './props.js';
+import { bossProjectile } from './boss-projectiles.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
 import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, chassisReward, sweptCircle } from './arsenal.js';
@@ -2136,14 +2137,13 @@ function attackBand(b, x, len, color, spawnKind) {
     if (spawnKind >= 0) summon(b, spawnKind, 3);
   });
 }
-function attackBoulders(b, n, col) {
+function attackBoulders(b, n) {
   for (let k = 0; k < n; k++) {
     const i = randomBlueAhead(b.z + 4, G.z0 - 6);
     const tx = clamp(i >= 0 ? B.x[i] : rand(-5, 5), -6, 6), tz = i >= 0 ? B.z[i] : b.z + rand(10, 30);
     let rock = null;
     if (!TURBO) {
-      rock = new THREE.Mesh(M.boulderGeo(), M.lam(col, { flatShading: true }));
-      rock.castShadow = true;
+      rock = bossProjectile(b.type);
       G.root.add(rock);
     }
     addTelegraph('circle', tx, tz, 2.3, 0, 1.25, () => {
@@ -2152,7 +2152,7 @@ function attackBoulders(b, n, col) {
       addRing(tx, tz, 2.6, 0xffffff, 0.35);
       G.shake = 0.5; sound.play('boom');
     });
-    if (rock) G.effects.push({ kind: 'rock', mesh: rock, fx: b.x + 2.6, fz: b.z, tx, tz, life: 1.25, max: 1.25, shared: true });
+    if (rock) G.effects.push({ kind: 'rock', mesh: rock, fx: b.x + 2.6, fz: b.z, tx, tz, life: 1.25, max: 1.25 });
   }
 }
 function attackBreath(b, color) {
@@ -2246,28 +2246,28 @@ function bossAttack(S, b) {
     case 'king': attackSlam(b, true); break;
     case 'jelly': attackSlam(b, false); summon(b, 6, 4); break;
     case 'skeleton': attackBand(b, pickX(), 20, PCOL.orange, 2); break;
-    case 'golem': attackBoulders(b, 2, 0x7f9fc0); summon(b, 3, 3); break;
-    case 'moon': attackBoulders(b, 3, 0x8a8aa0); summon(b, 5, 1, 0.003); break;
+    case 'golem': attackBoulders(b, 2); summon(b, 3, 3); break;
+    case 'moon': attackBoulders(b, 3); summon(b, 5, 1, 0.003); break;
     case 'dragon': attackBreath(b, PCOL.orange); summon(b, 2, 3); break;
     case 'storm': attackBreath(b, PCOL.ice); summon(b, 6, 3); break;
     case 'brute': attackShockwave(b); if (b.atkN % 2 === 0) summon(b, 1, 2, 0.004); break;
     case 'robot': attackBand(b, pickX(), 24, PCOL.pink, -1); attackBand(b, rand(-5, 5), 24, PCOL.pink, 5); break;
     case 'drill': attackBand(b, pickX(), 22, PCOL.metal, 7); if (b.atkN % 3 === 0) attackBand(b, rand(-5, 5), 22, PCOL.metal, -1); break;
-    case 'dice': attackBoulders(b, 3, 0xffffff); summon(b, 12, 4); if (b.atkN % 3 === 0) rerollSlots(S); break;
+    case 'dice': attackBoulders(b, 3); summon(b, 12, 4); if (b.atkN % 3 === 0) rerollSlots(S); break;
     case 'kraken': attackBand(b, pickX(), 20, PCOL.pink, 8); attackBand(b, rand(-5, 5), 20, PCOL.pink, -1); break;
-    case 'pumpkin': attackBoulders(b, 3, 0xff8a1a); summon(b, 9, 4); if (b.atkN % 3 === 0) attackBall(S, b, 0.01); break;
+    case 'pumpkin': attackBoulders(b, 3); summon(b, 9, 4); if (b.atkN % 3 === 0) attackBall(S, b, 0.01); break;
     case 'commander': summon(b, 4, 8, 0.0008, 4.5); attackBand(b, pickX(), 22, PCOL.red, -1); break;
     case 'spider': attackWeb(b, pickX()); summon(b, 4, 6, 0.0008); break;
     case 'magma': attackBreath(b, PCOL.orange); for (let k = 0; k < 2; k++) meteorStrike(S, 2.2, b); break;
     case 'pharaoh': attackBand(b, pickX(), 22, PCOL.sand, 10); summon(b, 10, 3); break;
     case 'thunder': attackLightning(b, 5); if (b.atkN % 2 === 0) summon(b, 7, 4); break;
-    case 'jack': attackBoulders(b, 3, 0xff5a8a); summon(b, 4, 5); break;
+    case 'jack': attackBoulders(b, 3); summon(b, 4, 5); break;
     case 'flipper': if (b.atkN % 2 === 0) attackTilt(b); else attackBand(b, pickX(), 22, PCOL.pink, 6); break;
     case 'ringmaster': summon(b, 6, 5); if (b.atkN % 3 === 0) attackBall(S, b, 0.006, 1.8); else attackBand(b, pickX(), 20, PCOL.gold, -1); break;
     case 'mesmer': attackMesmer(b, pickX()); if (b.atkN % 2 === 0) summon(b, 9, 4); break;
-    case 'locomotive': attackBand(b, pickX(), 28, PCOL.metal, 5); if (b.atkN % 2 === 0) attackBoulders(b, 2, 0x2a2a30); break;
+    case 'locomotive': attackBand(b, pickX(), 28, PCOL.metal, 5); if (b.atkN % 2 === 0) attackBoulders(b, 2); break;
     case 'scarecrow': summon(b, 7, 6); attackBand(b, pickX(), 20, PCOL.sand, -1); break;
-    case 'panda': attackBoulders(b, 3, 0x6ab04a); if (b.atkN % 2 === 0) attackSlam(b, false); break;
+    case 'panda': attackBoulders(b, 3); if (b.atkN % 2 === 0) attackSlam(b, false); break;
     case 'shogun': { const x = pickX(); attackBand(b, x, 22, PCOL.red, -1); attackBand(b, clamp(-x, -5, 5), 22, PCOL.red, 3); break; }
     case 'trex': attackShockwave(b); if (b.atkN % 2 === 0) attackEggs(S, b, 2); break;
     case 'roc': attackBreath(b, PCOL.ice); attackEggs(S, b, b.atkN % 2 ? 1 : 2); break;
@@ -2275,7 +2275,7 @@ function bossAttack(S, b) {
     case 'overlord': {
       const m = b.atkN % 7;
       if (m === 0) attackMesmer(b, pickX());
-      else if (m === 1) { attackBoulders(b, 3, 0x7a4aff); summon(b, 9, 3); }
+      else if (m === 1) { attackBoulders(b, 3); summon(b, 9, 3); }
       else if (m === 2) attackTilt(b);
       else if (m === 3) attackLightning(b, 6);
       else if (m === 4) attackEggs(S, b, 2);
@@ -2286,7 +2286,7 @@ function bossAttack(S, b) {
     case 'emperor': {
       const m = b.atkN % 6;
       if (m === 0) attackBand(b, pickX(), 22, PCOL.purple, 6);
-      else if (m === 1) { attackBoulders(b, 3, 0x9a6aff); summon(b, 9, 3); }
+      else if (m === 1) { attackBoulders(b, 3); summon(b, 9, 3); }
       else if (m === 2) attackBall(S, b, 0.006);
       else if (m === 3) attackLightning(b, 6);
       else if (m === 4) attackWeb(b, pickX());
@@ -2296,7 +2296,7 @@ function bossAttack(S, b) {
     default: { // titan: cycles through everything
       const m = b.atkN % 4;
       if (m === 0) attackBand(b, pickX(), 22, PCOL.purple, 6);
-      else if (m === 1) attackBoulders(b, 3, 0x9a6aff);
+      else if (m === 1) attackBoulders(b, 3);
       else if (m === 2) attackShockwave(b);
       else attackBreath(b, PCOL.pink);
     }
@@ -2345,7 +2345,7 @@ function updateEffects(dt) {
     if (e.life <= 0) {
       for (const m of [e.mesh, e.outer, e.inner]) if (m) {
         G.root.remove(m);
-        m.traverse((o) => { if (o.geometry) { o.geometry.dispose(); if (!e.shared) o.material.dispose(); } });
+        m.traverse((o) => { if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); if (o.material && !o.material.userData.shared) o.material.dispose(); });
       }
       E.splice(k, 1);
     }
@@ -2501,10 +2501,10 @@ function meteorStrike(S, r, from) {
   const tz = i >= 0 ? B.z[i] - rand(0, 2) : G.z0 - rand(10, 40);
   let rock = null;
   if (!TURBO) {
-    rock = new THREE.Mesh(M.boulderGeo(), M.lam(0x3a2020, { emissive: 0xff3a0a }));
+    rock = bossProjectile('meteor');
     rock.scale.setScalar(1.3);
     G.root.add(rock);
-    G.effects.push({ kind: 'rock', mesh: rock, fx: from ? from.x : tx + 10, fz: from ? from.z : tz - 26, tx, tz, life: 1.3, max: 1.3, shared: true, high: 14 });
+    G.effects.push({ kind: 'rock', mesh: rock, fx: from ? from.x : tx + 10, fz: from ? from.z : tz - 26, tx, tz, life: 1.3, max: 1.3, high: 14 });
   }
   addTelegraph('circle', tx, tz, r, 0, 1.3, () => {
     blueInCircle(tx, tz, r);

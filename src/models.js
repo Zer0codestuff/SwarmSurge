@@ -451,7 +451,6 @@ export function buildBoss(type) {
   model.normalizedAttack = true;
   return model;
 }
-export function boulderGeo() { return new THREE.DodecahedronGeometry(0.75); }
 // nuke mushroom cloud (unit size, scaled up by the effect)
 export function buildMushroom() {
   const g = new THREE.Group();
