@@ -1,7 +1,8 @@
 // Models for the level 11-20 mechanics: belts, jump pads, hangars, tesla coils, pillars, tornadoes,
 // black holes, rolling swarm balls, the rival cannon and spider webs.
 import * as THREE from 'three';
-import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, buildGate, troopWeaponGeo } from './models.js';
+import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, troopWeaponGeo } from './models.js';
+import { sculptLoadingBay, drivePayload } from './supply-assets.js';
 import { WEAPON_IDS, CHASSIS_IDS } from './arsenal.js';
 import { createVehicleRig } from './vehicle-assets.js';
 import { createSupportAircraft } from './air-assets.js';
@@ -68,31 +69,32 @@ export function buildSupportPlane(tier = 1) {
 }
 
 export function buildArmory(w, upgrade) {
-  const model = buildGate(w, 0xffc54a);
-  const icon = new THREE.Group(); icon.position.y = 2.8; model.group.add(icon);
-  const metal = lam(0x28496b), gold = lam(0xffd571), light = lam(0xe1faff);
+  const group = new THREE.Group(), icon = new THREE.Group();
+  const jaws = sculptLoadingBay(group,w);
+  let reward;
   if (upgrade === 'tank' || CHASSIS_IDS[upgrade]) {
     const rig = createVehicleRig(); rig.setForm(CHASSIS_IDS[upgrade] || 1);
-    rig.group.scale.setScalar(.58); rig.group.position.y = -.55;
-    rig.group.rotation.y = Math.PI / 5; icon.add(rig.group);
-  } else if (upgrade === 'squad') {
-    for (const side of [-1,1]) {
-      icon.add(mesh(new THREE.BoxGeometry(.58,.18,.7),metal,side*.4,-.1,0));
-      icon.add(mesh(new THREE.SphereGeometry(.26,8,6),gold,side*.4,.15,0));
-      icon.add(mesh(new THREE.CylinderGeometry(.09,.11,.55,8).rotateX(Math.PI/2),light,side*.4,.15,-.35));
-    }
+    reward = rig.group;
   } else if (WEAPON_IDS[upgrade]) {
-    const gun = new THREE.Mesh(troopWeaponGeo(WEAPON_IDS[upgrade]), new THREE.MeshToonMaterial({ vertexColors: true }));
-    gun.scale.setScalar(2); gun.position.set(-.65, -.9, -.7); gun.rotation.y = Math.PI / 2; icon.add(gun);
-  } else if (upgrade === 'air') {
-    const plane = buildSupportPlane(); plane.group.scale.setScalar(.5); icon.add(plane.group);
-  } else {
-    const bolt = new THREE.Shape(); bolt.moveTo(.12, .75); bolt.lineTo(-.4, -.05); bolt.lineTo(0, -.05); bolt.lineTo(-.12, -.7); bolt.lineTo(.45, .15); bolt.lineTo(.05, .15);
-    const geo = new THREE.ExtrudeGeometry(bolt, { depth: .12, bevelEnabled: false });
-    icon.add(mesh(geo, light));
+    reward = new THREE.Mesh(troopWeaponGeo(WEAPON_IDS[upgrade], 'low'),lam(0xffffff,{vertexColors:true}));
+    reward.rotation.y = Math.PI / 2;
+  } else if (upgrade === 'air') reward = buildSupportPlane().group;
+  else reward = drivePayload(upgrade);
+  // Center the physical reward, including off-center troop hand mounts.
+  const bounds = new THREE.Box3().setFromObject(reward);
+  const center = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
+  const scale = Math.min(1.75,w*.66)/Math.max(size.x,size.y,size.z);
+  reward.scale.multiplyScalar(scale); reward.position.copy(center).multiplyScalar(-scale);
+  icon.add(reward); group.add(icon);
+  const display = label(group,Math.min(w*.92,3.7),1.04,.62);
+  function pose(progress,time,release=0) {
+    const open = .13 + progress*.38 + release*.44;
+    jaws[0].rotation.z = open; jaws[1].rotation.z = -open;
+    icon.position.set(0,2.06 + .35*progress + .075*Math.sin(2*time) + .9*release,-.16);
+    icon.rotation.y = .58 + .48*Math.sin(time*1.4);
   }
-  model.icon = icon;
-  return model;
+  pose(0,0);
+  return {group, icon, pose, ...display};
 }
 
 // Fill the hangar to unlock repeated bombing runs.

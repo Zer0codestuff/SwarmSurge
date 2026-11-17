@@ -1453,7 +1453,9 @@ function upgradeCannon(up) {
     if (spec.weapon) unlockWeapon(spec.weapon);
     if (spec.aircraft) { G.aircraft = Math.min(3, G.aircraft + spec.aircraft); G.airT = .2; }
     if (spec.ability) G.abilityT = ABILITY_SPECS[spec.ability].first;
-    setBarrels(G.barrels); cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
+    setBarrels(G.barrels);
+    const fitTime = TURBO || reducedMotion ? null : G.t;
+    cannon.setChassis(G.chassis,fitTime); twinCannon.setChassis(G.chassis,fitTime);
     addRing(G.cx, G.cannonZ, 3.5, 0x8beaff, .5);
     burst(G.cx, .6, G.cannonZ, PCOL.gold, 16, 3);
     banner(CHASSIS[G.chassis].toUpperCase() + '!', 'gold');
@@ -3439,7 +3441,11 @@ function renderWorld(dt) {
     for (const g of S.gates) {
       const grp = g.model.group;
       if (!g.alive) {
-        if (g.dying > 0) { g.dying = Math.max(0, g.dying - dt * 3); grp.scale.setScalar(Math.max(0.01, g.dying)); }
+        if (g.dying > 0) {
+          g.dying = Math.max(0, g.dying - dt * 3);
+          if (g.model.pose && !reducedMotion) g.model.pose(1,G.t + g.ph,1 - g.dying);
+          grp.scale.setScalar(Math.max(.01,g.dying));
+        }
         if (g.dying <= 0) grp.visible = false;
         continue;
       }
@@ -3449,7 +3455,7 @@ function renderWorld(dt) {
       if (g.dirty && G.t - g.refT > 0.08) { g.refT = G.t; refreshGate(g); }
       const t = g.def.t;
       if (g.model.wheel && !reducedMotion) g.model.wheel.rotation.z = -G.t * 1.5;
-      if (g.model.icon) { g.model.icon.rotation.y = Math.sin(G.t * 1.5 + g.ph) * .35; g.model.icon.position.y = 2.8 + Math.sin(G.t * 2 + g.ph) * .12; }
+      if (t === 'upgrade') g.model.pose(Math.min(1,g.prog/g.need),reducedMotion ? 0 : G.t + g.ph);
       if (g.locked) grp.visible = true;
       else if (g.def.phase) {
         const P2 = g.def.phase, ph = (G.t + (P2.off ?? 0)) % P2.period, edge = g.on ? P2.on - ph : P2.period - ph;
@@ -3473,7 +3479,7 @@ function renderWorld(dt) {
         g.model.panelMat.opacity = (g.coolUntil > S.time ? 0.2 : 0.5) + g.flash * 0.3;
       } else if (t === 'tesla') { g.model.orb.scale.setScalar(g.active ? 1 + Math.sin(G.t * 30) * 0.15 + (g.zapT < 0.1 ? 0.4 : 0) : 0.7 + g.prog / g.need * 0.4); g.model.panelMat.opacity = (g.active ? 0.2 : 0.45) + g.flash * 0.3; }
       else if (t === 'nuke' && g.coolUntil > S.time) g.model.panelMat.opacity = 0.12 + Math.abs(Math.sin(G.t * 4)) * 0.2;
-      else if (t !== 'statue') g.model.panelMat.opacity = (t === 'ice' ? 0.82 : t === 'fence' ? 0.9 : 0.55) + g.flash * 0.35;
+      else if (g.model.panelMat && t !== 'statue') g.model.panelMat.opacity = (t === 'ice' ? 0.82 : t === 'fence' ? 0.9 : 0.55) + g.flash * 0.35;
       if (BLOCKERS.has(t) || REDGATES.has(t)) grp.position.x = g.x + Math.sin(G.t * 60) * g.flash * 0.08;
       if (t === 'star') g.model.setColor(starColor.setHSL((G.t * 0.4) % 1, 1, 0.6));
     }

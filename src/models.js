@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { sculptIceWall, sculptFence, sculptStatue, sculptSaw, sculptPortal, sculptPortalExit } from './obstacle-assets.js';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { assetBatch } from './asset-kit.js';
+import { fittingCollar } from './supply-assets.js';
 import { THEMES } from './levels.js';
 import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
 import { buildRoadside } from './road-assets.js';
@@ -155,7 +156,25 @@ export function buildCannon(tint = 0x2f8bff) {
   const shield = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2),
     new THREE.MeshPhongMaterial({ color: 0x75ebff, emissive: 0x124762, transparent: true, opacity: 0.1, depthWrite: false, shininess: 90 }));
   shield.visible = false; g.add(shield);
-  function setChassis(tier) {
+  const collar = fittingCollar(); g.add(collar);
+  let fittingAt = null;
+  function fittingPose(time) {
+    const p = Math.max(0,Math.min(1,(time-fittingAt)/.78));
+    const spread = Math.min(1,p/.52), rise = Math.min(1,Math.max(0,(p-.18)/.68));
+    const folded = (1-spread)**2, lowered = (1-rise)**2;
+    rig.group.scale.set(1-.49*folded,1-.61*lowered,1-.18*folded);
+    barrels.position.copy(rig.barrelAnchor); barrels.position.y *= 1-.59*lowered;
+    barrels.rotation.x = .7*folded;
+    glow.position.copy(rig.glowAnchor); glow.position.y *= 1-.61*lowered;
+    socket.position.copy(glow.position); socket.position.y -= .2;
+    collar.visible = p<1; collar.position.y = .1+p*(rig.glowAnchor.y+.2);
+    collar.scale.setScalar(.9 + .36*Math.sin(Math.PI*p) - .72*p**5);
+    collar.rotation.y = p*1.4;
+    if (p===1) fittingAt=null;
+  }
+  function setChassis(tier, time = null) {
+    if (fittingAt !== null) fittingPose(fittingAt+1);
+    const changed = tier !== rig.formId;
     rig.setForm(tier);
     base.visible = rig.formId === 0;
     body.visible = dome.visible = base.visible;
@@ -164,9 +183,11 @@ export function buildCannon(tint = 0x2f8bff) {
     glow.position.copy(rig.glowAnchor);
     socket.visible = !base.visible;
     socket.position.copy(rig.glowAnchor); socket.position.y -= 0.2;
+    if (changed && tier && time !== null) { fittingAt=time; fittingPose(time); }
   }
   function animateVehicle(time, dt, recoil, speed, charge) {
     rig.animate(time, dt, recoil, speed, charge);
+    if (fittingAt !== null) fittingPose(time);
   }
   function setBarrels(n) {
     barrels.clear();
