@@ -25,15 +25,15 @@ window.runGameChecks = (g) => {
     S.counterShots=2; G.twin=true; G.squad=1; G.overdrive=3; G.charge=CHARGE_MAX-1;
     triggerReactor(S.reactor); tickReactor(S.reactor,3.2); triggerReactor(S.reactor);
     G.fireT=0; fireCannon(BASE_INTERVAL*2+.001);
-    const factor=2*S.reactor.power, mixed=VANGUARD|SUNWING;
+    const factor=2*S.reactor.power, mixed=AEGIS|SUNWING;
     return {pass:B.n===10 && !S.counterShots && B.kind[3]===(mixed|GIANT) && B.hp[3]===factor*COUNTER_POWER*GIANT_HP
       && [0,1,2,4,5,6].every(i=>B.kind[i]===mixed && B.hp[i]===factor*COUNTER_POWER)
       && [7,8,9].every(i=>B.kind[i]===SUNWING && B.hp[i]===factor)};
   })()`);
-  check('Vanguard armor follows gate copies and absorbs exactly one blast per soldier', `(() => {
+  check('Aegis Guard armor follows gate copies and absorbs exactly one blast per soldier', `(() => {
     const g={cur:{t:'mul',v:3},x:0,w:4,z:-9,boost:1,flash:1};
-    const i=spawn(B,0,-9,40,VANGUARD|SUNWING); B.weapon[i]=3; applyGate(G.stage,g,i);
-    writeBlue(); const mesh=blueForms[VANGUARD_FORM], visible=mesh.near.count+mesh.far.count===3;
+    const i=spawn(B,0,-9,40,AEGIS|SUNWING); B.weapon[i]=3; applyGate(G.stage,g,i);
+    writeBlue(); const mesh=blueForms[AEGIS_FORM], visible=mesh.near.count+mesh.far.count===3;
     blueInCircle(0,-9,3); const blocked=Array.from(B.hp.slice(0,3)).every(n=>n===40) && B.kind.slice(0,3).every(k=>k===SUNWING);
     blueInRect(0,-9,6,6); const hurt=B.hp.slice(0,3).every(n=>n===12);
     G.stage.counterShots=8; $('rretry').click();

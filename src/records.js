@@ -2,10 +2,10 @@
 const KEY = 'swarm-records';
 export const SWIFT_SECONDS = 65, CRUSH_SECONDS = 12;
 export const MEDALS = [
-  { id: 'flawless', name: 'Flawless', hint: 'Lose no hearts', icon: '♥' },
-  { id: 'swift', name: 'Swift', hint: `Win in under ${SWIFT_SECONDS} s of battle`, icon: '⚡' },
-  { id: 'overpowered', name: 'Overpowered', hint: `Beat the boss in under ${CRUSH_SECONDS} s`, icon: '♛' },
-  { id: 'hardcore', name: 'Hardcore', hint: 'Win a one-heart run', icon: '☠' },
+  { id: 'flawless', name: 'Flawless', hint: 'Lose no hearts', icon: '<path d="M12 21S2 15.5 2 8.5a5.5 5.5 0 0 1 10-3 5.5 5.5 0 0 1 10 3C22 15.5 12 21 12 21z"/>' },
+  { id: 'swift', name: 'Swift', hint: `Win in under ${SWIFT_SECONDS} s of battle`, icon: '<path d="M14 1 3.5 13h7l-1 10L21 9h-7.5z"/>' },
+  { id: 'overpowered', name: 'Overpowered', hint: `Beat the boss in under ${CRUSH_SECONDS} s`, icon: '<path d="m2 6 5.6 4.5L12 3l4.4 7.5L22 6l-2.2 11H4.2zM4.6 19h14.8v2H4.6z"/>' },
+  { id: 'hardcore', name: 'Hardcore', hint: 'Win a one-heart run', icon: '<path fill-rule="evenodd" d="M12 2C6 2 3 6 3 11c0 3 1.7 5.3 4.5 6.1L8 21h2v-2h1v2h2v-2h1v2h2l.5-3.9C19.3 16.3 21 14 21 11c0-5-3-9-9-9zm-3.7 8a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4zm7.4 0a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4zm-3.7 4.4-1.3 2.2h2.6z"/>' },
 ];
 const clean = (value) => (Number.isFinite(value) && value > 0 ? value : 0);
 

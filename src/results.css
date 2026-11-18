@@ -43,6 +43,7 @@
 .stage-times li b { font-size: 14px; line-height: 1.35; }
 .stage-times .ahead { color: #95f5cf; }
 .stage-times .behind { color: #ffbfa1; }
+.medal-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -.1em; }
 #result .medal { border-radius: 8px; }
 #result .btn { font-size: 15px; padding: 9px 14px; border-width: 1px; border-radius: 9px; }
 @media (max-width: 350px) {

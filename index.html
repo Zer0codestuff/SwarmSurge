@@ -30,6 +30,7 @@
   .lbl.spawner { font-size: 20px; background: #e8243a; border: 2px solid #fff; border-radius: 8px; padding: 0 9px; }
   /* floating popups: the outer div is positioned every frame, the inner span animates */
   .pop { position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform; }
+  .pop.combo-popup { width: max-content; max-width: min(510px, calc(80vw - 14px)); white-space: normal; text-align: center; text-wrap: balance; line-height: 1.09; }
   .pop span { display: block; transform: translate(-50%, -100%); font-weight: 900; -webkit-text-stroke: 2px #1b0a33; paint-order: stroke fill; text-shadow: 0 2px 2px #1b0a33; }
   .pop span.combo { animation: rise 1.4s ease-out forwards; }
   .pop span.c1 { font-size: min(26px, 6.5vw); color: #fff; }
@@ -209,6 +210,7 @@
   #hud.cine #danger { opacity: 0; animation: none; }
   #bottom { width: min(440px, 90vw); bottom: max(10px, env(safe-area-inset-bottom)); }
   #ups { gap: 4px; margin-bottom: 7px; }
+  #ups:empty { display: none; }
   .up { font-family: system-ui, sans-serif; font-weight: 800; border: 1px solid #ffffffbb; font-size: 10px; padding: 2px 7px; border-radius: 6px; box-shadow: 0 2px 0 #142c4633; }
   #rank { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 6px; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 800; }
   #rankdot { width: 9px; height: 9px; border-radius: 3px; border: 1px solid #fff; }
@@ -219,6 +221,7 @@
     width: min(205px, 100%); box-sizing: border-box; padding: 7px 10px 8px; border-radius: 9px;
     background: #211e2df2; border: 1px solid #e99c72; color: #fff2d3; text-shadow: none;
     font: 700 12px/1.2 system-ui, sans-serif; text-align: left; }
+  #bottom:has(#sweep-readout:not([hidden])) #surge:empty { display: none; }
   #sweep-readout.safe { border-color: #7edec9; color: #b9ffe6; }
   #sweep-readout.late { border-color: #fff0a6; background: #492e2bf5; }
   #sweep-clock { float: right; font-variant-numeric: tabular-nums; }

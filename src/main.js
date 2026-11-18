@@ -19,7 +19,7 @@ import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-
 import { TREAD_PITCH } from './conveyor-assets.js';
 import { createSupplyDrop, callSupplyDrop, stepSupplyDrop, supplyMessage, poseSupplyDrop } from './supply-drop.js';
 import { newReactor, chargePower, triggerReactor, tickReactor, VENT_TIME, BURST_TIME } from './reactor.js';
-import { VANGUARD_FORM, SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
+import { AEGIS_FORM, SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
 import { LATE_LIGHTS } from './biomes-late.js';
 import * as PL from './props-late.js';
@@ -160,8 +160,8 @@ const blueForms = TROOP_FORMS.map((_, form) => ({
   far: instanced(troopFormGeometry(form, 'low').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
 }));
 // Allied kind bits are inherited by gate copies and combined on pool overflow.
-const GIANT = 1, SUNWING = 2, VANGUARD = 4;
-const VANGUARD_RGB = rgb(0xd7fff0);
+const GIANT = 1, SUNWING = 2, AEGIS = 4;
+const AEGIS_RGB = rgb(0xd7fff0);
 const SWEEP_RADIUS = 1.9, COUNTER_WINDOW = .36, COUNTER_POWER = 6, COUNTER_VOLLEYS = 12;
 const SUNWING_RGB = rgb(0xffe4a2);
 const FORM_BY_RANK = RANKS.map((_, rank) => blueForms[troopForm(rank)]);
@@ -448,15 +448,18 @@ function popup(text, cls, x, y, z, life = 1.3) {
   if (TURBO) return;
   const p = popups[popHead]; popHead = (popHead + 1) % popups.length;
   p.x = x; p.y = y; p.z = z; p.life = life; p.target = null;
-  // stack combo popups that are still fresh so they don't overlap
   p.combo = cls.startsWith('combo');
+  p.el.classList.toggle('combo-popup', p.combo);
+  p.dy = 0;
   p.serial = ++popSerial;
   if (p.combo) {
-    const previous = popups.filter(q => q !== p && q.combo && q.life > 0).sort((a,b) => b.serial - a.serial);
-    for (const q of previous.slice(1)) { q.life = 0; q.el.style.display = 'none'; }
+    let newest = null;
+    for (const q of popups) if (q !== p && q.combo && q.life > 0 && (!newest || q.serial > newest.serial)) newest = q;
+    for (const q of popups) if (q !== p && q.combo && q.life > 0) {
+      if (q === newest) q.dy = -1;
+      else { q.life = 0; q.el.style.display = 'none'; }
+    }
   }
-  p.dy = 0;
-  if (p.combo) for (const q of popups) if (q !== p && q.combo && q.life > 0.6) p.dy = Math.min(p.dy, q.dy - 1);
   p.inner.textContent = text;
   p.inner.className = '';
   void p.inner.offsetWidth;
@@ -495,9 +498,12 @@ function updatePopups(dt) {
       continue;
     }
     if (!project(p.x, p.y, p.z)) { p.el.style.display = 'none'; p.life = 0; p.target = null; continue; }
-    let sx = tmpV.x, sy = tmpV.y;
-    if (p.combo) { sx = clamp(sx, innerWidth * 0.3, innerWidth * 0.7); sy = Math.max(innerHeight * 0.2, sy) + p.dy * 40; }
-    p.el.style.transform = `translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px)`;
+    const sx = tmpV.x.toFixed(1) + 'px';
+    const sy = p.combo ? Math.max(innerHeight * .2, tmpV.y) + p.dy * 48 : tmpV.y;
+    // Percentages resolve against this popup's width. Reserve its largest
+    // animated scale without reading layout as each label or viewport changes.
+    const x = p.combo ? `clamp(calc(8px + 62.5%), ${sx}, calc(100vw - 8px - 62.5%))` : sx;
+    p.el.style.transform = `translate(${x},${sy.toFixed(1)}px)`;
   }
 }
 
@@ -1070,7 +1076,7 @@ function fireFrom(cx, actor = cannon, power = volleyPower(), kind = G.stage.reac
       const barrel = actor.barrels.children[b];
       barrel.localToWorld(cannonMuzzle.set(0, 0, -1.245));
       cannonMuzzle.x += cx - actor.group.position.x;
-      spark(cannonMuzzle.x, cannonMuzzle.y, cannonMuzzle.z, (kind & VANGUARD) ? PCOL.green : G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, .12, 0);
+      spark(cannonMuzzle.x, cannonMuzzle.y, cannonMuzzle.z, (kind & AEGIS) ? PCOL.green : G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, .12, 0);
     }
   }
 }
@@ -1091,7 +1097,7 @@ function fireCannon(dt) {
     G.fireT += interval;
     const counter = G.stage.counterShots > 0;
     const power = basePower * (counter ? COUNTER_POWER : 1);
-    const kind = baseKind | (counter ? VANGUARD : 0);
+    const kind = baseKind | (counter ? AEGIS : 0);
     if (counter) G.stage.counterShots--;
     fireFrom(G.cx, cannon, power, kind);
     if (G.twin) fireFrom(twinX(), twinCannon, power, kind);
@@ -2114,8 +2120,8 @@ function addTelegraph(shape, x, z, a, b, time, onHit, cannon = false) {
   return warning;
 }
 function blastTroop(i) {
-  if (B.kind[i] & VANGUARD) {
-    B.kind[i] &= ~VANGUARD;
+  if (B.kind[i] & AEGIS) {
+    B.kind[i] &= ~AEGIS;
     B.flash[i] = 1;
     return;
   }
@@ -3252,12 +3258,12 @@ function finishTroopMeshes(near, far) {
   proxy.count = near.count; proxy.visible = near.visible;
 }
 function specialForm(kind) {
-  if (kind & VANGUARD) return VANGUARD_FORM;
+  if (kind & AEGIS) return AEGIS_FORM;
   if (kind & SUNWING) return SUNWING_FORM;
   return null;
 }
 function specialTint(form) {
-  if (form === VANGUARD_FORM) return VANGUARD_RGB;
+  if (form === AEGIS_FORM) return AEGIS_RGB;
   if (form === SUNWING_FORM) return SUNWING_RGB;
   return null;
 }
@@ -3709,7 +3715,7 @@ function renderWorld(dt) {
   if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
   renderSweep(G.phase === 'play' ? G.stage.sweep : null);
-  const counter = G.phase === 'play' && G.stage.counterShots ? `Vanguards ×${COUNTER_POWER} · ${G.stage.counterShots} volleys` : '';
+  const counter = G.phase === 'play' && G.stage.counterShots ? `Aegis guards ×${COUNTER_POWER} · ${G.stage.counterShots} volleys` : '';
   const supply = G.phase === 'play' ? supplyMessage(G.stage.drop,G.cx) : '';
   setHud('supplyStatus', $('surge'), supply ? 'supply' : '', 'className');
   setHud('surge', $('surge'), supply || counter || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
@@ -3779,8 +3785,8 @@ function openWorldCard(index) {
     <div class="wc-stars" aria-label="${stars} of 3 stars">${starsHtml(stars)}</div>
     <div class="wc-stats">${stat('BEST ARMY', best.army && fmt(best.army))}${stat('BEST COMBO', best.combo > 1 && 'x' + fmt(best.combo))}${stat('BEST TIME', best.time && clock(best.time))}</div>
     <details class="field-notes"><summary>Scout the stages</summary><ol>${level.stages.map((stage, i) =>
-      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}${stage.boss?.sweep ? ' Dodge a boss sweep just before impact to fire twelve ×6 Vanguard volleys. Their shields absorb one blast.' : ''}</p></li>`).join('')}</ol></details>
-    <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medal.icon}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
+      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}${stage.boss?.sweep ? ' Dodge a boss sweep just before impact to fire twelve ×6 Aegis Guard volleys. Their shields absorb one blast.' : ''}</p></li>`).join('')}</ol></details>
+    <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medalIcon(medal)}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
   $('wc-play').textContent = resumable ? `RESUME ${index + 1}.${G.stageIdx + 1}` : 'PLAY';
   $('wc-hard').disabled = !stars;
   $('wc-hard').textContent = stars ? '☠ HARDCORE' : '☠ Clear the world first';
@@ -3792,6 +3798,9 @@ $('wc-play').addEventListener('click', () => { closeWorldCard(); sound.unlock();
 $('wc-hard').addEventListener('click', () => { closeWorldCard(); sound.unlock(); startLevel(cardWorld, 0, true); });
 $('wc-close').addEventListener('click', closeWorldCard);
 $('worldcard').addEventListener('click', (event) => { if (event.target === $('worldcard')) closeWorldCard(); });
+function medalIcon(medal) {
+  return `<svg viewBox="0 0 24 24" class="medal-icon" aria-hidden="true" fill="currentColor">${medal.icon}</svg>`;
+}
 function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
 function showMenu(preserveRun = false) {
   titleScreen?.hide();
@@ -3845,7 +3854,7 @@ function showResult(win) {
   $('rstars').innerHTML = win ? starsHtml(stars) : '';
   const last = G.levelIdx >= LEVELS.length - 1;
   const bossLoss = !!G.stage.boss;
-  const tip = G.stage.boss?.sweep ? 'Leave the striped lane before impact. A last-second dodge gives you twelve ×6 Vanguard volleys.' : bossLoss
+  const tip = G.stage.boss?.sweep ? 'Leave the striped lane before impact. A last-second dodge gives you twelve ×6 Aegis Guard volleys.' : bossLoss
     ? 'Tip: chain gates in a row and grab POWER/upgrades first. A huge army pushes the boss back!'
     : 'Tip: gates in a row multiply each other. Break fences, ice and barriers to reach the big ones!';
   // Each tile shows the run; after a win it also shows the record it beat or still has to beat.
@@ -3858,7 +3867,7 @@ function showResult(win) {
   const held = win ? medalsOf(records, G.levelIdx) : [];
   const medals = win ? `<div class="medals">${MEDALS.map((medal, k) => {
     const fresh = outcome.earned.includes(medal.id), has = held.includes(medal);
-    return `<span class="medal${has ? ' on' : ''}${fresh ? ' fresh' : ''}" style="--k:${k}" title="${medal.hint}"><i>${medal.icon}</i>${medal.name}<small>${fresh ? 'NEW!' : has ? 'earned' : medal.hint}</small></span>`;
+    return `<span class="medal${has ? ' on' : ''}${fresh ? ' fresh' : ''}" style="--k:${k}" title="${medal.hint}"><i>${medalIcon(medal)}</i>${medal.name}<small>${fresh ? 'NEW!' : has ? 'earned' : medal.hint}</small></span>`;
   }).join('')}</div>` : '';
   $('rmsg').innerHTML = win
     ? stats + times + medals + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
@@ -3935,7 +3944,7 @@ function pauseGame() {
   // Medal goals for this world: earned ones are lit, ones this run can no longer reach are struck out.
   const held = medalsOf(records, G.levelIdx);
   const gone = { flawless: !G.fullRun || G.hurt > 0, swift: !G.fullRun || G.time >= SWIFT_SECONDS, overpowered: !G.fullRun || (!!G.stage.boss && G.stage.time >= CRUSH_SECONDS), hardcore: !G.fullRun || !G.hardcore };
-  $('pausemedals').innerHTML = MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : gone[medal.id] ? 'gone' : ''}"><i>${medal.icon}</i><span>${medal.name}: ${medal.hint}${held.includes(medal) ? ' (earned)' : ''}</span></li>`).join('');
+  $('pausemedals').innerHTML = MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : gone[medal.id] ? 'gone' : ''}"><i>${medalIcon(medal)}</i><span>${medal.name}: ${medal.hint}${held.includes(medal) ? ' (earned)' : ''}</span></li>`).join('');
   $('pause').showModal();
   return true;
 }

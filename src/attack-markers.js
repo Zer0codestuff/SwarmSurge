@@ -31,7 +31,8 @@ const material = new THREE.ShaderMaterial({
       vec2 inset = size * .5 - abs(pos);
       float edge = disc ? radius - d : min(inset.x, inset.y);
       if (edge < 0.) discard;
-      float border = line(edge - .07, .045);
+      float border = line(edge - .13, .047);
+      float outline = 1. - smoothstep(.045, .105, edge);
       float detail, clockLine, charged;
       if (disc) {
         // Broken inner ring and four registration marks leave the center open.
@@ -61,7 +62,8 @@ const material = new THREE.ShaderMaterial({
       vec3 base = mode > 2.5 ? vec3(.39,.07,.48) : vec3(.65,.045,.052);
       vec3 trim = mode > 2.5 ? vec3(1.,.65,1.) : vec3(1.,.65,.26);
       vec3 color = mix(mix(base, trim, ink), vec3(1.,.94,.74), clockLine);
-      float alpha = .14 + .14 * charged + .61 * ink + .60 * clockLine;
+      color = mix(color, vec3(.13,.019,.035), outline * .90);
+      float alpha = .18 + .14 * charged + .61 * ink + .60 * clockLine + .48 * outline;
       gl_FragColor = vec4(color, min(.95, alpha));
       #include <colorspace_fragment>
     }`,

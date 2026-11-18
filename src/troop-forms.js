@@ -5,9 +5,9 @@ import { loftGeometry, sweepGeometry, patchGeometry } from './boss-shapes.js';
 // Allied troops change body form as their rank rises. Every form keeps the hip
 // pivot, hand anchors and footprint of the original infantry, so weapon overlays,
 // stride animation, shadows and collision stay valid across ranks.
-export const TROOP_FORMS = ['Surge bot', 'Trooper', 'Paladin', 'Ascended', 'Sunwing', 'Vanguard'];
+export const TROOP_FORMS = ['Surge bot', 'Trooper', 'Paladin', 'Ascended', 'Sunwing', 'Aegis Guard'];
 export const SUNWING_FORM = TROOP_FORMS.indexOf('Sunwing');
-export const VANGUARD_FORM = TROOP_FORMS.indexOf('Vanguard');
+export const AEGIS_FORM = TROOP_FORMS.indexOf('Aegis Guard');
 const FORM_OF_RANK = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3];
 export function troopForm(rank) {
   return FORM_OF_RANK[Math.max(0, Math.min(FORM_OF_RANK.length - 1, rank | 0))];
@@ -274,7 +274,7 @@ function sunwing(low) {
 
 // The left forearm carries a full-height kite shield. A raised rim, inset
 // enamel and rear handgrip give it a silhouette from both sides of the road.
-function vanguard(low) {
+function aegisGuard(low) {
   const k = sculptKit(low);
   const steel = 0x55677e, ivory = 0xfff5cf, teal = 0x20756d, light = 0xa4fff0, brass = 0xffc168;
   k.loft([[.29,.11,.10],[.37,.16,.12],[.51,.215,.15],[.64,.20,.135],[.70,.10,.08]], steel);
@@ -303,10 +303,10 @@ function vanguard(low) {
   k.plate(shield.map(([x,y])=>[x*.83,y*.84]),.047,.057,teal,[-.332,.515,.195],angle);
   k.gem(.064,[-.382,.54,.258],light,1.75,angle);
   if (!low) k.limb([[-.31,.64,.087],[-.25,.54,.044],[-.25,.43,.076]], [.021,.023,.02],steel);
-  return finish(k,'Vanguard');
+  return finish(k,'Aegis Guard');
 }
 
-const BUILDERS = [surgeBot, trooper, paladin, ascended, sunwing, vanguard];
+const BUILDERS = [surgeBot, trooper, paladin, ascended, sunwing, aegisGuard];
 export function raiderGeometry(detail = 'high') { return raider(detail === 'low'); }
 export function troopFormGeometry(form, detail = 'high') {
   const build = BUILDERS[form];
