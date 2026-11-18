@@ -614,7 +614,14 @@ function refreshGate(g) {
   const c = g.cur, L = g.model.label, t = g.def.t;
   g.dirty = false;
   if (g.locked) M.drawLabel(L, opText(c, g.boost), '', -1, '#c9b886');
-  else if (t === 'flip') {
+  else if (g.def.redline) {
+    const sub = g.vent > 0 ? `COOL ${Math.ceil(g.vent)}s` : g.band === 2 ? 'PEAK · SWITCH' : 'REDLINE';
+    M.drawLabel(L, opText(c, g.boost), sub, g.vent > 0 ? g.vent / 4 : g.heat, g.vent > 0 ? '#ffa7a1' : g.band === 2 ? '#ffcd70' : '#c9fff3');
+  } else if (g.def.link && (!g.linkSpent || g.linkLeft > 0)) {
+    const link = g.def.link;
+    const sub = g.linkLeft > 0 ? `LINK ${Math.ceil(g.linkLeft)}s` : `LINK ×${fmt(c.v * g.boost * link.bonus)}`;
+    M.drawLabel(L, opText(c, g.boost), sub, g.linkLeft > 0 ? g.linkLeft / link.seconds : -1, '#bdffe7');
+  } else if (t === 'flip') {
     const p = Math.ceil((1 - g.flipT / g.def.period) * 8) / 8;
     M.drawLabel(L, c.t === 'mul' ? 'x' + fmt(c.v * g.boost) : '÷' + c.v, '', p, c.t === 'mul' ? '#ffffff' : '#ffd9d9');
   } else if (g.def.sunforge) M.drawLabel(L, 'x' + fmt(c.v * g.boost), 'SUNWINGS ×' + fmt(c.v * g.boost * g.def.sunforge), -1, '#ffe9a8');
@@ -627,7 +634,7 @@ function refreshGate(g) {
     else M.drawLabel(L, fmtHp(g.hp), 'SMASH!');
   }
   else if (t === 'statue') M.drawLabel(L, fmtHp(g.hp));
-  else if (t === 'upgrade') M.drawLabel(L, g.rewardName ?? UP_NAMES[c.up], `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
+  else if (t === 'upgrade') M.drawLabel(L, g.def.kit?.name ?? g.rewardName ?? UP_NAMES[c.up], `${g.def.fieldChoice ? 'PICK 1 · ' : ''}${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
   else if (t === 'nuke') M.drawLabel(L, 'NUKE', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#9aff5a');
   else if (t === 'star') M.drawLabel(L, 'GATES x2', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffd0ff');
   else if (t === 'charge') {
@@ -647,15 +654,21 @@ function refreshGate(g) {
   else if (t === 'tesla') M.drawLabel(L, g.active ? 'ZAP!' : 'TESLA', g.active ? 'ONLINE' : `${fmt(g.prog)}/${fmt(g.need)}`, g.active ? 1 : g.prog / g.need, '#bff6ff');
   else if (t === 'hypno') {
     if (g.active) M.drawLabel(L, 'HYPNO!', `ENEMIES JOIN ${Math.ceil(g.activeT)}s`, g.activeT / (g.def.dur ?? 6), '#c8ffe8');
-    else M.drawLabel(L, 'HYPNO', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#e4c8ff');
+    else M.drawLabel(L, 'HYPNO', `${g.def.linkArrow && !g.linkUsed ? 'LINK ' + g.def.linkArrow + ' ' : ''}${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#e4c8ff');
   } else if (t === 'bank') {
     const ripe = g.def.ripe ?? 7, max = g.def.max ?? 5;
-    if (g.bankT >= 0) M.drawLabel(L, 'HARVEST x' + fmt(max), `${fmtHp(g.stored)} · ${Math.ceil(ripe - g.bankT)}s`, g.bankT / ripe, '#fff0a0');
-    else M.drawLabel(L, 'HARVEST x' + fmt(max), g.coolUntil > (G.stage?.time ?? 0) ? 'REGROWING' : 'PLANT TROOPS', -1, '#fff0a0');
+    if (g.bankT >= ripe) M.drawLabel(L, 'HARVEST x' + fmt(max), 'CROP READY', 1, '#fff0a0');
+    else if (g.linkNeed && !g.linkUsed && g.bankT >= 0) {
+      const status = g.stored >= g.linkNeed ? 'LINK ' + g.def.linkArrow : fmtHp(g.stored) + '/' + fmtHp(g.linkNeed);
+      M.drawLabel(L, 'HARVEST x' + fmt(max), `${status} · ${Math.ceil(ripe - g.bankT)}s`, g.bankT / ripe, '#b9ffe8');
+    } else if (g.bankT >= 0) M.drawLabel(L, 'HARVEST x' + fmt(max), `${fmtHp(g.stored)} · ${Math.ceil(ripe - g.bankT)}s`, g.bankT / ripe, '#fff0a0');
+    else M.drawLabel(L, 'HARVEST x' + fmt(max), g.coolUntil > (G.stage?.time ?? 0) ? 'REGROWING' : g.linkNeed && !g.linkUsed ? `LINK ${g.def.linkArrow} · SOW ${fmtHp(g.linkNeed)}` : 'SOW · ' + ripe + 's', -1, '#fff0a0');
   }
   else if (REDGATES.has(t)) M.drawLabel(L, (t === 'redmul' ? 'x' : '+') + g.def.v, 'SMASH ' + fmtHp(g.hp), -1, '#c81020');
 }
 function buildGateModel(gd, cur) {
+  if (gd.redline) return M.buildRedlineGate(gd.w, gd.mega, gd.x < 0 ? -1 : 1);
+  if (gd.link) return M.buildLinkGate(gd.w, gd.mega);
   if (gd.sunforge) return M.buildSunforge(gd.w, gd.mega);
   if (gd.t === 'upgrade') return P.buildArmory(gd.w, gd.up);
   if (gd.t === 'ice') return M.buildIceWall(gd.w);
@@ -683,7 +696,7 @@ function buildStage(sd, i, root, theme) {
     tower: null, boss: null, fort: null, waveT: 2.0, waveN: 0, flankT: sd.flanks?.start ?? Infinity, flankN: 0, time: 0, enraged: false, comboNext: 10,
   };
   sd.gates?.forEach((gd, k) => {
-    const cur = gd.t === 'flip' ? gd.a : gd.t === 'slot' ? gd.opts[0] : gd;
+    const cur = gd.t === 'flip' ? gd.a : gd.t === 'slot' ? gd.opts[0] : gd.redline || gd.link ? { t: gd.t, v: gd.v } : gd;
     const model = buildGateModel(gd, cur);
     const g = {
       def: gd, cur, bit: (1 << (k & 31)) >>> 0, hi: k >= 32, baseX: gd.x, x: gd.x, z: z0 - gd.d, w: gd.w, alive: true,
@@ -691,6 +704,17 @@ function buildStage(sd, i, root, theme) {
       ph: gd.slide?.ph ?? Math.random() * 6.28, dying: 0, dirty: true, refT: 0, boost: 1, on: !gd.requires, locked: !!gd.requires, spin: 0, active: false, zapT: 0,
       activeT: 0, uses: 0, stored: 0, bankT: -1, coolUntil: 0, cm: 1,
     };
+    if (gd.redline) {
+      st.redline = g;
+      g.heat = 0; g.vent = 0; g.fedUntil = -1; g.band = 0;
+      // Leave time to divert the stream when the dial hits its hot band.
+      // Shots already in flight still cross a distant gate after a lane change.
+      g.peakRate = .38 / (gd.d / BLUE_SPEED + 1.1);
+    }
+    if (gd.link) {
+      st.linkGate = g;
+      g.linkLeft = 0; g.linkSpent = false;
+    }
     g.textScale = gd.requires ? 3.4 / model.text.geometry.parameters.width : gd.vault ? 4.8 / model.text.geometry.parameters.width : 1;
     if (gd.requires || gd.vault) {
       model.text.position.y = gd.vault ? 2.1 : 3.7 + gd.vaultStep * 0.9;
@@ -717,6 +741,8 @@ function buildStage(sd, i, root, theme) {
       st.exits.push(ex);
     });
   });
+  const bays = st.gates.filter(g => g.def.fieldChoice);
+  if (bays.length === 2) { bays[0].otherBay = bays[1]; bays[1].otherBay = bays[0]; }
   for (const g of st.gates) if (g.def.requires) g.seal = st.gates.find(seal => seal.def.id === g.def.requires);
   sd.walls?.forEach((wd) => {
     const m = M.buildWall(wd.d2 - wd.d1);
@@ -969,13 +995,22 @@ function syncSupplyPreviews(S) {
     g.dirty = true;
   }
 }
-function priceStageSupplies(S, inheritedFlux) {
+function priceStageInvestments(S, inheritedFlux) {
   syncSupplyPreviews(S);
   // Fix prices at entry. A reward never raises other prices midway through the stage.
   const seconds = S.i === 0 ? 1.6 : S.i === 1 ? 3.2 : 4;
-  for (const g of S.gates) if (g.def.t === 'upgrade' || g.def.t === 'hangar') {
-    g.need = Math.max(g.def.need, Math.ceil(inheritedFlux * seconds));
+  const budget = seconds => Math.max(1, Math.ceil(inheritedFlux * seconds));
+  for (const g of S.gates) {
+    const d = g.def;
+    if (d.t === 'upgrade' || d.t === 'hangar') g.need = Math.max(d.need, budget(seconds * (d.price ?? 1)));
+    else if (d.depositSeconds) g.linkNeed = budget(d.depositSeconds);
+    else if (d.feedCap && d.hp) g.hp = g.entryHp = Math.min(d.hp, budget(d.feedCap));
+    else if (d.feedCap) g.need = Math.min(d.need, budget(d.feedCap));
+    else continue;
     g.dirty = true;
+  }
+  for (const prop of [...S.carts, ...S.fusions]) {
+    if (prop.def.feedCap) prop.need = Math.min(prop.def.need, budget(prop.def.feedCap));
   }
 }
 function enterStage(i) {
@@ -989,7 +1024,7 @@ function enterStage(i) {
   G.stage.counterShots = 0;
   G.stage.sweep = null;
   G.stage.reactor = newReactor(G.stage.def.surge);
-  priceStageSupplies(G.stage, G.snap.supplyFlux);
+  priceStageInvestments(G.stage, G.snap.supplyFlux);
   G.shown = false;
   G.z0 = G.cannonZ = G.camZ = G.stage.z0;
   G.camLag = G.cx; G.prevCx = G.cx;
@@ -1319,7 +1354,7 @@ function fireLance(S, spec) {
   // Walls in the lane lose a fixed share of their strength per beam. Vault seals still need troops.
   for (const g of S.gates) {
     if (!g.alive || !g.on || g.def.vault || !(BLOCKERS.has(g.def.t) || REDGATES.has(g.def.t)) || Math.abs(g.x - x) > g.w / 2 + spec.width * .5) continue;
-    g.hp -= Math.min(g.hp, Math.max(damage, (g.def.hp || 0) * spec.blockerShare)); g.flash = 1; g.dirty = true;
+    g.hp -= Math.min(g.hp, Math.max(damage, (g.entryHp ?? g.def.hp ?? 0) * spec.blockerShare)); g.flash = 1; g.dirty = true;
     spark(x, 1.2, g.z, PCOL.ice, 8, 5, 1, .4);
     if (g.hp <= 0) {
       g.alive = false; g.dying = 1; burst(g.x, 1, g.z, PCOL.ice, 40, 8); sound.play('boom');
@@ -1450,6 +1485,8 @@ function comboCheck(S, i, gx, gz) {
 }
 function applyGate(S, g, i) {
   const c = g.cur;
+  // Count time under traffic, not the number or strength of copies in one volley.
+  if (g.heat != null && g.vent === 0) g.fedUntil = S.time + .32;
   if (g.flash < 0.5) spark(B.x[i], 1.2, g.z, c.t === 'div' ? PCOL.red : PCOL.white, 3, 3, 0.7, 0.35, -4);
   g.flash = 1;
   g.passes = (g.passes || 0) + 1;
@@ -1597,7 +1634,15 @@ function absorb(S, g, i) {
       burst(g.x, 1.5, g.z, t === 'star' ? PCOL.pink : t === 'nuke' ? PCOL.green : PCOL.gold, 40, 7);
       if (t === 'upgrade' || t === 'hangar') {
         g.alive = false; g.dying = 1;
+        if (g.otherBay) {
+          g.otherBay.alive = false;
+          g.otherBay.model.group.visible = false;
+        }
         upgradeCannon(t === 'hangar' ? 'air' : g.cur.up);
+        if (g.def.kit) {
+          upgradeCannon(g.def.kit.drive);
+          banner(g.def.kit.name + '!', 'gold');
+        }
         if (G.phase === 'play' && callSupplyDrop(S.drop,G.cx)) sound.play('drop');
         burst(G.cx, 1.5, G.z0, PCOL.gold, 30, 6);
         if (!TURBO) sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.gold, 60, 0.5, 1.2);
@@ -1616,6 +1661,7 @@ function absorb(S, g, i) {
         g.need = Math.round(g.need * 2.5); g.prog = 0;
       } else if (t === 'hypno') {
         g.active = true; g.activeT = g.def.dur ?? 6; g.uses++;
+        igniteLink(S, g);
         banner('HYPNO ONLINE! ENEMIES JOIN YOU', 'pink', 1.3);
         sound.play('warp');
       } else if (t === 'tesla') {
@@ -1819,7 +1865,7 @@ function moveBlue(S, dt) {
       if (!g.alive || !g.on || !(pz > g.z && z <= g.z) || Math.abs(x - g.x) > g.w / 2 + 0.05) continue;
       const t = g.def.t;
       if ((t === 'tesla' || t === 'hypno') && g.active) continue;
-      if (t === 'bank') { if (S.time < g.coolUntil) continue; bankDeposit(g, i); break; }
+      if (t === 'bank') { if (S.time < g.coolUntil || g.bankT >= (g.def.ripe ?? 7)) continue; bankDeposit(g, i); break; }
       if (BLOCKERS.has(t) || ABSORBERS.has(t) || REDGATES.has(t)) { absorb(S, g, i); if (B.hp[i] <= 0) break; continue; }
       if (t === 'portal') { teleport(S, g, i); break; }
       if (t === 'loop') { if (loop(S, g, i)) break; continue; }
@@ -2558,7 +2604,62 @@ function meteorStrike(S, r, from) {
     G.shake = Math.max(G.shake, 0.5); sound.play('boom');
   });
 }
+const REDLINE_COLORS = [0x2997aa, 0xe7a32f, 0xff713e];
+function tickRedline(g, time, dt) {
+  const oldHeat = g.heat, oldVent = g.vent;
+  if (g.vent > 0) {
+    g.vent = Math.max(0, g.vent - dt);
+  } else {
+    const rate = time > g.fedUntil ? -.28 : g.band === 2 ? g.peakRate : .2;
+    g.heat = clamp(g.heat + dt * rate, 0, 1);
+    if (g.heat >= 1) { g.heat = 0; g.vent = 4; g.fedUntil = -1; }
+  }
+  const band = g.vent > 0 ? -1 : g.heat >= .62 ? 2 : g.heat >= .28 ? 1 : 0;
+  if (band !== g.band) {
+    g.band = band; g.cur.t = band < 0 ? 'div' : 'mul';
+    g.cur.v = band < 0 ? 3 : g.def.v * (band === 2 ? 6 : band === 1 ? 2 : 1);
+    g.model.setColor(band < 0 ? GATE_COLORS.div : REDLINE_COLORS[band]);
+    g.dirty = true;
+  }
+  if (g.heat !== oldHeat || g.vent !== oldVent) g.dirty = true;
+}
+function routeMessage(S) {
+  const g = S.linkGate;
+  if (g) {
+    const link = g.def.link;
+    if (g.linkLeft > 0) return `${link.lane.toUpperCase()} LINK ×${fmt(g.cur.v * g.boost)} · ${Math.ceil(g.linkLeft)}s`;
+    if (!g.linkSpent && S.time < 6) return `${link.objective} for a ×${fmt(g.def.v * link.bonus * g.boost)} link`;
+  }
+  const r = S.redline;
+  if (!r) return '';
+  const lane = r.x < -1 ? 'Left' : r.x > 1 ? 'Right' : 'Middle';
+  if (r.vent > 0) return `${lane} gate ÷3 · Cooling ${Math.ceil(r.vent)}s`;
+  if (r.band === 2) return `${lane} gate ×${fmt(r.cur.v * r.boost)} · Switch lanes to cool`;
+  if (r.band === 1) return `${lane} redline · ${Math.floor(r.heat * 20) * 5}% heat`;
+  return '';
+}
+function igniteLink(S, source) {
+  const g = S.linkGate;
+  if (!source.def.linkArrow || !g || g.linkSpent || G.phase !== 'play') return;
+  const link = g.def.link;
+  source.linkUsed = true; source.dirty = true;
+  g.linkSpent = true; g.linkLeft = link.seconds; g.cur.v = g.def.v * link.bonus;
+  g.flash = 1; g.dirty = true; g.model.setColor(0x45dcac);
+  if (source.cores) {
+    for (const core of source.cores) addBeam(core.x, 2.2, source.z, g.x, 2.4, g.z, 0x92ffe2, .46, .14);
+  } else addBeam(source.x, 1.7, source.z, g.x, 2.4, g.z, 0x92ffe2, .46, .14);
+  addRing(g.x, g.z, g.w * .7, 0x6dffcc, .5);
+  sound.play('gate');
+}
 function updateMechanics(S, dt) {
+  if (G.phase === 'play') {
+    if (S.redline) tickRedline(S.redline, S.time, dt);
+    const g = S.linkGate;
+    if (g?.linkLeft > 0) {
+      g.linkLeft = Math.max(0, g.linkLeft - dt); g.dirty = true;
+      if (!g.linkLeft) { g.cur.v = g.def.v; g.model.setColor(gateColor(g.def, g.def)); }
+    }
+  }
   if (G.rad > 0) G.rad -= dt;
   for (const g of S.gates) {
     if (!g.alive) continue;
@@ -2590,8 +2691,10 @@ function updateMechanics(S, dt) {
       }
     }
     if (d.t === 'bank' && g.bankT >= 0 && G.phase === 'play') {
-      g.bankT += dt; g.dirty = true;
-      if (g.bankT >= (d.ripe ?? 7)) harvest(S, g);
+      const ripe = d.ripe ?? 7;
+      g.bankT = Math.min(ripe, g.bankT + dt); g.dirty = true;
+      // Keep the crop and its link available until at least one unit can carry the payout.
+      if (g.bankT >= ripe && B.n < B.N) harvest(S, g);
     } else if (d.t === 'bank' && g.coolUntil > 0) g.dirty = true;
     if (d.t === 'tesla' && g.active && G.phase === 'play') {
       g.zapT -= dt;
@@ -2747,6 +2850,7 @@ function bankDeposit(g, i) {
   B.hp[i] = 0;
 }
 function harvest(S, g) {
+  if (g.linkNeed && g.stored >= g.linkNeed) igniteLink(S, g);
   const mult = g.def.max ?? 5, total = g.stored * mult;
   const room = Math.max(1, Math.min(24, B.N - RESERVE - B.n));
   const share = Math.min(MAX_POWER, total / room), cm = Math.min(1e37, g.cm * mult);
@@ -2804,6 +2908,7 @@ function lateContacts(S, i) {
     if (!c.alive || c.cool > 0 || c.prog >= c.need || Math.abs(x - c.x) > 1.0 + ri || Math.abs(z - c.z) > 0.9) continue;
     const d = Math.min(B.hp[i], c.need - c.prog);
     B.hp[i] -= d; c.prog += d; c.flash = 1;
+    if (c.prog >= c.need) igniteLink(S, c);
     if (B.hp[i] <= 0) { if (i % 3 === 0) burst(x, 0.8, z, PCOL.gold, 2, 2.5); return; }
   }
   for (const e of S.eggs) {
@@ -2828,6 +2933,7 @@ function lateContacts(S, i) {
   }
 }
 function smashEgg(S, e) {
+  igniteLink(S, e);
   e.alive = false; e.model.group.visible = false;
   burst(e.x, 1, e.z, PCOL.white, 30, 6); burst(e.x, 1, e.z, PCOL.gold, 14, 5);
   if (!TURBO) debris.burst(e.x, 0.8, e.z, [PCOL.white, PCOL.sand, PCOL.gold], 16, 1.6, 1.4, 6, 0.3);
@@ -2842,6 +2948,10 @@ function smashEgg(S, e) {
   if (e.def.relay) e.relayT = e.def.relay;
 }
 function hatchEgg(S, e) {
+  if (e.def.linkArrow && !e.def.relay && !S.linkGate.linkSpent) {
+    S.linkGate.linkSpent = true; S.linkGate.dirty = true;
+    S.linkGate.model.setColor(gateColor(S.linkGate.def, S.linkGate.cur));
+  }
   e.alive = false; e.model.group.visible = false;
   // A missed egg releases a pack of light raiders unless the stage asks for something heavier.
   const kind = e.def.kind ?? 0, hp = (e.def.unitHp ?? 1) * threat(S);
@@ -2871,6 +2981,7 @@ function cartBlast(S, c) {
   if (c.uses <= 0) c.alive = false;
 }
 function fuse(S, f) {
+  igniteLink(S, f);
   const dur = f.def.dur ?? 5;
   f.active = dur; f.uses--; f.need = Math.round(f.need * 2);
   for (const c of f.cores) { c.full = false; c.prog = 0; c.flash = 1; }
@@ -2907,8 +3018,13 @@ function updateLate(S, dt) {
       if (c.cool <= 0) { c.d = c.def.d1; c.z = S.z0 - c.d; c.model.group.visible = true; }
       continue;
     }
-    const target = c.def.d1 + (c.def.d2 - c.def.d1) * Math.min(1, c.prog / c.need);
-    const step = Math.max(0, Math.min(target - c.d, (c.prog >= c.need ? 9 : 5) * dt));
+    // Single-load freight is packed at the siding. If it creeps all the way to
+    // the enemy spawn half full, newly fired troops can never reach the last boxes.
+    const full = c.prog >= c.need, track = c.def.d2 - c.def.d1;
+    const loadingTrack = c.def.feedCap ? Math.min(track, 3) : track;
+    const target = full ? c.def.d2 : c.def.d1 + loadingTrack * c.prog / c.need;
+    const speed = full && c.def.feedCap ? 14 : full ? 9 : 5;
+    const step = clamp(target - c.d, 0, speed * dt);
     c.speed = dt > 0 ? step / dt : 0; c.d += step; c.z = S.z0 - c.d;
     if (!play) continue;
     if (c.speed > 0.4) for (let j = 0; j < R.n; j++) if (R.hp[j] > 0 && Math.abs(R.x[j] - c.x) < 1.3 && Math.abs(R.z[j] - c.z) < 1.2) killRed(j);
@@ -2965,7 +3081,11 @@ function renderLate(S, dt, cur) {
     m.body.position.x = Math.sin(G.t * 60) * c.flash * 0.04;
     for (const w of m.wheels) w.rotation.x -= c.speed * dt / 0.3;
     m.fuse.scale.setScalar(c.prog >= c.need ? 1.2 + Math.sin(G.t * 30) * 0.4 : 0.8 + Math.sin(G.t * 6) * 0.1);
-    if (label) M.drawLabel(m.label, c.prog >= c.need ? 'FUSE LIT!' : 'PUSH THE CART', `${fmtHp(c.prog)}/${fmtHp(c.need)}`, c.prog / c.need, '#ffd28a');
+    if (label) {
+      const load = c.def.feedCap ? `HAUL ${Math.round(c.def.dmg * 100)}%` : 'PUSH THE CART';
+      const link = c.def.linkArrow && !c.linkUsed ? 'LINK ' + c.def.linkArrow + ' ' : '';
+      M.drawLabel(m.label, c.prog >= c.need ? 'FUSE LIT!' : load, `${link}${fmtHp(c.prog)}/${fmtHp(c.need)}`, c.prog / c.need, '#ffd28a');
+    }
   }
   for (const e of S.eggs) {
     if (!e.alive) continue;
@@ -2973,7 +3093,7 @@ function renderLate(S, dt, cur) {
     m.body.rotation.z = Math.sin(G.t * (4 + urgency * 18)) * (0.02 + urgency * 0.1) + Math.sin(G.t * 60) * e.flash * 0.04;
     m.crackMat.opacity = Math.min(1, urgency * 1.4);
     m.shellMat.color.setHex(e.flash > 0.2 ? 0xffffff : urgency > 0.75 && Math.sin(G.t * 16) > 0 ? 0xffd0b0 : 0xf2ead2);
-    if (label) M.drawLabel(m.label, fmtHp(e.hp), `HATCH IN ${Math.max(0, Math.ceil(e.t))}s`, Math.max(0, e.t) / hatch, urgency > 0.75 ? '#ff9a8a' : '#fff4d0');
+    if (label) M.drawLabel(m.label, fmtHp(e.hp), `${e.def.linkArrow && !e.linkUsed ? 'LINK ' + e.def.linkArrow + ' · ' : 'HATCH IN '}${Math.max(0, Math.ceil(e.t))}s`, Math.max(0, e.t) / hatch, urgency > 0.75 ? '#ff9a8a' : '#fff4d0');
   }
   for (const f of S.fusions) {
     for (const c of f.cores) {
@@ -2987,7 +3107,7 @@ function renderLate(S, dt, cur) {
         if (!f.alive) M.drawLabel(m.label, 'SPENT', '', -1, '#9aa4c0');
         else if (f.active > 0) M.drawLabel(m.label, 'FUSION', `BEAM ${Math.ceil(f.active)}s`, f.active / (f.def.dur ?? 5), '#bff6ff');
         else if (c.full) M.drawLabel(m.label, 'READY', `PAIR IT ${Math.ceil(c.holdT)}s`, c.holdT / (f.def.hold ?? 5), '#ffffff');
-        else M.drawLabel(m.label, 'CORE', `${fmtHp(c.prog)}/${fmtHp(f.need)}`, c.prog / f.need, '#9af6ff');
+        else M.drawLabel(m.label, f.def.linkArrow && !f.linkUsed ? 'LINK ' + f.def.linkArrow : 'CORE', `${fmtHp(c.prog)}/${fmtHp(f.need)}`, c.prog / f.need, '#9af6ff');
       }
     }
     if (f.active > 0) {
@@ -3555,6 +3675,7 @@ function renderWorld(dt) {
       if (cur && S.boss && (G.cine > 0 || g.cineHidden)) { g.cineHidden = G.cine > 0 && g.z < camera.position.z + 1; grp.visible = !g.cineHidden; }
       if (g.dirty && G.t - g.refT > 0.08) { g.refT = G.t; refreshGate(g); }
       const t = g.def.t;
+      if (g.model.needle) g.model.needle.rotation.z = 1.95 - 3.9 * (g.vent > 0 ? g.vent / 4 : g.heat);
       if (g.model.wheel && !reducedMotion) g.model.wheel.rotation.z = -G.t * 1.5;
       if (t === 'upgrade') g.model.pose(Math.min(1,g.prog/g.need),reducedMotion ? 0 : G.t + g.ph);
       if (g.locked) grp.visible = true;
@@ -3738,8 +3859,9 @@ function renderWorld(dt) {
   renderSweep(G.phase === 'play' ? G.stage.sweep : null);
   const counter = G.phase === 'play' && G.stage.counterShots ? `Aegis guards ×${COUNTER_POWER} · ${G.stage.counterShots} ${G.stage.counterShots === 1 ? 'volley' : 'volleys'}` : '';
   const supply = G.phase === 'play' ? supplyMessage(G.stage.drop,G.cx) : '';
-  setHud('supplyStatus', $('surge'), supply ? 'supply' : '', 'className');
-  setHud('surge', $('surge'), supply || counter || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
+  const route = G.phase === 'play' ? routeMessage(G.stage) : '';
+  setHud('surgeKind', $('surge'), supply ? 'supply' : route && !counter ? 'route' : '', 'className');
+  setHud('surge', $('surge'), supply || counter || route || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
   renderReactor(reactor);
   const giantLaunched = G.t - cannon.giantAt < .4;
   setHud('giantCount', $('giant-count'), giantLaunched ? 'Launched' : (CHARGE_MAX-G.charge) + (CHARGE_MAX-G.charge === 1 ? ' volley' : ' volleys'));
@@ -3809,7 +3931,7 @@ function openWorldCard(index) {
     <div class="wc-stars" aria-label="${stars} of 3 stars">${starsHtml(stars)}</div>
     <div class="wc-stats">${stat('BEST ARMY', best.army && fmt(best.army))}${stat('BEST COMBO', best.combo > 1 && 'x' + fmt(best.combo))}${stat('BEST TIME', best.time && clock(best.time))}</div>
     <details class="field-notes"><summary>Scout the stages</summary><ol>${level.stages.map((stage, i) =>
-      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}${stage.boss?.sweep ? ' Dodge a boss sweep just before impact to fire twelve ×6 Aegis Guard volleys. Their shields absorb one blast.' : ''}</p></li>`).join('')}</ol></details>
+      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}${stage.boss?.sweep ? ' Dodge a boss sweep just before impact to fire twelve ×6 Aegis Guard volleys. Their shields absorb one blast.' : ''}</p>${stage.routeNote ? '<p>' + stage.routeNote + '</p>' : ''}</li>`).join('')}</ol></details>
     <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medalIcon(medal)}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
   $('wc-play').textContent = resumable ? `RESUME ${index + 1}.${G.stageIdx + 1}` : 'PLAY';
   $('wc-hard').disabled = !stars;
@@ -3934,7 +4056,7 @@ $('rretry').addEventListener('click', () => {
   twinCannon.group.visible = G.twin;
   renderUps();
   G.snap = { ...snap, lives: G.lives };
-  priceStageSupplies(G.stage, snap.supplyFlux);
+  priceStageInvestments(G.stage, snap.supplyFlux);
 });
 $('rrestart').addEventListener('click', () => startLevel(G.levelIdx, 0, G.hardcore));
 $('rmenu').addEventListener('click', showMenu);
@@ -3964,6 +4086,8 @@ function pauseGame() {
   resetInput(); G.paused = true; acc = 0; sound.setPaused(true);
   document.body.classList.add('game-paused');
   $('pausewhere').textContent = `${LEVELS[G.levelIdx].name} / Stage ${G.stageIdx+1}`;
+  $('pause-route').hidden = !G.stage.def.routeNote;
+  $('pause-route-note').textContent = G.stage.def.routeNote || '';
   $('pause-sweep').hidden = !G.stage.boss?.sweep;
   syncPauseOptions();
   // Medal goals for this world: earned ones are lit, ones this run can no longer reach are struck out.
@@ -4155,7 +4279,7 @@ window.__game = {
   },
   gates() {
     return G.stage.gates.filter((g) => g.alive).map((g) => ({
-      t: g.def.t === 'flip' || g.def.t === 'slot' ? g.cur.t : g.def.t, flip: g.def.t === 'flip', slot: g.def.t === 'slot', opts: g.def.opts,
+      t: g.cur.t, flip: g.def.t === 'flip', slot: g.def.t === 'slot', opts: g.def.opts,
       boost: g.boost, v: (g.def.t === 'charge' ? g.val : g.cur.v) * (g.cur.t === 'div' ? 1 : g.boost), max: g.def.max,
       id: g.def.id, requires: g.def.requires, locked: g.locked,
       x: +g.x.toFixed(2), d: +(G.z0 - g.z).toFixed(1), w: g.w, hp: g.hp, need: g.need, prog: g.prog, up: g.cur.up, to: g.def.to,

@@ -194,12 +194,13 @@ const WORLDS = [
     enemy: 'Shielders: armored',
     stages: [
       {
-        tip: 'Bounce on the sliding bumper while the flip gate shows its multiplier.',
+        tip: 'Bank shots off the moving bumper to change lanes mid-run.',
+        routeNote: 'Feed the left gate for a steady ×5. On the right, time your volleys for ×16. A late arrival gets divided by five.',
         waves: { every: 3.0, swarm: 9, shielder: 1, ramp: 0.4 },
         bumpers: [{ x: 0, d: 16, slide: { amp: 4.2, speed: 0.7 } }],
         gates: [
           { t: 'mul', v: 2, x: -3.3, d: 9, w: 5.6 }, { t: 'mul', v: 2, x: 3.3, d: 9, w: 5.6 },
-          flip(5, 2, 1.8, -3.3, 24, 5.6), flip(4, 2, 1.5, 3.3, 24, 5.6),
+          { t: 'charge', v: 2, max: 5, per: 30, x: -3.3, d: 24, w: 5.6 }, flip(16, 5, 2.2, 3.3, 24, 5.6),
           ...ladder(0, 30, 2, 4, 4, 12.9),
         ],
       },
@@ -423,13 +424,13 @@ const WORLDS = [
         ],
       },
       {
-        tip: 'The loop sends troops back through the hall, multipliers and all.',
+        tip: 'Lead the moving loop. It returns troops to the right lane for a second pass through the linked gate.',
         waves: { every: 2.7, swarm: 11, ghost: 2, imp: 1, ramp: 0.45 },
         gates: [
           { t: 'hypno', needF: 0.007, dur: 7, x: -3.3, d: 10, w: 5.6 },
           { t: 'mul', v: 2, x: 3.3, d: 10, w: 5.6 },
           ...ladder(0, 16, 2, 5, 3, 12.9),
-          { t: 'loop', x: 0, d: 30, w: 3.6, to: { x: 0, d: 14 }, max: 1 },
+          { t: 'loop', x: 0, d: 35, w: 3.2, slide: { amp: 3.7, speed: .68, ph: 1.1 }, to: { x: 3.3, d: 7.6 }, max: 1 },
           { t: 'mul', v: 3, x: -4.6, d: 30, w: 3.6 }, { t: 'mul', v: 3, x: 4.6, d: 30, w: 3.6 },
         ],
         spawners: [{ x: -4.6, d: 49, hpF: 0.02, every: 2.6, n: 2, kind: 9, unitHp: 3, style: 'dome' }, { x: 4.6, d: 49, hpF: 0.02, every: 2.6, n: 2, kind: 12, unitHp: 2, style: 'dome' }],
@@ -855,13 +856,14 @@ const WORLDS = [
         ],
       },
       {
-        tip: 'Feed the star once the bank pays out. Every gate doubles.',
+        tip: 'When the left field lights the right gate, steer wide to charge the star or stay inside for a direct shot at the fort.',
         waves: { every: 2.7, swarm: 12, shielder: 2, ramp: 0.45 },
         gates: [
           { t: 'mul', v: 3, x: 0, d: 9, w: 12.9 },
           { t: 'bank', max: 6, ripe: 8, cool: 2, x: -3.3, d: 15, w: 5.6 },
-          { t: 'star', needF: 0.01, x: 3.3, d: 15, w: 5.6 },
-          ...ladder(-3.3, 21, 2, 4, 4, 5.6), ...ladder(3.3, 21, 2, 4, 4, 5.6),
+          { t: 'mul', v: 2, x: 3.3, d: 12.5, w: 5.6 },
+          { t: 'star', needF: 0.01, feedCap: 36, x: 4.9, d: 17, w: 2.7 },
+          ...ladder(-3.3, 21, 2, 4, 4, 5.6), ...ladder(3.3, 25, 3, 4, 4, 5.6),
           { t: 'mul', v: 2, x: 0, d: 38, w: 12.9 },
         ],
         spawners: [{ x: -4.6, d: 50, hpF: 0.015, every: 2.6, n: 2, kind: 3, unitHp: 5, style: 'dome' }, { x: 4.6, d: 50, hpF: 0.015, every: 2.6, n: 2, kind: 3, unitHp: 5, style: 'dome' }],

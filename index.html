@@ -215,8 +215,9 @@
   #rank { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 6px; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 800; }
   #rankdot { width: 9px; height: 9px; border-radius: 3px; border: 1px solid #fff; }
   #surge { color: #ffe091; font-size: 12px; min-height: 16px; margin-bottom: 3px; }
-  #surge.supply { width: fit-content; max-width: 100%; margin-inline: auto; padding: 2px 9px; border-radius: 7px;
+  #surge.supply, #surge.route { width: fit-content; max-width: 100%; margin-inline: auto; padding: 2px 9px; border-radius: 7px;
     color: #effffb; background: #143b42ed; border-left: 3px solid #78f4d4; font: 750 12px/1.35 system-ui,sans-serif; }
+  #surge.route { color: #fff2ce; background: #252f3eef; border-left-color: #f0bd68; }
   #sweep-readout { position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%);
     width: min(205px, 100%); box-sizing: border-box; padding: 7px 10px 8px; border-radius: 9px;
     background: #211e2df2; border: 1px solid #e99c72; color: #fff2d3; text-shadow: none;
@@ -373,6 +374,7 @@
   <div id="pausetitle">Paused</div>
   <p id="pausewhere"></p>
   <details class="field-notes"><summary>How to use the reactor</summary><p>Tap Charge reactor or press R to divert your cannon fire. Tap again to launch powered Sunwings for 2.4 seconds. Wait for a higher multiplier, but launch before the reactor vents. You get one charge per stage.</p></details>
+  <details id="pause-route" class="field-notes" hidden><summary>This stage’s routes</summary><p id="pause-route-note"></p></details>
   <details id="pause-sweep" class="field-notes" hidden><summary>How to counter a boss sweep</summary><p>The white marker is your cannon. Leave the striped lane before the timer ends. If you are still inside when “Dodge now!” appears, escaping in time launches twelve ×6 volleys of Aegis guards. Each guard can block one blast.</p></details>
   <ul id="pausemedals" aria-label="Medals for this world"></ul>
   <button id="resume" class="btn" autofocus>Resume</button>

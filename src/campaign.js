@@ -1,3 +1,5 @@
+import { addRouteChoices } from './route-choices.js';
+
 // Boss HP multipliers per world. Armies grow exponentially, so each extra second of a boss fight
 // costs a large HP factor. Measured with seed-42 and seed-7 bots: normal bosses aim for about 24 s
 // of smart play, capped so the naive policy still wins where it already won. Worlds 9, 10 and 19
@@ -24,7 +26,7 @@ const ROUTES = [
   ['siege', 'scatter', 'plasma', 0.65],
   ['frost', 'hover', 'rail', 0.5],
   ['flame', 'air', 'railfort', 0.7],
-  ['railfort', 'rail', 'air', 0.65],
+  ['railfort', 'frost', 'air', 0.65],
   ['air', 'hover', 'plasma', 0.65],
   ['siege', 'flame', 'titan', 0.6],
 ];
@@ -104,6 +106,14 @@ function addSpecialGates(s, world, stage) {
   for (const [w, st, x, d] of MIRRORS) if (w === world && st === stage) swap(x, d, 2, { t: 'mirror' });
 }
 
+function finishStage(s, world, stage) {
+  addSpecialGates(s, world, stage);
+  addRouteChoices(s, world, stage);
+  const supply = s.gates[0];
+  if (!supply.fieldChoice) s.tip = LESSONS[supply.up] + ' ' + s.tip;
+  return s;
+}
+
 function addVault(s, world, stage) {
   const vault = VAULTS.find(v => v.world === world && v.stage === stage);
   if (!vault) return;
@@ -163,10 +173,8 @@ function prepareLate(level, li, original, si) {
   }
   const up = route[si];
   s.gates.unshift({ t: 'upgrade', up, need: Math.round((12 + ci + si * 5) * supplyScale), x: si % 2 ? 3.4 : -3.4, d: 5.5, w: 4.7 });
-  s.tip = `${LESSONS[up]} ${original.tip}`;
   for (const b of s.balls || []) b.delay = Math.min(b.delay ?? 0, 5);
-  addSpecialGates(s, li + 1, si + 1);
-  return s;
+  return finishStage(s, li + 1, si + 1);
 }
 
 export function prepareCampaign(levels) {
@@ -212,7 +220,6 @@ export function prepareCampaign(levels) {
       const up = route[si];
       // Supply crates sit before the lane puzzles. Claim one, then choose your route.
       s.gates.unshift({ t: 'upgrade', up, need: Math.round((12 + li + si * 5) * supplyScale), x: si % 2 ? 3.4 : -3.4, d: 5.5, w: 4.7 });
-      s.tip = `${LESSONS[up]} ${original.tip}`;
       // Short stationary routes are intentional. Longer fights gain a moving bonus lane.
       if (li >= 3 && !s.surge && si !== 2 && s.gates.length < 40) {
         s.gates.push({ t: 'mul', v: 3, x: 0, d: 43, w: 3.2, color: 'gold', slide: { amp: 4.5, speed: 0.48 } });
@@ -222,8 +229,7 @@ export function prepareCampaign(levels) {
         b.hp *= 0.7;
       }
       addVault(s, li + 1, si + 1);
-      addSpecialGates(s, li + 1, si + 1);
-      return s;
+      return finishStage(s, li + 1, si + 1);
     }),
   }));
 }
