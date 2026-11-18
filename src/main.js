@@ -2125,6 +2125,12 @@ function blastTroop(i) {
   if (B.kind[i] & AEGIS) {
     B.kind[i] &= ~AEGIS;
     B.flash[i] = 1;
+    if (!TURBO && G.t >= (G.stage.guardFxAt ?? 0)) {
+      G.stage.guardFxAt = G.t + .18;
+      addRing(B.x[i], B.z[i], 1.25 * B.sc[i], 0x88ffdc, .26);
+      spark(B.x[i], B.sc[i], B.z[i], PCOL.ice, 5, 2.8, .7, .28);
+      sound.play('shield');
+    }
     return;
   }
   hurt(i, 8, .5);
@@ -3724,7 +3730,7 @@ function renderWorld(dt) {
   if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
   renderSweep(G.phase === 'play' ? G.stage.sweep : null);
-  const counter = G.phase === 'play' && G.stage.counterShots ? `Aegis guards ×${COUNTER_POWER} · ${G.stage.counterShots} volleys` : '';
+  const counter = G.phase === 'play' && G.stage.counterShots ? `Aegis guards ×${COUNTER_POWER} · ${G.stage.counterShots} ${G.stage.counterShots === 1 ? 'volley' : 'volleys'}` : '';
   const supply = G.phase === 'play' ? supplyMessage(G.stage.drop,G.cx) : '';
   setHud('supplyStatus', $('surge'), supply ? 'supply' : '', 'className');
   setHud('surge', $('surge'), supply || counter || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
@@ -3952,6 +3958,7 @@ function pauseGame() {
   resetInput(); G.paused = true; acc = 0; sound.setPaused(true);
   document.body.classList.add('game-paused');
   $('pausewhere').textContent = `${LEVELS[G.levelIdx].name} / Stage ${G.stageIdx+1}`;
+  $('pause-sweep').hidden = !G.stage.boss?.sweep;
   syncPauseOptions();
   // Medal goals for this world: earned ones are lit, ones this run can no longer reach are struck out.
   const held = medalsOf(records, G.levelIdx);
