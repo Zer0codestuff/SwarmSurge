@@ -711,6 +711,90 @@ window.runGameChecks = (g) => {
     return {pass:clear,count:clouds.count};
   })()`);
   const late=(idx,stage=0)=>`startLevel(${idx},${stage}); G.paused=true; G.phase='play'; G.bot=null; B.n=R.n=0; const S=G.stage;`;
+  check('Redline traffic earns a hot multiplier, can cool early, and overload divides even star-boosted troops', `(() => { ${late(7,2)}
+    const g=S.redline, base=g.def.v;
+    g.boost=2;
+    const pass=()=>{ B.n=0; const i=spawn(B,g.x,g.z,90,0); applyGate(S,g,i);
+      return B.hp.subarray(0,B.n).reduce((sum,hp)=>sum+hp,0); };
+    // Many crossings in the same instant must not charge the dial.
+    for(let n=0;n<80;n++) pass();
+    const cold=g.heat===0 && pass()===90*base*2;
+    const stream=(seconds,fire)=>{ for(let n=0;n<Math.round(seconds/STEP);n++) {
+      if(fire && n%6===0) pass(); S.time+=STEP; updateMechanics(S,STEP);
+    }};
+    stream(3.4,true); const peak=g.band===2 && pass()===90*base*6*2;
+    stream(2,false); const cooled=g.band>=0 && g.band<2 && g.vent===0;
+    stream(6.5,true); const divided=g.vent>0 && pass()===30;
+    stream(4.2,false); const recovered=g.vent===0 && g.cur.t==='mul' && g.cur.v===base && g.def.v===base;
+    return {pass:cold&&peak&&cooled&&divided&&recovered,cold,peak,cooled,divided,recovered};
+  })()`);
+  check('Competing armories spend partial deposits, grant one complete kit, and reset together on retry', `(() => { ${late(28,1)}
+    const [a,b]=S.gates.filter(g=>g.def.fieldChoice), [win,lose]=a.def.kit?[a,b]:[b,a];
+    const partial=spawn(B,lose.x,lose.z,4,0); absorb(S,lose,partial);
+    const spent=B.hp[partial]===0 && lose.prog===4 && lose.alive;
+    B.n=0;
+    const paid=spawn(B,win.x,win.z+.1,win.need+5,0), free=spawn(B,lose.x,lose.z+.1,lose.need+9,0);
+    B.vz[paid]=B.vz[free]=-9; buildGrid(gB,B); moveBlue(S,.05);
+    const kit=G.twin&&G.rate===2&&G.chassis===0;
+    const closed=!win.alive&&!lose.alive&&!lose.model.group.visible&&B.hp[paid]===5&&B.hp[free]===lose.need+9;
+    const price=win.need; $('rretry').click(); const pair=G.stage.gates.filter(g=>g.def.fieldChoice);
+    return {pass:spent&&kit&&closed&&!G.twin&&G.rate===1&&pair.length===2&&pair.every(g=>g.alive&&g.prog===0)&&pair.find(g=>g.def.kit).need===price,spent,kit,closed};
+  })()`);
+  check('A link changes actual troop power once, preserves stars, and expires only during play', `(() => { ${late(29,1)}
+    const source=S.gates.find(g=>g.def.linkArrow), receiver=S.linkGate, base=receiver.def.v, link=receiver.def.link;
+    const i=spawn(B,source.x,source.z,source.need+3,0); absorb(S,source,i);
+    receiver.boost=2; const spill=B.hp[i]===3 && source.active;
+    B.n=0; applyGate(S,receiver,spawn(B,receiver.x,receiver.z,12,0));
+    const total=B.hp.subarray(0,B.n).reduce((sum,n)=>sum+n,0);
+    G.phase='clear'; updateMechanics(S,2); const held=receiver.linkLeft===link.seconds;
+    G.phase='play'; updateMechanics(S,link.seconds+.01); igniteLink(S,source);
+    const baseAgain=receiver.linkSpent&&receiver.linkLeft===0&&receiver.cur.v===base&&receiver.boost===2&&receiver.def.v===base;
+    $('rretry').click();
+    return {pass:spill&&total===12*base*link.bonus*2&&held&&baseAgain&&!G.stage.linkGate.linkSpent,spill,total,held,baseAgain};
+  })()`);
+  check('Harvest links require the full sowing quota, and a missed nest cannot light its gate', `(() => { ${late(35)}
+    const bank=S.gates.find(g=>g.linkNeed), link=S.linkGate;
+    bankDeposit(bank,spawn(B,bank.x,bank.z,bank.linkNeed-1,0)); harvest(S,bank);
+    const short=!link.linkSpent;
+    bankDeposit(bank,spawn(B,bank.x,bank.z,bank.linkNeed,0)); harvest(S,bank);
+    const full=link.linkLeft===link.def.link.seconds;
+    startLevel(41); G.phase='play'; const nest=G.stage.eggs.find(e=>e.def.linkArrow);
+    hatchEgg(G.stage,nest); const missed=G.stage.linkGate.linkSpent&&G.stage.linkGate.linkLeft===0;
+    return {pass:short&&full&&missed,short,full,missed};
+  })()`);
+  check('A packed troop pool keeps a ripe crop and its link until the field can pay', `(() => { ${late(35)}
+    const bank=S.gates.find(g=>g.linkNeed), cap=B.N, ripe=bank.def.ripe;
+    try {
+      B.N=2;
+      for(let k=0;k<2;k++){const i=spawn(B,bank.x,bank.z+.15,10,0); B.vz[i]=-9;}
+      bank.stored=40; bank.bankT=ripe-.01;
+      updateMechanics(S,.03); buildGrid(gB,B); moveBlue(S,.05);
+      const held=bank.bankT===ripe&&bank.stored===40&&!S.linkGate.linkSpent&&B.hp[0]===10&&B.hp[1]===10;
+      B.n=1; updateMechanics(S,.03); updateMechanics(S,.03);
+      return {pass:held&&B.n===2&&B.hp[1]===40*bank.def.max&&bank.stored===0&&S.linkGate.linkSpent,held};
+    } finally {B.N=cap;}
+  })()`);
+  check('Freight loads at the siding, links on its final payment, then hits the fort exactly once', `(() => { ${late(30)}
+    const c=S.carts[0], half=Math.floor(c.need/2), hp=S.tower.hp;
+    lateContacts(S,spawn(B,c.x,c.z,half,0));
+    for(let n=0;n<240;n++)updateLate(S,STEP);
+    const siding=c.d<=c.def.d1+3 && !S.linkGate.linkSpent;
+    lateContacts(S,spawn(B,c.x,c.z,c.need-half,0));
+    const lit=S.linkGate.linkLeft===S.linkGate.def.link.seconds;
+    for(let n=0;n<600;n++)updateLate(S,STEP);
+    return {pass:siding&&lit&&!c.alive&&c.uses===0&&Math.abs(S.tower.hp-(hp-S.tower.max*c.def.dmg))<.01,siding,lit};
+  })()`);
+  check('The final paired cores multiply the same troop through the beam and the linked gate', `(() => { ${late(49,1)}
+    const f=S.fusions[0], gate=S.linkGate, raw=gate.def.v;
+    for(const core of f.cores) lateContacts(S,spawn(B,core.x,f.z,f.need,0));
+    updateLate(S,STEP); const lit=f.active>0 && gate.linkLeft>0;
+    B.n=0; const x=f.hi-.8, i=spawn(B,x,f.z-.1,10,0);
+    B.pz[i]=f.z+.1; lateContacts(S,i); lateContacts(S,i);
+    const once=B.hp[i]===10*f.def.v;
+    B.x[i]=gate.x; B.z[i]=gate.z; applyGate(S,gate,i);
+    const sum=B.hp.subarray(0,B.n).reduce((s,n)=>s+n,0);
+    return {pass:lit&&once&&sum===10*f.def.v*raw*gate.def.link.bonus,lit,once,sum};
+  })()`);
   check('Bumpers multiply a troop once and bounce it toward the touched side', `(() => { ${late(20)}
     const b=S.bumpers[0], i=spawn(B,b.x+.3,b.z+.2,10,0);
     lateContacts(S,i); const first=B.hp[i]===10*b.v && B.adur[i]>0 && B.ax1[i]>b.x;
@@ -734,7 +818,7 @@ window.runGameChecks = (g) => {
     let power=0; for(let k=0;k<B.n;k++) if(B.hp[k]>0) power+=B.hp[k];
     return {pass:stored && Math.abs(power/(40*max)-1)<1e-6 && g.stored===0 && g.bankT<0 && g.coolUntil>S.time,power};
   })()`);
-  check('A filled mine cart blasts the fort once and returns at a higher cost', `(() => { ${late(30)}
+  check('A filled mine cart blasts the fort once and returns at a higher cost', `(() => { ${late(32,1)}
     const c=S.carts[0], T=S.tower, hp=T.hp, need=c.need, uses=c.uses;
     const i=spawn(B,c.x,c.z,need+5,0); lateContacts(S,i);
     const fed=c.prog===need && B.hp[i]===5;

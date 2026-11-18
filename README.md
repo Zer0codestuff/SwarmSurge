@@ -6,6 +6,8 @@ A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your canno
 - 50 worlds with 3 stages each
 - Worlds 21 to 50 add a new mechanic every five worlds: pinball bumpers, hypno gates that turn enemies, mine carts, harvest banks that pay out troops later, dinosaur eggs and paired fusion cores
 - Gates (`+`, `x`, `÷`, flip, slot machine, phasing), barriers, ice vaults, portals, prism portals, mirror gates, jump pads, loops and conveyor belts
+- Redline gates build heat under continuous traffic and reach six times their cold value. Divert troops before the dial fills or the gate divides by three for four seconds.
+- Pick-one armories offer competing loadouts. A completed bay closes its partner. Linked fields, nests, hypno gates, carts and fusion cores can light a multiplier in another lane for one short window. The stage scout and pause menu show the local route.
 - Personal bests and four medals per world (Flawless, Swift, Overpowered, Hardcore) on the results screen, the map and each world's card
 - Hardcore replays: one heart, no healing
 - A generated soundtrack: every world has its own key, tempo and melody, and the arrangement builds with the battle
