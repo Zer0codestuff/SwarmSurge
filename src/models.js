@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { sculptIceWall, sculptFence, sculptStatue, sculptSaw, sculptPortal, sculptPortalExit } from './obstacle-assets.js';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
-import { assetBatch } from './asset-kit.js';
+import { assetBatch, assetGlow } from './asset-kit.js';
 import { fittingCollar } from './supply-assets.js';
 import { THEMES } from './levels.js';
 import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
@@ -271,6 +271,39 @@ export function buildGate(w, hex, mega = false) {
     group: g, panel, panelMat, frameMat, label, text,
     setColor(c) { panelMat.color.set(c); capMat.color.set(c); frameMat.color.set(c).multiplyScalar(0.55); },
   };
+}
+
+// The dial sits on the outer pylon, leaving the multiplier and the next gate visible.
+export function buildRedlineGate(w, mega, side) {
+  const gate = buildGate(w, 0x2997aa, mega);
+  const dial = new THREE.Group();
+  dial.position.set(side * (w / 2 - .22), mega ? 2.95 : 2.45, .09);
+  dial.rotation.x = -.30;
+  gate.group.add(dial);
+  const casing = assetBatch().cylinder(.5, .18, 0, 0, 0, 0x324452, 'z', .48, 20)
+    .cylinder(.44, .04, 0, 0, .1, 0x162f3e, 'z', .44, 20)
+    .ring(.46, .045, 0, 0, .13, 0xedbb79, 'z');
+  for (let i = 0; i <= 10; i++) {
+    const a = 1.95 - i * .39;
+    casing.box(.054, .12, .034, -.36 * Math.sin(a), .36 * Math.cos(a), .14, i < 3 ? 0x87e6d3 : i < 7 ? 0xffce61 : 0xff624c, 0, 0, a);
+  }
+  casing.finish(dial, 'pressure-dial').castShadow = false;
+  gate.needle = assetBatch().beam([0, -.09, .19], [0, .33, .19], .05, .035, 0xffefbb)
+    .cylinder(.072, .04, 0, 0, .21, 0xffb244, 'z').finish(dial, 'pressure-needle', assetGlow);
+  gate.needle.rotation.z = 1.95;
+  return gate;
+}
+
+export function buildLinkGate(w, mega) {
+  const gate = buildGate(w, 0x288a98, mega);
+  const links = assetBatch();
+  links.ring(.23, .062, -.15, .02, 0, 0xd8fff1, 'z')
+    .ring(.23, .062, .15, .02, .05, 0x70deb9, 'z')
+    .beam([-.34, -.13, 0], [-.45, -.42, 0], .08, .08, 0x62a4ab)
+    .beam([.34, -.13, 0], [.45, -.42, 0], .08, .08, 0x62a4ab);
+  const badge = links.finish(gate.group, 'gate-link', assetGlow);
+  badge.position.y = mega ? 2.92 : 2.42;
+  return gate;
 }
 
 // A cast brass sun wheel above the existing multiplier. The swept vanes,
