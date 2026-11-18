@@ -1,3 +1,4 @@
+import { shadeUndersides } from './asset-kit.js';
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 
@@ -108,6 +109,7 @@ export function troopBuilder(animated = false, lowDetail = false) {
     finish() {
       const geometry = mergeGeometries(parts, false);
       for (const part of parts) part.dispose();
+      shadeUndersides(geometry);
       geometry.userData.shared = true;
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();

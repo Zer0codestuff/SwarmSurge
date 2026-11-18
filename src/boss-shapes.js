@@ -56,13 +56,22 @@ export function loftGeometry(sections, { segments = 32, steps = 28, warp, shade 
       indices.push(...(flip?[start,a+1,a]:[start,a,a+1]));
     }
   }
-  const g=surface(vertices,indices,colors), n=g.attributes.normal;
-  for(let j=0;j<=steps;j++) {
-    const a=j*(segments+1), b=a+segments;
-    const normal=new THREE.Vector3(n.getX(a)+n.getX(b),n.getY(a)+n.getY(b),n.getZ(a)+n.getZ(b)).normalize();
-    n.setXYZ(a,normal.x,normal.y,normal.z);n.setXYZ(b,normal.x,normal.y,normal.z);
+  return smoothRingSeams(surface(vertices,indices,colors), segments, steps + 1);
+}
+
+// Indexed rings duplicate the closing vertex. Give both copies the same normal
+// so a travelling highlight crosses the join on armor, horns and tentacles.
+function smoothRingSeams(geometry, segments, rows) {
+  const normals = geometry.attributes.normal;
+  const normal = new THREE.Vector3(), other = new THREE.Vector3();
+  for (let row = 0; row < rows; row++) {
+    const first = row * (segments + 1), last = first + segments;
+    normal.fromBufferAttribute(normals, first)
+      .add(other.fromBufferAttribute(normals, last)).normalize();
+    normals.setXYZ(first, normal.x, normal.y, normal.z);
+    normals.setXYZ(last, normal.x, normal.y, normal.z);
   }
-  return g;
+  return geometry;
 }
 
 export function headGeometry(w,h,d,{ snout=.23, brow=.12, cheeks=.1, jaw=.76, skull=false }={}) {
@@ -75,6 +84,10 @@ export function headGeometry(w,h,d,{ snout=.23, brow=.12, cheeks=.1, jaw=.76, sk
     const front=Math.max(0,Math.cos(a))**4;
     const eye=gauss(Math.abs(x),w*.24,w*.13)*gauss(y,h*.08,h*.14);
     z+=front*(snout*d*gauss(y,-h*.16,h*.17)+brow*d*gauss(y,h*.25,h*.075)-eye*d*(skull?.28:.11));
+    // A nasal bridge separates the sockets and a recessed crease frames the mouth.
+    const bridge=gauss(x,0,w*.095)*gauss(y,h*.065,h*.17);
+    const mouth=gauss(x,0,w*.26)*gauss(y,-h*.27,h*.045);
+    z+=front*d*((skull?.095:.065)*bridge-.055*mouth);
     z+=front*cheeks*d*gauss(Math.abs(x),w*.32,w*.16)*gauss(y,-h*.1,h*.17);
     return [x,y,z];
   }});
@@ -97,7 +110,7 @@ export function sweepGeometry(points,radii,{segments=12,steps=24,flutes=0,flatte
     const p=curve.getPoint(row/steps), n=positions.length/3;positions.push(p.x,p.y,p.z);colors.push(.9,.9,.9);
     for(let k=0;k<segments;k++){const a=row*(segments+1)+k;indices.push(...(flip?[n,a+1,a]:[n,a,a+1]));}
   }
-  return surface(positions,indices,colors);
+  return smoothRingSeams(surface(positions,indices,colors), segments, steps + 1);
 }
 
 export function patchGeometry(outline,depth=.18,bulge=.25,{segments=40,rings=7}={}) {
@@ -111,13 +124,14 @@ export function patchGeometry(outline,depth=.18,bulge=.25,{segments=40,rings=7}=
   for(let side=0;side<2;side++)for(let j=0;j<=rings;j++)for(let k=0;k<=segments;k++){
     const r=Math.max(.001,j/rings), p=boundary[k%segments];
     positions.push(center.x+(p.x-center.x)*r,center.y+(p.y-center.y)*r,(side?-depth/2:depth/2)+(!side?bulge*(1-r*r):0));
-    const shade=.94+.06*(1-r);colors.push(shade,shade,shade);
+    const shade=side ? .78 : 1-.14*r*r;
+    colors.push(shade,shade,shade);
     if(j<rings&&k<segments){const n=side*(rings+1)*(segments+1)+j*(segments+1)+k;
       indices.push(...(side?[n,n+1,n+segments+1,n+1,n+segments+2,n+segments+1]:[n,n+segments+1,n+1,n+1,n+segments+1,n+segments+2]));}
   }
   const back=(rings+1)*(segments+1), edge=rings*(segments+1);
   for(let k=0;k<segments;k++){const n=edge+k;indices.push(n,n+back,n+1,n+1,n+back,n+back+1);}
-  return surface(positions,indices,colors);
+  return smoothRingSeams(surface(positions,indices,colors), segments, 2 * (rings + 1));
 }
 
 export function clothGeometry(width,length,{folds=6,flare=.35,depth=.2,segments=28,steps=24}={}) {

@@ -337,11 +337,20 @@ function dragon() {
   for(const {g}of arms){const claws=assetBatch();for(let k=0;k<3;k++)path(claws,[[-.39+k*.39,-2.07,.69],[-.39+k*.39,-2.35,.78],[-.39+k*.39,-2.53,.58]],[.105,.075,.008],horn,{segments:6,steps:8});claws.finish(g,'swept-claws',bossShell);}
   const neck=node(pose,'serpentine-neck',0,5.58,-.07),n=assetBatch();
   path(n,[[0,-.48,-.18],[0,.6,-.22],[0,1.58,.15],[0,2.24,.65]],[.84,.74,.7,.76],skin,{segments:24,steps:26,flatten:.88});
+  // Overlapping ventral scutes follow the bend of the neck into the lower jaw.
+  for (const [y,z,w] of [[.32,.48,.5],[.82,.52,.48],[1.3,.68,.44],[1.76,.88,.4]]) {
+    n.add(patchGeometry([[-w,.13],[-w*.65,.23],[w*.65,.23],[w,.13],
+      [w*.64,-.09],[0,-.23],[-w*.64,-.09]],.09,.12,{segments:12,rings:2}),belly,0,y,z);
+  }
   n.finish(neck,'flowing-dragon-neck',bossSkin);
   const head=node(neck,'dragon-visage',0,2.13,.64),h=assetBatch();
   h.add(headGeometry(2.12,1.84,2.05,{snout:.4,brow:.25,cheeks:.13,jaw:.82}),skin);
   shell(h,[[-.78,.28],[-.34,.52],[.53,.47],[.84,.17],[.65,-.32],[-.59,-.37]],skin,0,-.3,1.23,.22,.32);
   for(const s of [-1,1]) {
+    path(h,[[s*.85,-.02,.24],[s*1.15,.05,.05],[s*1.43,.26,-.24]],
+      [.19,.12,.008],horn,{segments:7,steps:7});
+    path(h,[[s*.79,-.28,.2],[s*1.05,-.32,.02],[s*1.27,-.26,-.18]],
+      [.15,.09,.008],dark,{segments:7,steps:7});
     path(h,[[s*.75,.55,-.42],[s*1.01,1.16,-.66],[s*.9,1.77,-.86],[s*.58,1.98,-.82]],[.27,.22,.12,.009],horn,{segments:10,steps:18});
     shell(h,[[-.1,0],[.09,.11],[.18,.02],[.04,-.08]],dark,s*.48,-.17,1.61,.05,.01,0,0,s*.1);
   }

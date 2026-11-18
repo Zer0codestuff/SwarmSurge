@@ -86,6 +86,11 @@ function surgeBot(low) {
   k.plate([[-0.1, 0.06], [0.1, 0.06], [0.11, -0.05], [0, -0.075], [-0.11, -0.05]], 0.03, 0.025, C.mid, [0, 0.505, 0.128]);
   k.blob(1, [0.06, 0.022, 0.02], [0, 0.515, 0.162], C.light);
   if (!low) k.blob(1, [0.018, 0.018, 0.012], [0.07, 0.48, 0.158], C.amber);
+  // Raised ceramic rails protect the exposed battery down the back.
+  for (const side of [-1, 1]) {
+    k.limb([[side*.075,.415,-.192],[side*.095,.50,-.219],[side*.08,.61,-.207]],
+      [.018,.023,.015], C.mid);
+  }
   // Battery pack
   k.loft([[0.4, 0.1, 0.055], [0.5, 0.115, 0.065], [0.62, 0.1, 0.055], [0.65, 0.04, 0.03]], C.dark, [0, 0, -0.165]);
   k.blob(1, [0.035, 0.05, 0.015], [0, 0.52, -0.232], C.light);
@@ -221,6 +226,9 @@ function raider(low) {
     // Spiked shoulder guards
     k.loft([[-0.05, 0.085, 0.09], [0.01, 0.095, 0.1], [0.06, 0.06, 0.065], [0.08, 0.01, 0.01]], E.mid, [s * 0.215, 0.6, -0.005], [0, 0, -s * 0.4]);
     if (!low) k.b.add(new THREE.ConeGeometry(0.03, 0.1, 5), E.trim, [s * 0.255, 0.69, -0.01], [0, 0, -s * 0.5]);
+    // A swept cheek plate leaves the visor exposed and gives the jaw two points.
+    k.plate([[-.045,.05],[.043,.035],[.032,-.027],[-.012,-.088],[-.039,-.021]],
+      .024,.012,E.mid,[s*.15,.77,.15],[0,s*.56,s*.12]);
     // Curved horns sweep out and up from the helmet.
     k.limb([[s * 0.15, 0.9, -0.01], [s * 0.24, 0.96, -0.03], [s * 0.27, 1.06, -0.05], [s * 0.25, 1.13, -0.06]], [0.04, 0.032, 0.02, 0.006], E.trim);
   }

@@ -1,3 +1,4 @@
+import { shadeUndersides } from './asset-kit.js';
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { loftGeometry } from './boss-shapes.js';
@@ -59,6 +60,7 @@ function batch() {
     finish(parent, name, material = surface) {
       const geometry = mergeGeometries(parts, false);
       parts.forEach(part => part.dispose());
+      if (material === surface) shadeUndersides(geometry);
       geometry.computeBoundingBox(); geometry.computeBoundingSphere(); geometry.userData.shared = true;
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = name; mesh.castShadow = material === surface; mesh.receiveShadow = material === surface;
