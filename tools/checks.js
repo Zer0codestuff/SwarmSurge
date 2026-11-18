@@ -9,6 +9,36 @@ window.runGameChecks = (g) => {
       results.push({ name, pass: detail.pass, detail });
     } catch (error) { results.push({ name, pass: false, error: error.message }); }
   };
+  check('Sweep timing uses cannon position and rewards a late escape exactly once', `(() => {
+    const b={z:G.z0-48}, life=G.lives;
+    attackSweep(b); G.cx=3; updateEffects(1.26);
+    const early=G.stage.counterShots===0 && G.lives===life;
+    G.cx=G.aim=0; attackSweep(b); updateEffects(.92); G.aim=4; updateEffects(.34);
+    const hit=G.stage.counterShots===0 && G.lives===life-1;
+    G.cx=G.aim=0; attackSweep(b); updateEffects(.92); G.cx=2; updateEffects(.34);
+    const late=G.stage.counterShots===COUNTER_VOLLEYS && !G.stage.sweep && G.lives===life-1;
+    G.stage.counterShots=0; updateEffects(.34);
+    return {pass:early && hit && late && G.stage.counterShots===0,early,hit,late};
+  })()`);
+  check('Counterfire counts volleys across the fleet and stacks with reactor giants', `(() => {
+    const S=G.stage;
+    S.counterShots=2; G.twin=true; G.squad=1; G.overdrive=3; G.charge=CHARGE_MAX-1;
+    triggerReactor(S.reactor); tickReactor(S.reactor,3.2); triggerReactor(S.reactor);
+    G.fireT=0; fireCannon(BASE_INTERVAL*2+.001);
+    const factor=2*S.reactor.power, mixed=VANGUARD|SUNWING;
+    return {pass:B.n===10 && !S.counterShots && B.kind[3]===(mixed|GIANT) && B.hp[3]===factor*COUNTER_POWER*GIANT_HP
+      && [0,1,2,4,5,6].every(i=>B.kind[i]===mixed && B.hp[i]===factor*COUNTER_POWER)
+      && [7,8,9].every(i=>B.kind[i]===SUNWING && B.hp[i]===factor)};
+  })()`);
+  check('Vanguard armor follows gate copies and absorbs exactly one blast per soldier', `(() => {
+    const g={cur:{t:'mul',v:3},x:0,w:4,z:-9,boost:1,flash:1};
+    const i=spawn(B,0,-9,40,VANGUARD|SUNWING); B.weapon[i]=3; applyGate(G.stage,g,i);
+    writeBlue(); const mesh=blueForms[VANGUARD_FORM], visible=mesh.near.count+mesh.far.count===3;
+    blueInCircle(0,-9,3); const blocked=Array.from(B.hp.slice(0,3)).every(n=>n===40) && B.kind.slice(0,3).every(k=>k===SUNWING);
+    blueInRect(0,-9,6,6); const hurt=B.hp.slice(0,3).every(n=>n===12);
+    G.stage.counterShots=8; $('rretry').click();
+    return {pass:visible && blocked && hurt && G.stage.counterShots===0 && !G.stage.sweep};
+  })()`);
   check('Reactor diverts fire, launches every cannon, then restores normal output', `(() => {
     G.paused=false; G.overdrive=4; G.squad=1; G.twin=true; G.charge=CHARGE_MAX-1;
     useReactor(); for(let n=0;n<50;n++) step(STEP);

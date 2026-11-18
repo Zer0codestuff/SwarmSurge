@@ -215,6 +215,17 @@
   #surge { color: #ffe091; font-size: 12px; min-height: 16px; margin-bottom: 3px; }
   #surge.supply { width: fit-content; max-width: 100%; margin-inline: auto; padding: 2px 9px; border-radius: 7px;
     color: #effffb; background: #143b42ed; border-left: 3px solid #78f4d4; font: 750 12px/1.35 system-ui,sans-serif; }
+  #sweep-readout { position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%);
+    width: min(205px, 100%); box-sizing: border-box; padding: 7px 10px 8px; border-radius: 9px;
+    background: #211e2df2; border: 1px solid #e99c72; color: #fff2d3; text-shadow: none;
+    font: 700 12px/1.2 system-ui, sans-serif; text-align: left; }
+  #sweep-readout.safe { border-color: #7edec9; color: #b9ffe6; }
+  #sweep-readout.late { border-color: #fff0a6; background: #492e2bf5; }
+  #sweep-clock { float: right; font-variant-numeric: tabular-nums; }
+  #sweep-lanes { position: relative; display: block; height: 6px; margin-top: 7px; border-radius: 2px; background: #536872; overflow: visible; }
+  #sweep-zone { position: absolute; height: 100%; background: repeating-linear-gradient(125deg,#ff9875 0 4px,#973848 4px 7px); }
+  #sweep-cannon { position: absolute; width: 5px; height: 12px; border-radius: 2px; top: -3px; transform: translateX(-50%);
+    background: #fff; box-shadow: 0 0 0 1px #142330; }
   #charge { height: 12px; border: 1px solid #d8f2ff; background: var(--glass); }
   #charge span { font-size: 8px; line-height: 10px; vertical-align: top; }
   #banner { top: 34%; max-width: 94vw; white-space: normal; text-align: center; font-size: clamp(26px, 6vw, 50px); line-height: 1.05; }
@@ -285,6 +296,9 @@
   </div>
   <div id="target"><div id="targettrack"><div id="targetghost"></div><div id="targetfill"></div></div><span id="targetname"></span></div>
   <div id="bottom" class="stroke">
+    <div id="sweep-readout" hidden><span id="sweep-action"></span><span id="sweep-clock"></span>
+      <span id="sweep-lanes" aria-hidden="true"><i id="sweep-zone"></i><i id="sweep-cannon"></i></span>
+    </div>
     <div id="surge"></div>
     <div id="ups"></div>
     <div id="rank"><i id="rankdot"></i><span id="rankname">Recruit</span></div>

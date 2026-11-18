@@ -5,8 +5,9 @@ import { loftGeometry, sweepGeometry, patchGeometry } from './boss-shapes.js';
 // Allied troops change body form as their rank rises. Every form keeps the hip
 // pivot, hand anchors and footprint of the original infantry, so weapon overlays,
 // stride animation, shadows and collision stay valid across ranks.
-export const TROOP_FORMS = ['Surge bot', 'Trooper', 'Paladin', 'Ascended', 'Sunwing'];
+export const TROOP_FORMS = ['Surge bot', 'Trooper', 'Paladin', 'Ascended', 'Sunwing', 'Vanguard'];
 export const SUNWING_FORM = TROOP_FORMS.indexOf('Sunwing');
+export const VANGUARD_FORM = TROOP_FORMS.indexOf('Vanguard');
 const FORM_OF_RANK = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3];
 export function troopForm(rank) {
   return FORM_OF_RANK[Math.max(0, Math.min(FORM_OF_RANK.length - 1, rank | 0))];
@@ -271,7 +272,41 @@ function sunwing(low) {
   return finish(k,'Sunwing');
 }
 
-const BUILDERS = [surgeBot, trooper, paladin, ascended, sunwing];
+// The left forearm carries a full-height kite shield. A raised rim, inset
+// enamel and rear handgrip give it a silhouette from both sides of the road.
+function vanguard(low) {
+  const k = sculptKit(low);
+  const steel = 0x55677e, ivory = 0xfff5cf, teal = 0x20756d, light = 0xa4fff0, brass = 0xffc168;
+  k.loft([[.29,.11,.10],[.37,.16,.12],[.51,.215,.15],[.64,.20,.135],[.70,.10,.08]], steel);
+  k.plate([[-.17,.10],[0,.14],[.17,.10],[.14,-.035],[0,-.14],[-.14,-.035]],
+    .04,.045,ivory,[0,.53,.125]);
+  k.loft([[.66,.08,.075],[.72,.15,.14],[.85,.18,.17],[.96,.155,.13],[1.02,.065,.085]], ivory);
+  k.blob(1,[.145,.052,.065],[0,.83,.122],C.dark);
+  k.blob(1,[.107,.016,.027],[0,.837,.177],light);
+  // A curved crest and chevron pack read even from the rear chase camera.
+  k.plate([[-.13,-.03],[-.15,.055],[-.06,.13],[.08,.15],[.16,.085],[.13,.015]],
+    .055,.022,brass,[0,.995,-.012],[0,Math.PI/2,0]);
+  k.loft([[.36,.09,.045],[.43,.14,.075],[.60,.145,.08],[.65,.10,.055]],teal,[0,0,-.16]);
+  k.plate([[-.095,.065],[0,.013],[.095,.065],[.075,-.006],[0,-.068],[-.075,-.006]],
+    .017,.012,light,[0,.52,-.24],[0,Math.PI,0]);
+  for (const s of [-1,1]) {
+    const x=s*.105;
+    k.limb([[x,.35,0],[x,.22,.018],[x,.09,-.015]], [.072,.067,.047],steel,s);
+    k.loft([[0,.073,.115,0,.036],[.065,.078,.119,0,.027],[.15,.061,.068],[.24,.078,.076]],ivory,[x,0,0],undefined,s);
+    arm(k,s,.057,steel);
+    k.loft([[-.067,.11,.104],[.015,.126,.117],[.084,.069,.07],[.10,.027,.03]],teal,[s*.22,.605,0], [0,0,-s*.29]);
+    if (!low) k.blob(.047,[1,1,1.1],s>0?HAND_R:HAND_L,brass);
+  }
+  const shield=[[-.185,.23],[0,.31],[.16,.23],[.15,.01],[.105,-.16],[0,-.285],[-.137,-.16],[-.19,.018]];
+  const angle=[-.07,-.68,-.10];
+  k.plate(shield,.075,.062,brass,[-.304,.51,.144],angle);
+  k.plate(shield.map(([x,y])=>[x*.83,y*.84]),.047,.057,teal,[-.332,.515,.195],angle);
+  k.gem(.064,[-.382,.54,.258],light,1.75,angle);
+  if (!low) k.limb([[-.31,.64,.087],[-.25,.54,.044],[-.25,.43,.076]], [.021,.023,.02],steel);
+  return finish(k,'Vanguard');
+}
+
+const BUILDERS = [surgeBot, trooper, paladin, ascended, sunwing, vanguard];
 export function raiderGeometry(detail = 'high') { return raider(detail === 'low'); }
 export function troopFormGeometry(form, detail = 'high') {
   const build = BUILDERS[form];

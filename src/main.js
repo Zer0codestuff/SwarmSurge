@@ -18,7 +18,7 @@ import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-
 import { TREAD_PITCH } from './conveyor-assets.js';
 import { createSupplyDrop, callSupplyDrop, stepSupplyDrop, supplyMessage, poseSupplyDrop } from './supply-drop.js';
 import { newReactor, chargePower, triggerReactor, tickReactor, VENT_TIME, BURST_TIME } from './reactor.js';
-import { SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
+import { VANGUARD_FORM, SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
 import { LATE_LIGHTS } from './biomes-late.js';
 import * as PL from './props-late.js';
@@ -159,7 +159,9 @@ const blueForms = TROOP_FORMS.map((_, form) => ({
   far: instanced(troopFormGeometry(form, 'low').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
 }));
 // Allied kind bits are inherited by gate copies and combined on pool overflow.
-const GIANT = 1, SUNWING = 2;
+const GIANT = 1, SUNWING = 2, VANGUARD = 4;
+const VANGUARD_RGB = rgb(0xd7fff0);
+const SWEEP_RADIUS = 1.9, COUNTER_WINDOW = .36, COUNTER_POWER = 6, COUNTER_VOLLEYS = 12;
 const SUNWING_RGB = rgb(0xffe4a2);
 const FORM_BY_RANK = RANKS.map((_, rank) => blueForms[troopForm(rank)]);
 const redMesh = instanced(M.redUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x400808, gradientMap: M.toonGradient() }), MAX_RED);
@@ -962,6 +964,8 @@ function enterStage(i) {
   G.zones.length = 0;
   G.stageIdx = i;
   G.stage = G.stages[i];
+  G.stage.counterShots = 0;
+  G.stage.sweep = null;
   G.stage.reactor = newReactor(G.stage.def.surge);
   priceStageSupplies(G.stage, G.snap.supplyFlux);
   G.shown = false;
@@ -1061,7 +1065,7 @@ function fireFrom(cx, actor = cannon, power = volleyPower(), kind = G.stage.reac
       const barrel = actor.barrels.children[b];
       barrel.localToWorld(cannonMuzzle.set(0, 0, -1.245));
       cannonMuzzle.x += cx - actor.group.position.x;
-      spark(cannonMuzzle.x, cannonMuzzle.y, cannonMuzzle.z, G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, .12, 0);
+      spark(cannonMuzzle.x, cannonMuzzle.y, cannonMuzzle.z, (kind & VANGUARD) ? PCOL.green : G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, .12, 0);
     }
   }
 }
@@ -1076,10 +1080,14 @@ function fireCannon(dt) {
   const interval = BASE_INTERVAL / G.rate;
   if (G.fireT > 0) return;
   const reactor = G.stage.reactor;
-  const kind = reactor.phase === 'burst' ? SUNWING : 0;
-  const power = volleyPower();
+  const baseKind = reactor.phase === 'burst' ? SUNWING : 0;
+  const basePower = volleyPower();
   while (G.fireT <= 0) {
     G.fireT += interval;
+    const counter = G.stage.counterShots > 0;
+    const power = basePower * (counter ? COUNTER_POWER : 1);
+    const kind = baseKind | (counter ? VANGUARD : 0);
+    if (counter) G.stage.counterShots--;
     fireFrom(G.cx, cannon, power, kind);
     if (G.twin) fireFrom(twinX(), twinCannon, power, kind);
     for (let k = 0; k < G.squad; k++) fireFrom(squadX(k), squadCannons[k], power, kind);
@@ -1384,8 +1392,8 @@ function killBlue(i, fx = true) {
   if (fx) {
     burst(B.x[i], 0.5, B.z[i], PCOL.blue, B.kind[i] || B.hp[i] > 30 ? 10 : 3, 3.5);
     const rank = rankOf(B.hp[i] > 0 ? B.hp[i] : B.mx[i]);
-    const wing = B.kind[i] & SUNWING;
-    toss(blueToss[wing ? SUNWING_FORM : troopForm(rank)], B.x[i], 0.2, B.z[i], B.sc[i], wing ? SUNWING_RGB : TIER_RGB[rank], 1);
+    const form = specialForm(B.kind[i]);
+    toss(blueToss[form ?? troopForm(rank)], B.x[i], 0.2, B.z[i], B.sc[i], specialTint(form) ?? TIER_RGB[rank], 1);
   }
   B.hp[i] = 0;
 }
@@ -2100,12 +2108,20 @@ function addTelegraph(shape, x, z, a, b, time, onHit, cannon = false) {
   G.effects.push(warning);
   return warning;
 }
+function blastTroop(i) {
+  if (B.kind[i] & VANGUARD) {
+    B.kind[i] &= ~VANGUARD;
+    B.flash[i] = 1;
+    return;
+  }
+  hurt(i, 8, .5);
+}
 function blueInCircle(x, z, r) {
   const r2 = r * r;
-  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && (B.x[i] - x) ** 2 + (B.z[i] - z) ** 2 < r2) hurt(i, 8, 0.5);
+  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && (B.x[i] - x) ** 2 + (B.z[i] - z) ** 2 < r2) blastTroop(i);
 }
 function blueInRect(x, z, w, d) {
-  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && Math.abs(B.x[i] - x) < w / 2 && Math.abs(B.z[i] - z) < d / 2) hurt(i, 8, 0.5);
+  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && Math.abs(B.x[i] - x) < w / 2 && Math.abs(B.z[i] - z) < d / 2) blastTroop(i);
 }
 function randomBlueAhead(minZ, maxZ) {
   for (let tries = 0; tries < 14 && B.n; tries++) {
@@ -2178,17 +2194,21 @@ function attackShockwave(b) {
 // fire column aimed at the cannon itself: dodge it or lose a heart (and burn the units in it)
 function attackSweep(b) {
   const x = clamp(G.aim, -5.4, 5.4), z1 = b.z + 3, z2 = G.z0 + 1, len = z2 - z1;
-  popup('⚠ FIRE! MOVE!', 'combo c2', x, 2.5, G.z0 - 7, 1.1);
   sound.play('warn');
-  addTelegraph('band', x, z1 + len / 2, 3.2, len, 1.25, () => {
+  G.stage.sweep = addTelegraph('band', x, z1 + len / 2, SWEEP_RADIUS * 2, len, 1.25, (sweep) => {
     blueInRect(x, z1 + len / 2, 3.2, len);
     for (let k = 0; k < 24; k++) burst(x + rand(-1.4, 1.4), 0.5, z1 + (k / 24) * len, PCOL.orange, 3, 4);
     for (let k = 0; k < 10; k++) spark(x + rand(-1.4, 1.4), 1, z1 + (k / 10) * len, PCOL.orange, 3, 4, 1.2, 0.6);
     G.shake = 0.7; sound.play('boom');
-    if (Math.abs(G.cx - x) < 1.9) {
+    if (Math.abs(G.cx - x) < SWEEP_RADIUS) {
       const damage = damageCannon(1);
       burst(G.cx, 1.2, G.cannonZ, PCOL.orange, 30, 7);
       if (damage) popup('BURNED! -1 ❤', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 1.0);
+    } else if (sweep.lateExposure) {
+      G.stage.counterShots = COUNTER_VOLLEYS;
+      popup('COUNTERFIRE ×' + COUNTER_POWER, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.3);
+      addRing(G.cx, G.cannonZ, 2.4, 0x82ffe0, .4);
+      sound.play('counter');
     } else popup('DODGED!', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 0.9);
   }, true);
 }
@@ -2321,7 +2341,11 @@ function updateEffects(dt) {
     const p = 1 - Math.max(0, e.life) / e.max;
     if (e.kind === 'tele') {
       if (e.mesh) e.mesh.userData.progress = p;
-      if (e.life <= 0 && G.phase === 'play') e.onHit(e);
+      if (e.cannon && e.life > 0 && e.life <= COUNTER_WINDOW && Math.abs(G.cx - e.x) < SWEEP_RADIUS) e.lateExposure = true;
+      if (e.life <= 0) {
+        if (e === G.stage.sweep) G.stage.sweep = null;
+        if (G.phase === 'play') e.onHit(e);
+      }
     } else if (e.kind === 'mush') {
       e.mesh.position.set(0, 0, e.z);
       e.mesh.scale.setScalar(2 + p * 16);
@@ -3220,6 +3244,16 @@ function finishTroopMeshes(near, far) {
   const proxy = near.userData.shadowProxy;
   proxy.count = near.count; proxy.visible = near.visible;
 }
+function specialForm(kind) {
+  if (kind & VANGUARD) return VANGUARD_FORM;
+  if (kind & SUNWING) return SUNWING_FORM;
+  return null;
+}
+function specialTint(form) {
+  if (form === VANGUARD_FORM) return VANGUARD_RGB;
+  if (form === SUNWING_FORM) return SUNWING_RGB;
+  return null;
+}
 function writeBlue() {
   for (const form of blueForms) form.near.count = form.far.count = 0;
   for (let k = 1; k < weaponMeshes.length; k++) weaponMeshes[k].count = weaponFarMeshes[k].count = 0;
@@ -3228,9 +3262,9 @@ function writeBlue() {
   for (let i = 0; i < B.n; i++) {
     const hp = B.hp[i], s = B.sc[i], tier = rankOf(hp);
     topRank = Math.max(topRank, tier);
-    const wing = B.kind[i] & SUNWING;
-    const col = wing ? SUNWING_RGB : tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : B.kind[i] && tier < 2 ? GIANT_RGB : TIER_RGB[tier];
-    const form = wing ? blueForms[SUNWING_FORM] : FORM_BY_RANK[tier];
+    const special = specialForm(B.kind[i]);
+    const col = specialTint(special) ?? (tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : (B.kind[i] & GIANT) && tier < 2 ? GIANT_RGB : TIER_RGB[tier]);
+    const form = special == null ? FORM_BY_RANK[tier] : blueForms[special];
     const body = troopInstance(B, i, form.near, form.far), index = body.count - 1;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
     writeMatrix(m, i, B, s, 1, index);
@@ -3664,13 +3698,34 @@ function renderWorld(dt) {
   const danger = G.lives <= 2 && !G.hardcore && G.phase === 'play';
   if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
+  renderSweep(G.phase === 'play' ? G.stage.sweep : null);
+  const counter = G.phase === 'play' && G.stage.counterShots ? `Vanguards ×${COUNTER_POWER} · ${G.stage.counterShots} volleys` : '';
   const supply = G.phase === 'play' ? supplyMessage(G.stage.drop,G.cx) : '';
   setHud('supplyStatus', $('surge'), supply ? 'supply' : '', 'className');
-  setHud('surge', $('surge'), supply || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
+  setHud('surge', $('surge'), supply || counter || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
   renderReactor(reactor);
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) hud.banner.className = ''; }
   if (tipTimer > 0) { tipTimer -= dt; if (tipTimer <= 0) hud.tip.className = 'stroke'; }
+}
+
+const sweepPanel = $('sweep-readout'), sweepZone = $('sweep-zone'), sweepCannon = $('sweep-cannon');
+function renderSweep(sweep) {
+  setHud('sweepHidden', sweepPanel, !sweep, 'hidden');
+  if (!sweep) return;
+  const safe = Math.abs(G.cx - sweep.x) >= SWEEP_RADIUS, late = sweep.life <= COUNTER_WINDOW;
+  setHud('sweepClass', sweepPanel, safe ? 'safe' : late ? 'late' : '', 'className');
+  setHud('sweepAction', $('sweep-action'), safe ? 'Lane clear' : late ? 'Dodge now!' : 'Boss sweep');
+  setHud('sweepTime', $('sweep-clock'), (Math.ceil(sweep.life * 10) / 10).toFixed(1) + ' s');
+  const lane = x => clamp((x / XLIM + 1) * 50, 0, 100);
+  if (hudCache.sweepX !== sweep.x) {
+    hudCache.sweepX = sweep.x;
+    const left = lane(sweep.x - SWEEP_RADIUS);
+    sweepZone.style.left = left + '%';
+    sweepZone.style.width = lane(sweep.x + SWEEP_RADIUS) - left + '%';
+  }
+  const point = Math.round(lane(G.cx) * 2) / 2;
+  if (hudCache.sweepPoint !== point) { hudCache.sweepPoint = point; sweepCannon.style.left = point + '%'; }
 }
 
 const reactorButton = $('reactor'), reactorAction = $('reactor-action'), reactorMeter = $('reactor-fill');
@@ -3714,7 +3769,7 @@ function openWorldCard(index) {
     <div class="wc-stars" aria-label="${stars} of 3 stars">${starsHtml(stars)}</div>
     <div class="wc-stats">${stat('BEST ARMY', best.army && fmt(best.army))}${stat('BEST COMBO', best.combo > 1 && 'x' + fmt(best.combo))}${stat('BEST TIME', best.time && clock(best.time))}</div>
     <details class="field-notes"><summary>Scout the stages</summary><ol>${level.stages.map((stage, i) =>
-      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}</p></li>`).join('')}</ol></details>
+      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}${stage.boss?.sweep ? ' Dodge a boss sweep just before impact to fire twelve ×6 Vanguard volleys. Their shields absorb one blast.' : ''}</p></li>`).join('')}</ol></details>
     <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medal.icon}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
   $('wc-play').textContent = resumable ? `RESUME ${index + 1}.${G.stageIdx + 1}` : 'PLAY';
   $('wc-hard').disabled = !stars;

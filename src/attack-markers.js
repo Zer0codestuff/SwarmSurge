@@ -83,7 +83,7 @@ export function attackMarker(shape, x, z, width, length, cannon) {
   mesh.userData.progress = 0;
   mesh.onBeforeRender = setWarningUniforms;
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set(x, .085, z);
+  mesh.position.set(x, .115, z);
   mesh.scale.set(disc ? width * 2 : width, disc ? width * 2 : length, 1);
   mesh.renderOrder = 1;
   return mesh;
