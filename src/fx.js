@@ -276,9 +276,10 @@ const ambVert = `
     p = mod(p, uBox) - uBox * 0.5;
     p += uOrigin;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    gl_PointSize = size * uSize * uScale / max(0.1, -mv.z);
+    // Fade weather out near the lens so an ember cannot expand across the playfield.
+    gl_PointSize = size * uSize * uScale / max(6.0, -mv.z);
     gl_Position = projectionMatrix * mv;
-    vAlpha = mix(1.0, 0.35 + 0.65 * abs(sin(uTime * 2.5 + seed * 30.0)), uTwinkle);
+    vAlpha = smoothstep(2.0, 7.0, -mv.z) * mix(1.0, 0.35 + 0.65 * abs(sin(uTime * 2.5 + seed * 30.0)), uTwinkle);
   }`;
 const ambFrag = `
   uniform vec3 uColor;
@@ -287,16 +288,16 @@ const ambFrag = `
   varying float vAlpha;
   void main() {
     float d = length(gl_PointCoord - 0.5) * 2.0;
-    float a = smoothstep(1.0, 0.2, d);
-    gl_FragColor = vec4(mix(uColor2, uColor, smoothstep(0.8, 0.0, d)), a * vAlpha * uOpacity);
+    float a = 1.0 - smoothstep(0.2, 1.0, d);
+    gl_FragColor = vec4(mix(uColor, uColor2, smoothstep(0.0, 0.8, d)), a * vAlpha * uOpacity);
   }`;
 const AMBIENT = {
   desert: { n: 120, color: 0xfff0c8, color2: 0xe9c88f, size: 0.18, vel: [1.6, 0.05, 0.6], sway: 0.6, opacity: 0.55, add: false },
   mob: { n: 120, color: 0xfff0c8, color2: 0xe9c88f, size: 0.18, vel: [1.8, 0.05, 0.6], sway: 0.6, opacity: 0.5, add: false },
-  lava: { n: 260, color: 0xffd060, color2: 0xff4a10, size: 0.3, vel: [0.2, 2.2, 0.4], sway: 0.8, opacity: 0.95, add: true, twinkle: 1 },
+  lava: { n: 175, color: 0xffc074, color2: 0xd94b24, size: 0.24, vel: [0.2, 2.2, 0.4], sway: 0.8, opacity: 0.78, add: true, twinkle: 1 },
   frost: { n: 500, color: 0xffffff, color2: 0xd8ecff, size: 0.28, vel: [0.4, -2.0, 0.6], sway: 1.0, opacity: 0.9, add: false },
   jungle: { n: 160, color: 0xc8ff6a, color2: 0x4ac040, size: 0.3, vel: [0.6, -0.8, 0.4], sway: 1.6, opacity: 0.85, add: false, twinkle: 0.6 },
-  neon: { n: 260, color: 0xff6af0, color2: 0x3afff0, size: 0.22, vel: [0, 1.2, 0], sway: 0.4, opacity: 0.9, add: true, twinkle: 1 },
+  neon: { n: 160, color: 0xe69cd2, color2: 0x68d6d9, size: 0.19, vel: [0, 1.2, 0], sway: 0.4, opacity: 0.72, add: true, twinkle: 1 },
   candy: { n: 260, color: 0xffffff, color2: 0xff6ab8, size: 0.3, vel: [0.3, -1.4, 0.2], sway: 1.4, opacity: 0.9, add: false, twinkle: 0.4 },
   moon: { n: 160, color: 0xc8d0ff, color2: 0x8a90c0, size: 0.16, vel: [0, 0.25, 0], sway: 0.3, opacity: 0.7, add: true, twinkle: 1 },
   sky: { n: 140, color: 0xffffff, color2: 0xcfe8ff, size: 0.35, vel: [1.2, 0.1, 0.5], sway: 0.6, opacity: 0.6, add: false },
@@ -307,7 +308,7 @@ const AMBIENT = {
   spooky: { n: 180, color: 0xb0ff6a, color2: 0x6a3aff, size: 0.22, vel: [0.2, 0.3, 0.2], sway: 1.2, opacity: 0.9, add: true, twinkle: 1 },
   arena: { n: 160, color: 0xff6a6a, color2: 0xffd0a0, size: 0.24, vel: [0.8, -0.6, 0.3], sway: 1.4, opacity: 0.85, add: false },
   crystal: { n: 300, color: 0x9afff8, color2: 0xc08aff, size: 0.2, vel: [0, 0.4, 0], sway: 0.4, opacity: 0.95, add: true, twinkle: 1 },
-  volcano: { n: 360, color: 0xffb040, color2: 0xff3a0a, size: 0.3, vel: [0.6, 2.4, 0.3], sway: 0.9, opacity: 0.95, add: true, twinkle: 1 },
+  volcano: { n: 215, color: 0xffb965, color2: 0xe14e21, size: 0.26, vel: [0.6, 2.4, 0.3], sway: 0.9, opacity: 0.82, add: true, twinkle: 1 },
   tomb: { n: 220, color: 0xfff0c8, color2: 0xe0b070, size: 0.18, vel: [2.4, 0.05, 0.6], sway: 0.6, opacity: 0.6, add: false },
   storm: { n: 520, color: 0xd0e8ff, color2: 0x8aa0c0, size: 0.16, vel: [0.8, -7, 0.4], sway: 0.2, opacity: 0.7, add: false },
   blackhole: { n: 360, color: 0xffc08a, color2: 0x9a3aff, size: 0.24, vel: [0, 0, 3], sway: 0.3, opacity: 0.95, add: true, twinkle: 1 },
@@ -359,11 +360,15 @@ export class Ambient {
 // gradient sky dome
 export function buildSky() {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uTop: { value: new THREE.Color() }, uMid: { value: new THREE.Color() }, uBottom: { value: new THREE.Color() } },
+    uniforms: { uTop: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() } },
     vertexShader: `varying vec3 vDir; void main() { vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.9999; }`,
-    fragmentShader: `uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uBottom; varying vec3 vDir;
-      void main() { float h = vDir.y; vec3 c = h > 0.0 ? mix(uMid, uTop, pow(smoothstep(0.0, 0.6, h), 0.7)) : mix(uMid, uBottom, smoothstep(0.0, -0.2, h)); gl_FragColor = vec4(c, 1.0); }`,
-    side: THREE.BackSide, depthWrite: false, fog: false,
+    fragmentShader: `uniform vec3 uTop; uniform vec3 uHorizon; varying vec3 vDir;
+      void main() {
+        float t = pow(smoothstep(0.0, 0.6, normalize(vDir).y), 0.7);
+        gl_FragColor = vec4(mix(uHorizon, uTop, t), 1.0);
+        #include <colorspace_fragment>
+      }`,
+    side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false,
   });
   const m = new THREE.Mesh(new THREE.SphereGeometry(320, 32, 16), mat);
   m.frustumCulled = false;

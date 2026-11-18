@@ -6,6 +6,7 @@ import { fittingCollar } from './supply-assets.js';
 import { THEMES } from './levels.js';
 import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
 import { buildRoadside } from './road-assets.js';
+import { addLavaRivers } from './lava-rivers.js';
 import { fortFamily } from './fort-assets.js';
 import * as S from './scenery-assets.js';
 import { raiderGeometry } from './troop-forms.js';
@@ -479,7 +480,12 @@ export function buildWorld(theme, len) {
   const g = new THREE.Group();
   const total = len + 160;
   const zc = -len / 2 + 30;
-  const ground = mesh(new THREE.PlaneGeometry(300, total), lam(T.ground), 0, -0.04, zc, false);
+  // Large sunlit surfaces need headroom for snow crests, gates and white lettering.
+  const groundColor = new THREE.Color(T.ground);
+  const luminance = .2126 * groundColor.r + .7152 * groundColor.g + .0722 * groundColor.b;
+  if (luminance > .38) groundColor.multiplyScalar((.38 + .28 * (luminance - .38)) / luminance);
+  // Extend past the roadside so the last boss sees a fully fogged horizon.
+  const ground = mesh(new THREE.PlaneGeometry(800, total + 320), lam(groundColor.getHex()), 0, -0.04, zc, false);
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; g.add(ground);
   const road = mesh(new THREE.PlaneGeometry(15, total), lam(T.road), 0, 0, zc, false);
   road.rotation.x = -Math.PI / 2; road.receiveShadow = true; g.add(road);
@@ -508,7 +514,9 @@ export function buildWorld(theme, len) {
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.2, total), lineMat); l.rotation.x = -Math.PI / 2; l.position.set(x, 0.01, zc); g.add(l);
   }
   // rails + posts on both sides
-  const railMat = glowRoad ? new THREE.MeshBasicMaterial({ color: T.rail }) : lam(T.rail);
+  // Keep the thin lane stripe luminous. The kerb below the fence is painted concrete.
+  const kerbColor = glowRoad ? new THREE.Color(T.road).lerp(new THREE.Color(T.rail), .12).getHex() : T.rail;
+  const railMat = lam(kerbColor);
   const postColor = LATE_POSTS[theme] ?? (theme === 'mob' ? 0x8a8f99 : theme === 'candy' ? 0xff6ab0 : theme === 'sky' ? 0xe0c070 : 0x8a6a4a);
   g.add(buildRoadside(fortFamily(theme), total, zc, { post: postColor, accent: T.roof, stone: T.tower, light: glowRoad ? T.rail : T.roof }, railMat));
 
@@ -525,12 +533,7 @@ export function buildWorld(theme, len) {
     scatter(g, S.deadTree(0x5a4030, .85), vc(false), 40, 10, 40, zc, total, 0.8, 1.6);
   } else if (theme === 'lava') {
     scatter(g, S.rockCluster(0x2b2025, 4, { accent: 0xff6a1a, accentDepth: .9 }), vc(false), 260, 11, 55, zc, total, 0.6, 1.5, 0, false);
-    const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff5a1a });
-    for (const sx of [-1, 1]) {
-      const lv = new THREE.Mesh(new THREE.PlaneGeometry(5, total), lavaMat); lv.rotation.x = -Math.PI / 2; lv.position.set(sx * 12.5, 0.0, zc); g.add(lv);
-      const glow = new THREE.Mesh(new THREE.PlaneGeometry(9, total), new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.25, depthWrite: false }));
-      glow.rotation.x = -Math.PI / 2; glow.position.set(sx * 12.5, 0.02, zc); g.add(glow);
-    }
+    addLavaRivers(g, zc, total);
   } else if (theme === 'frost') {
     scatter(g, S.pine(true), vc(false), 200, 11, 55, zc, total, 0.7, 1.4);
     scatter(g, S.crystalCluster(0x9fe6ff, 2, 0xdfe9f5), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x123a52 }), 120, 9.5, 40, zc, total, 0.4, 0.9, 0, false);
@@ -538,11 +541,12 @@ export function buildWorld(theme, len) {
     scatter(g, S.palm({ trunk: 0x7a5a32, leaf: 0x3fb84a, leaf2: 0x2f9a3a }), vc(false), 170, 11, 55, zc, total, 0.7, 1.3);
     scatter(g, S.bush(), vc(false), 200, 9, 50, zc, total, 0.6, 1.4, 0, false);
   } else if (theme === 'neon') {
-    const bld = paint(new THREE.BoxGeometry(3, 1, 3), 0x1a1a3a); bld.translate(0, 0.5, 0);
+    const bld = paint(new THREE.BoxGeometry(3, 1, 3), 0x33314c); bld.translate(0, 0.5, 0);
     const inst = scatter(g, bld, vc(), 120, 12, 45, zc, total, 1, 1, 0, false);
     const win = new THREE.InstancedMesh(new THREE.BoxGeometry(3.05, 0.25, 3.05), new THREE.MeshBasicMaterial({ color: 0xffffff }), 120 * 3);
     const mm = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
-    const cols = [0xff2fd0, 0x3afff0, 0xffe03a, 0x8a5aff].map((c) => new THREE.Color(c));
+    const cols = [0xe664b3, 0x6bd6d4, 0x927ed6, 0x57a7c2].map(c => new THREE.Color(c));
+    const windowColor = new THREE.Color();
     for (let i = 0; i < 120; i++) {
       inst.getMatrixAt(i, mm); mm.decompose(p, q, s);
       const h = 4 + Math.random() * 18;
@@ -551,11 +555,12 @@ export function buildWorld(theme, len) {
         const y = h * (0.3 + k * 0.25);
         mm.compose(new THREE.Vector3(p.x, y, p.z), q, new THREE.Vector3(1, 1, 1));
         win.setMatrixAt(i * 3 + k, mm);
-        win.setColorAt(i * 3 + k, cols[(i + k) % 4]);
+        // Each facade has one sign colour and subdued window bands below it.
+        win.setColorAt(i * 3 + k, windowColor.copy(cols[i % cols.length]).multiplyScalar(k === 2 ? .84 : .23));
       }
     }
     g.add(win);
-    const lampMat = new THREE.MeshBasicMaterial({ color: 0x3afff0 });
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0x64afbf });
     const lamp = new THREE.CylinderGeometry(0.08, 0.08, 4, 6); lamp.translate(0, 2, 0);
     const lamps = new THREE.InstancedMesh(lamp, lampMat, 60);
     for (let i = 0; i < 60; i++) { mm.makeTranslation(i % 2 ? 9 : -9, 0, zc - total / 2 + (i >> 1) * (total / 30)); lamps.setMatrixAt(i, mm); }
@@ -566,7 +571,7 @@ export function buildWorld(theme, len) {
     scatter(g, S.candyCane(), vc(false), 60, 10, 45, zc, total, 0.8, 1.4);
     [0x3ad0ff, 0xffe03a, 0x7aff5a, 0xb06aff].forEach(c => scatter(g, S.gumdrop(c), vc(false), 70, 9, 55, zc, total, 0.6, 1.4, 0, false));
   } else if (theme === 'moon') {
-    scatter(g, S.crater(), vc(false), 120, 10, 55, zc, total, 0.6, 2.4, 0, false);
+    scatter(g, S.crater(0x656878), vc(false), 120, 10, 55, zc, total, 0.6, 2.4, 0, false);
     scatter(g, S.rockCluster(0x6a6a7a, 6), vc(false), 180, 9, 55, zc, total, 0.3, 1.0, 0, false);
     const starGeo = new THREE.BufferGeometry();
     const pts = new Float32Array(600 * 3);

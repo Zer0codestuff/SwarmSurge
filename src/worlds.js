@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { lam, paint, merge, scatter } from './models.js';
 import * as S from './scenery-assets.js';
 import { LATE_DECOR } from './decor-late.js';
+import { addLavaRivers } from './lava-rivers.js';
 
 const vc = (flat = true) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: flat });
 const glow = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
@@ -90,8 +91,7 @@ const DECOR = {
     sideStrips(g, zc, total, 0x6afff0, 0.2, 9.4, 0.8);
   },
   volcano(g, zc, total) {
-    sideStrips(g, zc, total, 0xff5a1a, 1, 12.5, 5);
-    sideStrips(g, zc, total, 0xff8a2a, 0.25, 12.5, 9);
+    addLavaRivers(g, zc, total);
     scatter(g, S.rockCluster(0x2a1a14, 9, { accent: 0xff7a1a, accentDepth: .9 }), vc(false), 260, 9, 50, zc, total, 0.7, 1.6, 0, false);
     for (let k = 0; k < 4; k++) {
       const sx = k % 2 ? 1 : -1, z = zc - total / 2 + 40 + k * (total / 4);
