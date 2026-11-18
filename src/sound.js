@@ -99,6 +99,8 @@ export class Sound {
         this.tone(root*1.5,.15,'sine',.07,root*.2,.06);
         break;
       }
+      case 'drop': this.tone(988,.13,'sine',.07,-220); this.tone(784,.18,'sine',.08,-197,.16); break;
+      case 'supply': [392,494,659].forEach((f,i)=>this.tone(f,.18,'triangle',.09,40,.065*i)); break;
       case 'launch': this.burst(.2,.18,1600); [330,495,660,990].forEach((f,i) => this.tone(f,.2,'triangle',.09,f*.5,i*.04)); break;
       case 'vent': this.burst(.3,.18,900); this.tone(240,.26,'triangle',.12,-165); break;
       case 'evolve': [0, 4, 7, 12, 16].forEach((st, i) => this.tone(392 * 2 ** ((st + p * 2) / 12), .16, 'triangle', .09, 0, i * .055)); break;

@@ -1,27 +1,16 @@
 // Models for the level 11-20 mechanics: belts, jump pads, hangars, tesla coils, pillars, tornadoes,
 // black holes, rolling swarm balls, the rival cannon and spider webs.
 import * as THREE from 'three';
-import { lam, mesh, makeCanvasLabel, textPlane, redUnitGeo, buildCannon, buildGate, troopWeaponGeo } from './models.js';
+import { lam, mesh, makeCanvasLabel, textPlane, buildCannon, troopWeaponGeo } from './models.js';
+export { buildConveyor as buildBelt } from './conveyor-assets.js';
+import { swarmBallShell } from './swarm-ball-assets.js';
+import { sculptLoadingBay, drivePayload } from './supply-assets.js';
 import { WEAPON_IDS, CHASSIS_IDS } from './arsenal.js';
-import { createVehicleRig } from './vehicle-assets.js';
+import { vehicleDisplay } from './vehicle-assets.js';
 import { createSupportAircraft } from './air-assets.js';
 import { sculptJumpPad, sculptHangar, sculptTesla } from './obstacle-assets.js';
 export { buildBattlePillar as buildPillar } from './battlefield-assets.js';
 
-function stripeTexture(a, b, n = 8, w = 128, h = 32) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = a; ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = b;
-  for (let i = 0; i < n; i++) {
-    const x = (i / n) * w;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + w / n / 2, h / 2); ctx.lineTo(x, h); ctx.lineTo(x + w / n / 4, h / 2); ctx.fill();
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
 function label(g, w, y, z = 0.2) {
   const L = makeCanvasLabel();
   const tw = Math.min(w, 3.8);
@@ -29,22 +18,6 @@ function label(g, w, y, z = 0.2) {
   text.position.set(0, y, z); text.rotation.x = -0.3; text.renderOrder = 4;
   g.add(text);
   return { label: L, text };
-}
-
-// conveyor belt: arrows scroll in the push direction (texture offset animated by the game)
-export function buildBelt(w, len, dir) {
-  const g = new THREE.Group();
-  const tex = stripeTexture('#2b2f3a', '#ffcc1a', 6);
-  tex.repeat.set(w / 2.2, len / 2.2);
-  const belt = new THREE.Mesh(new THREE.PlaneGeometry(w, len), new THREE.MeshBasicMaterial({ map: tex }));
-  belt.rotation.x = -Math.PI / 2;
-  belt.rotation.z = dir > 0 ? 0 : Math.PI;
-  belt.position.y = 0.02;
-  g.add(belt);
-  const rollerMat = lam(0x8a90a0);
-  const roller = new THREE.CylinderGeometry(0.16, 0.16, len, 10); roller.rotateX(Math.PI / 2);
-  for (const sx of [-1, 1]) g.add(mesh(roller, rollerMat, sx * (w / 2 + 0.1), 0.16, 0, false));
-  return { group: g, tex };
 }
 
 // trampoline: launches units in an arc over walls and gates
@@ -68,31 +41,42 @@ export function buildSupportPlane(tier = 1) {
 }
 
 export function buildArmory(w, upgrade) {
-  const model = buildGate(w, 0xffc54a);
-  const icon = new THREE.Group(); icon.position.y = 2.8; model.group.add(icon);
-  const metal = lam(0x28496b), gold = lam(0xffd571), light = lam(0xe1faff);
-  if (upgrade === 'tank' || CHASSIS_IDS[upgrade]) {
-    const rig = createVehicleRig(); rig.setForm(CHASSIS_IDS[upgrade] || 1);
-    rig.group.scale.setScalar(.58); rig.group.position.y = -.55;
-    rig.group.rotation.y = Math.PI / 5; icon.add(rig.group);
-  } else if (upgrade === 'squad') {
-    for (const side of [-1,1]) {
-      icon.add(mesh(new THREE.BoxGeometry(.58,.18,.7),metal,side*.4,-.1,0));
-      icon.add(mesh(new THREE.SphereGeometry(.26,8,6),gold,side*.4,.15,0));
-      icon.add(mesh(new THREE.CylinderGeometry(.09,.11,.55,8).rotateX(Math.PI/2),light,side*.4,.15,-.35));
-    }
-  } else if (WEAPON_IDS[upgrade]) {
-    const gun = new THREE.Mesh(troopWeaponGeo(WEAPON_IDS[upgrade]), new THREE.MeshToonMaterial({ vertexColors: true }));
-    gun.scale.setScalar(2); gun.position.set(-.65, -.9, -.7); gun.rotation.y = Math.PI / 2; icon.add(gun);
-  } else if (upgrade === 'air') {
-    const plane = buildSupportPlane(); plane.group.scale.setScalar(.5); icon.add(plane.group);
-  } else {
-    const bolt = new THREE.Shape(); bolt.moveTo(.12, .75); bolt.lineTo(-.4, -.05); bolt.lineTo(0, -.05); bolt.lineTo(-.12, -.7); bolt.lineTo(.45, .15); bolt.lineTo(.05, .15);
-    const geo = new THREE.ExtrudeGeometry(bolt, { depth: .12, bevelEnabled: false });
-    icon.add(mesh(geo, light));
+  const group = new THREE.Group(), icon = new THREE.Group();
+  const jaws = sculptLoadingBay(group,w);
+  const vehicle = upgrade === 'tank' || !!CHASSIS_IDS[upgrade];
+  const stand = new THREE.Group(); icon.add(stand); group.add(icon);
+  let displayedTier = 0;
+  function mount(reward) {
+    // Fit around the local origin first, independent of an animated parent's
+    // world transform. Weapon geometry includes the troop's hand offset.
+    const bounds = new THREE.Box3().setFromObject(reward);
+    const center = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
+    const scale = Math.min(1.75,w*.66)/Math.max(size.x,size.y,size.z);
+    stand.position.copy(center).multiplyScalar(-scale);
+    stand.scale.setScalar(scale);
+    stand.add(reward);
   }
-  model.icon = icon;
-  return model;
+  function setTier(tier) {
+    if (displayedTier === tier) return;
+    displayedTier = tier;
+    stand.traverse(part => { if (part.isInstancedMesh) part.dispose(); });
+    stand.clear();
+    mount(vehicle ? vehicleDisplay(tier) : buildSupportPlane(tier).group);
+  }
+  if (vehicle || upgrade === 'air') setTier(CHASSIS_IDS[upgrade] || 1);
+  else if (WEAPON_IDS[upgrade]) {
+    const gun = new THREE.Mesh(troopWeaponGeo(WEAPON_IDS[upgrade], 'low'),lam(0xffffff,{vertexColors:true}));
+    gun.rotation.y = Math.PI / 2; mount(gun);
+  } else mount(drivePayload(upgrade));
+  const display = label(group,Math.min(w*.92,3.7),1.04,.62);
+  function pose(progress,time,release=0) {
+    const open = .13 + progress*.38 + release*.44;
+    jaws[0].rotation.z = open; jaws[1].rotation.z = -open;
+    icon.position.set(0,2.06 + .35*progress + .075*Math.sin(2*time) + .9*release,-.16);
+    icon.rotation.y = .58 + .48*Math.sin(time*1.4);
+  }
+  pose(0,0);
+  return {group, icon, pose, setTier: vehicle || upgrade === 'air' ? setTier : null, ...display};
 }
 
 // Fill the hangar to unlock repeated bombing runs.
@@ -161,29 +145,15 @@ export function buildBlackHole(r) {
 }
 
 // rolling ball made of hundreds of red units (reference frame "999")
-let ballUnit = null;
 export function buildSwarmBall(r) {
-  if (!ballUnit) ballUnit = redUnitGeo('low').scale(1.25, 1.25, 1.25);
-  const n = 144;
-  const material = new THREE.MeshToonMaterial({ color: 0xe8222a, emissive: 0x3a0505, vertexColors: true });
-  const inst = new THREE.InstancedMesh(ballUnit, material, n);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1);
-  for (let i = 0; i < n; i++) {
-    const y = 1 - (2 * (i + 0.5)) / n, rr = Math.sqrt(1 - y * y), a = i * 2.39996;
-    p.set(Math.cos(a) * rr, y, Math.sin(a) * rr);
-    q.setFromUnitVectors(up, p);
-    m.compose(p.clone().multiplyScalar(0.92), q, s.setScalar(0.3 + Math.random() * 0.06));
-    inst.setMatrixAt(i, m);
-  }
-  inst.castShadow = false;
-  const g = new THREE.Group();
-  const spin = new THREE.Group(); g.add(spin);
-  const fill = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 12), lam(0xa8141c));
+  const material = new THREE.MeshToonMaterial({color:0xffe1d7, emissive:0x230403, vertexColors:true});
+  const {inst,fill,count} = swarmBallShell(material);
+  const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin);
   spin.add(fill, inst);
   spin.scale.setScalar(r);
   const warning = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 40), new THREE.MeshBasicMaterial({ color: 0xff6644, transparent: true, opacity: 0.45, depthWrite: false }));
   warning.rotation.x = -Math.PI / 2; g.add(warning);
-  return { group: g, spin, inst, material, warning, count: n };
+  return { group: g, spin, inst, material, warning, count };
 }
 
 // the rival: a red cannon at the top of the road, firing enemies down at you

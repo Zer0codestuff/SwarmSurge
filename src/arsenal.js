@@ -55,6 +55,10 @@ export const ABILITY_SPECS = {
 };
 export const CHASSIS = ['Cannon', ...CHASSIS_SPECS.slice(1).map(spec => spec.name)];
 export const CHASSIS_IDS = Object.fromEntries(CHASSIS_SPECS.slice(1).map((spec, i) => [spec.key, i + 1]));
+export function chassisReward(current, upgrade) {
+  const requested = upgrade === 'tank' ? Math.min(TANK_EVOLUTION_CAP,current+1) : CHASSIS_IDS[upgrade];
+  return Math.max(current,requested);
+}
 export const AIRCRAFT_SPECS = [
   null,
   { name: 'Scout interceptor', label: 'Interceptor', damage: 1, width: 3, fortCap: .065, radius: 2.5 },

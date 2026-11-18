@@ -6,13 +6,16 @@ import { Music } from './music.js';
 import { CRUSH_SECONDS, MEDALS, SWIFT_SECONDS, clock, loadRecords, medalTotal, medalsOf, recordRun, saveRecords } from './records.js';
 import * as FX from './fx.js';
 import * as P from './props.js';
+import { bossProjectile } from './boss-projectiles.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
-import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, TANK_EVOLUTION_CAP, sweptCircle } from './arsenal.js';
+import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, chassisReward, sweptCircle } from './arsenal.js';
 import { biomeArt, campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { BOSS_CARDS } from './boss-cards.js';
 import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
+import { TREAD_PITCH } from './conveyor-assets.js';
+import { createSupplyDrop, callSupplyDrop, stepSupplyDrop, supplyMessage, poseSupplyDrop } from './supply-drop.js';
 import { newReactor, chargePower, triggerReactor, tickReactor, VENT_TIME, BURST_TIME } from './reactor.js';
 import { SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
@@ -607,7 +610,7 @@ function refreshGate(g) {
     else M.drawLabel(L, fmtHp(g.hp), 'SMASH!');
   }
   else if (t === 'statue') M.drawLabel(L, fmtHp(g.hp));
-  else if (t === 'upgrade') M.drawLabel(L, UP_NAMES[c.up], `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
+  else if (t === 'upgrade') M.drawLabel(L, g.rewardName ?? UP_NAMES[c.up], `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
   else if (t === 'nuke') M.drawLabel(L, 'NUKE', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#9aff5a');
   else if (t === 'star') M.drawLabel(L, 'GATES x2', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffd0ff');
   else if (t === 'charge') {
@@ -786,6 +789,10 @@ function buildStage(sd, i, root, theme) {
   const line = M.buildStartLine();
   line.position.set(0, 0.015, z0 - 2.2);
   root.add(line);
+  if (G.levelIdx >= 2 && i === 1) {
+    st.drop = createSupplyDrop(!TURBO);
+    if (st.drop.model) { st.drop.model.group.visible = false; group.add(st.drop.model.group); }
+  }
   return st;
 }
 
@@ -927,7 +934,18 @@ function addBall(S, root, x, z, hp, r, speed, def = {}) {
 function cannonFlux(includeSupport = true) {
   return G.barrels * G.rate * G.power / BASE_INTERVAL * (includeSupport ? (G.twin ? 2 : 1) + G.squad : 1);
 }
+function syncSupplyPreviews(S) {
+  for (const g of S.gates) {
+    if (!g.alive || !g.model?.setTier) continue;
+    const up = g.def.up;
+    const tier = up === 'air' ? Math.min(3,G.aircraft+1) : chassisReward(G.chassis,up);
+    g.model.setTier(tier);
+    g.rewardName = up === 'air' ? AIRCRAFT_SPECS[tier].label.toUpperCase() : CHASSIS[tier].toUpperCase();
+    g.dirty = true;
+  }
+}
 function priceStageSupplies(S, inheritedFlux) {
+  syncSupplyPreviews(S);
   // Fix prices at entry. A reward never raises other prices midway through the stage.
   const seconds = S.i === 0 ? 1.6 : S.i === 1 ? 3.2 : 4;
   for (const g of S.gates) if (g.def.t === 'upgrade' || g.def.t === 'hangar') {
@@ -1046,6 +1064,12 @@ function fireFrom(cx, actor = cannon, power = volleyPower(), kind = G.stage.reac
     }
   }
 }
+function launchGiant(power,kind) {
+  const i = cannonUnit(G.cx, GIANT_HP * power, GIANT | kind);
+  if (i >= 0) { B.vz[i] = -GIANT_SPEED; B.flash[i] = 1; }
+  burst(G.cx, 1.5, G.z0 - 1.5, PCOL.blue, 12, 5);
+  sound.play('heavy');
+}
 function fireCannon(dt) {
   G.fireT -= dt;
   const interval = BASE_INTERVAL / G.rate;
@@ -1061,10 +1085,7 @@ function fireCannon(dt) {
     G.charge++;
     if (G.charge >= CHARGE_MAX) {
       G.charge = 0;
-      const i = cannonUnit(G.cx, GIANT_HP * power, GIANT | kind);
-      if (i >= 0) { B.vz[i] = -GIANT_SPEED; B.flash[i] = 1; }
-      burst(G.cx, 1.5, G.z0 - 1.5, PCOL.blue, 12, 5);
-      sound.play('heavy');
+      launchGiant(power,kind);
     }
     G.recoil = 1;
     sound.play('shoot');
@@ -1445,7 +1466,7 @@ function upgradeCannon(up) {
   else if (up === 'power') { G.power = Math.min(243, G.power * 3); banner(`POWER x${G.power}!`, 'gold'); }
   else if (up === 'twin') { G.twin = true; twinCannon.group.visible = true; G.shield = Math.min(6, G.shield + 1); banner('TWIN CANNON!', 'gold'); }
   else if (up === 'tank' || CHASSIS_IDS[up]) {
-    G.chassis = Math.min(CHASSIS.length - 1, Math.max(G.chassis, up === 'tank' ? Math.min(TANK_EVOLUTION_CAP, G.chassis + 1) : CHASSIS_IDS[up]));
+    G.chassis = chassisReward(G.chassis,up);
     const spec = CHASSIS_SPECS[G.chassis];
     G.power = Math.min(243, G.power * spec.power);
     G.barrels = Math.min(6, G.barrels + spec.guns); G.shield = Math.min(6, G.shield + spec.armor);
@@ -1453,7 +1474,9 @@ function upgradeCannon(up) {
     if (spec.weapon) unlockWeapon(spec.weapon);
     if (spec.aircraft) { G.aircraft = Math.min(3, G.aircraft + spec.aircraft); G.airT = .2; }
     if (spec.ability) G.abilityT = ABILITY_SPECS[spec.ability].first;
-    setBarrels(G.barrels); cannon.setChassis(G.chassis); twinCannon.setChassis(G.chassis);
+    setBarrels(G.barrels);
+    const fitTime = TURBO || reducedMotion ? null : G.t;
+    cannon.setChassis(G.chassis,fitTime); twinCannon.setChassis(G.chassis,fitTime);
     addRing(G.cx, G.cannonZ, 3.5, 0x8beaff, .5);
     burst(G.cx, .6, G.cannonZ, PCOL.gold, 16, 3);
     banner(CHASSIS[G.chassis].toUpperCase() + '!', 'gold');
@@ -1464,6 +1487,7 @@ function upgradeCannon(up) {
     unlockWeapon(weapon);
     banner(WEAPONS[G.weapon].toUpperCase() + ' ONLINE!', 'gold');
   }
+  if (up === 'air' || up === 'tank' || CHASSIS_IDS[up]) syncSupplyPreviews(G.stage);
   G.cannonPulse = 1; renderUps();
 }
 // NUKE: wipes every enemy (and irradiates the field so new ones melt for a few seconds), flattens turrets, spawners,
@@ -1546,6 +1570,7 @@ function absorb(S, g, i) {
       if (t === 'upgrade' || t === 'hangar') {
         g.alive = false; g.dying = 1;
         upgradeCannon(t === 'hangar' ? 'air' : g.cur.up);
+        if (G.phase === 'play' && callSupplyDrop(S.drop,G.cx)) sound.play('drop');
         burst(G.cx, 1.5, G.z0, PCOL.gold, 30, 6);
         if (!TURBO) sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.gold, 60, 0.5, 1.2);
         G.cannonPulse = 1;
@@ -2112,14 +2137,13 @@ function attackBand(b, x, len, color, spawnKind) {
     if (spawnKind >= 0) summon(b, spawnKind, 3);
   });
 }
-function attackBoulders(b, n, col) {
+function attackBoulders(b, n) {
   for (let k = 0; k < n; k++) {
     const i = randomBlueAhead(b.z + 4, G.z0 - 6);
     const tx = clamp(i >= 0 ? B.x[i] : rand(-5, 5), -6, 6), tz = i >= 0 ? B.z[i] : b.z + rand(10, 30);
     let rock = null;
     if (!TURBO) {
-      rock = new THREE.Mesh(M.boulderGeo(), M.lam(col, { flatShading: true }));
-      rock.castShadow = true;
+      rock = bossProjectile(b.type);
       G.root.add(rock);
     }
     addTelegraph('circle', tx, tz, 2.3, 0, 1.25, () => {
@@ -2128,7 +2152,7 @@ function attackBoulders(b, n, col) {
       addRing(tx, tz, 2.6, 0xffffff, 0.35);
       G.shake = 0.5; sound.play('boom');
     });
-    if (rock) G.effects.push({ kind: 'rock', mesh: rock, fx: b.x + 2.6, fz: b.z, tx, tz, life: 1.25, max: 1.25, shared: true });
+    if (rock) G.effects.push({ kind: 'rock', mesh: rock, fx: b.x + 2.6, fz: b.z, tx, tz, life: 1.25, max: 1.25 });
   }
 }
 function attackBreath(b, color) {
@@ -2222,28 +2246,28 @@ function bossAttack(S, b) {
     case 'king': attackSlam(b, true); break;
     case 'jelly': attackSlam(b, false); summon(b, 6, 4); break;
     case 'skeleton': attackBand(b, pickX(), 20, PCOL.orange, 2); break;
-    case 'golem': attackBoulders(b, 2, 0x7f9fc0); summon(b, 3, 3); break;
-    case 'moon': attackBoulders(b, 3, 0x8a8aa0); summon(b, 5, 1, 0.003); break;
+    case 'golem': attackBoulders(b, 2); summon(b, 3, 3); break;
+    case 'moon': attackBoulders(b, 3); summon(b, 5, 1, 0.003); break;
     case 'dragon': attackBreath(b, PCOL.orange); summon(b, 2, 3); break;
     case 'storm': attackBreath(b, PCOL.ice); summon(b, 6, 3); break;
     case 'brute': attackShockwave(b); if (b.atkN % 2 === 0) summon(b, 1, 2, 0.004); break;
     case 'robot': attackBand(b, pickX(), 24, PCOL.pink, -1); attackBand(b, rand(-5, 5), 24, PCOL.pink, 5); break;
     case 'drill': attackBand(b, pickX(), 22, PCOL.metal, 7); if (b.atkN % 3 === 0) attackBand(b, rand(-5, 5), 22, PCOL.metal, -1); break;
-    case 'dice': attackBoulders(b, 3, 0xffffff); summon(b, 12, 4); if (b.atkN % 3 === 0) rerollSlots(S); break;
+    case 'dice': attackBoulders(b, 3); summon(b, 12, 4); if (b.atkN % 3 === 0) rerollSlots(S); break;
     case 'kraken': attackBand(b, pickX(), 20, PCOL.pink, 8); attackBand(b, rand(-5, 5), 20, PCOL.pink, -1); break;
-    case 'pumpkin': attackBoulders(b, 3, 0xff8a1a); summon(b, 9, 4); if (b.atkN % 3 === 0) attackBall(S, b, 0.01); break;
+    case 'pumpkin': attackBoulders(b, 3); summon(b, 9, 4); if (b.atkN % 3 === 0) attackBall(S, b, 0.01); break;
     case 'commander': summon(b, 4, 8, 0.0008, 4.5); attackBand(b, pickX(), 22, PCOL.red, -1); break;
     case 'spider': attackWeb(b, pickX()); summon(b, 4, 6, 0.0008); break;
     case 'magma': attackBreath(b, PCOL.orange); for (let k = 0; k < 2; k++) meteorStrike(S, 2.2, b); break;
     case 'pharaoh': attackBand(b, pickX(), 22, PCOL.sand, 10); summon(b, 10, 3); break;
     case 'thunder': attackLightning(b, 5); if (b.atkN % 2 === 0) summon(b, 7, 4); break;
-    case 'jack': attackBoulders(b, 3, 0xff5a8a); summon(b, 4, 5); break;
+    case 'jack': attackBoulders(b, 3); summon(b, 4, 5); break;
     case 'flipper': if (b.atkN % 2 === 0) attackTilt(b); else attackBand(b, pickX(), 22, PCOL.pink, 6); break;
     case 'ringmaster': summon(b, 6, 5); if (b.atkN % 3 === 0) attackBall(S, b, 0.006, 1.8); else attackBand(b, pickX(), 20, PCOL.gold, -1); break;
     case 'mesmer': attackMesmer(b, pickX()); if (b.atkN % 2 === 0) summon(b, 9, 4); break;
-    case 'locomotive': attackBand(b, pickX(), 28, PCOL.metal, 5); if (b.atkN % 2 === 0) attackBoulders(b, 2, 0x2a2a30); break;
+    case 'locomotive': attackBand(b, pickX(), 28, PCOL.metal, 5); if (b.atkN % 2 === 0) attackBoulders(b, 2); break;
     case 'scarecrow': summon(b, 7, 6); attackBand(b, pickX(), 20, PCOL.sand, -1); break;
-    case 'panda': attackBoulders(b, 3, 0x6ab04a); if (b.atkN % 2 === 0) attackSlam(b, false); break;
+    case 'panda': attackBoulders(b, 3); if (b.atkN % 2 === 0) attackSlam(b, false); break;
     case 'shogun': { const x = pickX(); attackBand(b, x, 22, PCOL.red, -1); attackBand(b, clamp(-x, -5, 5), 22, PCOL.red, 3); break; }
     case 'trex': attackShockwave(b); if (b.atkN % 2 === 0) attackEggs(S, b, 2); break;
     case 'roc': attackBreath(b, PCOL.ice); attackEggs(S, b, b.atkN % 2 ? 1 : 2); break;
@@ -2251,7 +2275,7 @@ function bossAttack(S, b) {
     case 'overlord': {
       const m = b.atkN % 7;
       if (m === 0) attackMesmer(b, pickX());
-      else if (m === 1) { attackBoulders(b, 3, 0x7a4aff); summon(b, 9, 3); }
+      else if (m === 1) { attackBoulders(b, 3); summon(b, 9, 3); }
       else if (m === 2) attackTilt(b);
       else if (m === 3) attackLightning(b, 6);
       else if (m === 4) attackEggs(S, b, 2);
@@ -2262,7 +2286,7 @@ function bossAttack(S, b) {
     case 'emperor': {
       const m = b.atkN % 6;
       if (m === 0) attackBand(b, pickX(), 22, PCOL.purple, 6);
-      else if (m === 1) { attackBoulders(b, 3, 0x9a6aff); summon(b, 9, 3); }
+      else if (m === 1) { attackBoulders(b, 3); summon(b, 9, 3); }
       else if (m === 2) attackBall(S, b, 0.006);
       else if (m === 3) attackLightning(b, 6);
       else if (m === 4) attackWeb(b, pickX());
@@ -2272,7 +2296,7 @@ function bossAttack(S, b) {
     default: { // titan: cycles through everything
       const m = b.atkN % 4;
       if (m === 0) attackBand(b, pickX(), 22, PCOL.purple, 6);
-      else if (m === 1) attackBoulders(b, 3, 0x9a6aff);
+      else if (m === 1) attackBoulders(b, 3);
       else if (m === 2) attackShockwave(b);
       else attackBreath(b, PCOL.pink);
     }
@@ -2321,7 +2345,7 @@ function updateEffects(dt) {
     if (e.life <= 0) {
       for (const m of [e.mesh, e.outer, e.inner]) if (m) {
         G.root.remove(m);
-        m.traverse((o) => { if (o.geometry) { o.geometry.dispose(); if (!e.shared) o.material.dispose(); } });
+        m.traverse((o) => { if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); if (o.material && !o.material.userData.shared) o.material.dispose(); });
       }
       E.splice(k, 1);
     }
@@ -2477,10 +2501,10 @@ function meteorStrike(S, r, from) {
   const tz = i >= 0 ? B.z[i] - rand(0, 2) : G.z0 - rand(10, 40);
   let rock = null;
   if (!TURBO) {
-    rock = new THREE.Mesh(M.boulderGeo(), M.lam(0x3a2020, { emissive: 0xff3a0a }));
+    rock = bossProjectile('meteor');
     rock.scale.setScalar(1.3);
     G.root.add(rock);
-    G.effects.push({ kind: 'rock', mesh: rock, fx: from ? from.x : tx + 10, fz: from ? from.z : tz - 26, tx, tz, life: 1.3, max: 1.3, shared: true, high: 14 });
+    G.effects.push({ kind: 'rock', mesh: rock, fx: from ? from.x : tx + 10, fz: from ? from.z : tz - 26, tx, tz, life: 1.3, max: 1.3, high: 14 });
   }
   addTelegraph('circle', tx, tz, r, 0, 1.3, () => {
     blueInCircle(tx, tz, r);
@@ -2989,6 +3013,20 @@ function step(dt) {
       else if (r.phase === 'charging' && power !== chargePower(r)) sound.play('reactor', chargePower(r));
     }
     if (r.phase !== 'charging') fireCannon(dt);
+    if (S.drop) {
+      const event = stepSupplyDrop(S.drop,G.cx,dt,r.phase === 'charging');
+      if (event === 'catch') {
+        G.shield = Math.min(6,G.shield+1);
+        G.guardFlash = 1;
+        popup('RESERVES READY!', 'combo c2',G.cx,3,G.z0-2);
+        sound.play('supply');
+      } else if (event === 'fire') {
+        // Each shell takes its lane and equipment when it fires. A reactor
+        // release can turn a loaded reserve into a Sunwing giant.
+        launchGiant(volleyPower(),r.phase === 'burst' ? SUNWING : 0);
+        G.recoil = 1;
+      } else if (event === 'miss') popup('DROP MISSED', 'combo c1',S.drop.x,2,G.z0-2,.8);
+    }
   }
   updateObstacles(S, dt);
   updateMechanics(S, dt);
@@ -3436,10 +3474,15 @@ function renderWorld(dt) {
     }
     S.group.visible = visible;
     if (!visible) continue;
+    if (S.drop?.model) poseSupplyDrop(S.drop,S.z0,cur && G.phase==='play',reducedMotion);
     for (const g of S.gates) {
       const grp = g.model.group;
       if (!g.alive) {
-        if (g.dying > 0) { g.dying = Math.max(0, g.dying - dt * 3); grp.scale.setScalar(Math.max(0.01, g.dying)); }
+        if (g.dying > 0) {
+          g.dying = Math.max(0, g.dying - dt * 3);
+          if (g.model.pose && !reducedMotion) g.model.pose(1,G.t + g.ph,1 - g.dying);
+          grp.scale.setScalar(Math.max(.01,g.dying));
+        }
         if (g.dying <= 0) grp.visible = false;
         continue;
       }
@@ -3449,7 +3492,7 @@ function renderWorld(dt) {
       if (g.dirty && G.t - g.refT > 0.08) { g.refT = G.t; refreshGate(g); }
       const t = g.def.t;
       if (g.model.wheel && !reducedMotion) g.model.wheel.rotation.z = -G.t * 1.5;
-      if (g.model.icon) { g.model.icon.rotation.y = Math.sin(G.t * 1.5 + g.ph) * .35; g.model.icon.position.y = 2.8 + Math.sin(G.t * 2 + g.ph) * .12; }
+      if (t === 'upgrade') g.model.pose(Math.min(1,g.prog/g.need),reducedMotion ? 0 : G.t + g.ph);
       if (g.locked) grp.visible = true;
       else if (g.def.phase) {
         const P2 = g.def.phase, ph = (G.t + (P2.off ?? 0)) % P2.period, edge = g.on ? P2.on - ph : P2.period - ph;
@@ -3473,13 +3516,13 @@ function renderWorld(dt) {
         g.model.panelMat.opacity = (g.coolUntil > S.time ? 0.2 : 0.5) + g.flash * 0.3;
       } else if (t === 'tesla') { g.model.orb.scale.setScalar(g.active ? 1 + Math.sin(G.t * 30) * 0.15 + (g.zapT < 0.1 ? 0.4 : 0) : 0.7 + g.prog / g.need * 0.4); g.model.panelMat.opacity = (g.active ? 0.2 : 0.45) + g.flash * 0.3; }
       else if (t === 'nuke' && g.coolUntil > S.time) g.model.panelMat.opacity = 0.12 + Math.abs(Math.sin(G.t * 4)) * 0.2;
-      else if (t !== 'statue') g.model.panelMat.opacity = (t === 'ice' ? 0.82 : t === 'fence' ? 0.9 : 0.55) + g.flash * 0.35;
+      else if (g.model.panelMat && t !== 'statue') g.model.panelMat.opacity = (t === 'ice' ? 0.82 : t === 'fence' ? 0.9 : 0.55) + g.flash * 0.35;
       if (BLOCKERS.has(t) || REDGATES.has(t)) grp.position.x = g.x + Math.sin(G.t * 60) * g.flash * 0.08;
       if (t === 'star') g.model.setColor(starColor.setHSL((G.t * 0.4) % 1, 1, 0.6));
     }
     for (const ex of S.exits) ex.ring.rotation.z += dt * 2;
     renderLate(S, dt, cur);
-    for (const bt of S.belts) bt.model.tex.offset.x -= dt * 0.9;
+    for (const bt of S.belts) bt.model.tex.offset.x = -(G.t * Math.abs(bt.v) / TREAD_PITCH % 1);
     for (const tn of S.tornados) {
       tn.model.group.position.x = tn.x;
       tn.model.strands.forEach((strand, k) => {
@@ -3502,7 +3545,7 @@ function renderWorld(dt) {
       b.model.group.position.set(b.x, b.r, b.z);
       b.model.spin.scale.setScalar(b.r * (1 + b.flash * 0.05));
       b.model.inst.count = Math.max(12, Math.ceil(b.model.count * Math.max(0, b.hp / b.max)));
-      b.model.material.color.set(b.flash > 0.1 ? 0xffc7a0 : b.chill > 0 ? 0x93e7ff : 0xe8222a);
+      b.model.material.color.set(b.flash > 0.1 ? 0xffc7a0 : b.chill > 0 ? 0xb4efff : 0xffe1d7);
       b.model.warning.material.color.setHex(b.chill > 0 ? 0x80eaff : 0xff6644);
       b.model.warning.position.y = -b.r + 0.035;
       b.model.warning.scale.setScalar(b.r + 0.5);
@@ -3628,7 +3671,9 @@ function renderWorld(dt) {
   const danger = G.lives <= 2 && !G.hardcore && G.phase === 'play';
   if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
-  setHud('surge', $('surge'), G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : '');
+  const supply = G.phase === 'play' ? supplyMessage(G.stage.drop,G.cx) : '';
+  setHud('supplyStatus', $('surge'), supply ? 'supply' : '', 'className');
+  setHud('surge', $('surge'), supply || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
   renderReactor(reactor);
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) hud.banner.className = ''; }
@@ -3676,7 +3721,7 @@ function openWorldCard(index) {
     <div class="wc-stars" aria-label="${stars} of 3 stars">${starsHtml(stars)}</div>
     <div class="wc-stats">${stat('BEST ARMY', best.army && fmt(best.army))}${stat('BEST COMBO', best.combo > 1 && 'x' + fmt(best.combo))}${stat('BEST TIME', best.time && clock(best.time))}</div>
     <details class="field-notes"><summary>Scout the stages</summary><ol>${level.stages.map((stage, i) =>
-      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}</p></li>`).join('')}</ol></details>
+      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}</p></li>`).join('')}</ol></details>
     <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medal.icon}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
   $('wc-play').textContent = resumable ? `RESUME ${index + 1}.${G.stageIdx + 1}` : 'PLAY';
   $('wc-hard').disabled = !stars;

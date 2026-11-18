@@ -100,8 +100,33 @@ try {
     });
     kerb.dispose();
     const roadPass = roadsides.every(r=>r.pass) && Object.keys(THEMES).every(theme=>RA.ROAD_FAMILIES.includes(FA.fortFamily(theme)));
-    return {bosses,forts,props,propPass,lateProps,latePass,rosterPass,roadsides,roadPass,worlds:LEVELS.length};
+    const {bossProjectile} = await import('/src/boss-projectiles.js');
+    const projectiles = ['golem','moon','dice','pumpkin','jack','locomotive','panda','overlord','meteor'].map(type=>{
+      const m=bossProjectile(type), twin=bossProjectile(type), stats=inspect(m);
+      const pass=stats.finite && stats.triangles<2500 && m!==twin && m.geometry===twin.geometry && m.geometry.userData.shared && m.material.userData.shared;
+      return {type,pass,triangles:stats.triangles};
+    });
+    const {sculptSupplyDrop} = await import('/src/supply-assets.js');
+    const upgradeTypes = new Set(LEVELS.flatMap(l=>l.stages.flatMap(s=>s.gates.filter(g=>g.t==='upgrade').map(g=>g.up))));
+    const {vehicleDisplay} = await import('/src/vehicle-assets.js');
+    const displays = Array.from({length:8},(_,i)=>inspect(vehicleDisplay(i+1)));
+    const displayPass = displays.every(m=>m.finite && m.meshes<=4 && m.sharedMaterials);
+    const bayPass = [...upgradeTypes].every(up=>{
+      const m=P.buildArmory(4.7,up);
+      m.pose(0,1); const closed=pose(m.group);
+      m.pose(.85,1); const funded=pose(m.group); m.pose(.85,1);
+      const result=inspect(m.group).finite && different(closed,funded) && !different(funded,pose(m.group)) && m.icon.children.length>0;
+      dispose(m.group); return result;
+    });
+    const ball=P.buildSwarmBall(2), drop=sculptSupplyDrop(), belt=P.buildBelt(5.6,6,-3);
+    const tri=g=>(g.index?.count ?? g.attributes.position.count)/3;
+    const ballTriangles=tri(ball.inst.geometry)*ball.count + tri(ball.spin.children[0].geometry);
+    const supplyPass=displayPass && bayPass && ballTriangles<55000 && inspect(ball.group).finite && inspect(drop.group).finite && inspect(belt.group).finite && !!drop.group.getObjectByName('recovery-chute') && belt.tex.repeat.x>1;
+    [ball.group,drop.group,belt.group].forEach(dispose);
+    return {projectiles,supplyPass,ballTriangles,armories:upgradeTypes.size,bosses,forts,props,propPass,lateProps,latePass,rosterPass,roadsides,roadPass,worlds:LEVELS.length};
   });
+  console.log(`${report.projectiles.every(p=>p.pass)?'PASS':'FAIL'} nine cached boss and meteor projectile designs`);
+  console.log(`${report.supplyPass?'PASS':'FAIL'} ${report.armories} armory rewards, supply parachute, conveyor and ${report.ballTriangles}-triangle swarm ball`);
   for (const boss of report.bosses) console.log(`${boss.pass?'PASS':'FAIL'} ${boss.type}: ${boss.meshes} meshes, ${boss.triangles} triangles, top ${boss.top.toFixed(2)}/${boss.height}`);
   console.log(`${report.forts.every(f=>f.pass)?'PASS':'FAIL'} all ${report.forts.length} biome fort bounds`);
   console.log(`${report.propPass?'PASS':'FAIL'} defense and obstacle contracts`);
@@ -110,5 +135,5 @@ try {
   console.log(`${report.rosterPass?'PASS':'FAIL'} every boss and theme in the ${report.worlds} worlds has a contract`);
   fs.mkdirSync(new URL('./out/',import.meta.url),{recursive:true});
   fs.writeFileSync(new URL('./out/asset-checks.json',import.meta.url),JSON.stringify({...report,errors},null,2));
-  if (errors.length || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass || !report.roadPass) { console.error(errors.join('\n')); process.exitCode=1; }
+  if (errors.length || !report.projectiles.every(p=>p.pass) || !report.supplyPass || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass || !report.roadPass) { console.error(errors.join('\n')); process.exitCode=1; }
 } finally { await browser.close(); }
