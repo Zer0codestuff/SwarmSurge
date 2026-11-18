@@ -120,11 +120,26 @@ try {
     });
     const ball=P.buildSwarmBall(2), drop=sculptSupplyDrop(), belt=P.buildBelt(5.6,6,-3);
     const tri=g=>(g.index?.count ?? g.attributes.position.count)/3;
+    const {AEGIS_FORM,troopFormGeometry} = await import('/src/troop-forms.js');
+    const guardDetails = ['high','low'].map(lod => {
+      const g=troopFormGeometry(AEGIS_FORM,lod), triangles=tri(g);
+      const finite=Object.values(g.attributes).every(a=>a.array.every(Number.isFinite));
+      g.dispose(); return {triangles,finite};
+    });
+    const {createImpactShield}=await import('/src/impact-shield.js');
+    const armor=createImpactShield(), panes=inspect(armor);
+    const {attackMarker}=await import('/src/attack-markers.js');
+    const disc=attackMarker('circle',-2,-14,2.5,0,false), lane=attackMarker('band',1,-22,3.8,44,true);
+    const markerPass=disc.geometry===lane.geometry && disc.material===lane.material && tri(disc.geometry)===2 && disc.scale.x===5 && lane.scale.y===44;
+    const guardPass=guardDetails.every(d=>d.finite) && guardDetails[1].triangles<guardDetails[0].triangles
+      && panes.finite && panes.triangles<500 && armor.geometry.attributes.paneCenter.count===armor.geometry.attributes.position.count && markerPass;
+    dispose(armor);
     const ballTriangles=tri(ball.inst.geometry)*ball.count + tri(ball.spin.children[0].geometry);
     const supplyPass=displayPass && bayPass && ballTriangles<55000 && inspect(ball.group).finite && inspect(drop.group).finite && inspect(belt.group).finite && !!drop.group.getObjectByName('recovery-chute') && belt.tex.repeat.x>1;
     [ball.group,drop.group,belt.group].forEach(dispose);
-    return {projectiles,supplyPass,ballTriangles,armories:upgradeTypes.size,bosses,forts,props,propPass,lateProps,latePass,rosterPass,roadsides,roadPass,worlds:LEVELS.length};
+    return {guardDetails,guardPass,projectiles,supplyPass,ballTriangles,armories:upgradeTypes.size,bosses,forts,props,propPass,lateProps,latePass,rosterPass,roadsides,roadPass,worlds:LEVELS.length};
   });
+  console.log(`${report.guardPass?'PASS':'FAIL'} Aegis Guard detail levels (${report.guardDetails.map(d=>d.triangles).join('/')} triangles), shield panes and shared road markings`);
   console.log(`${report.projectiles.every(p=>p.pass)?'PASS':'FAIL'} nine cached boss and meteor projectile designs`);
   console.log(`${report.supplyPass?'PASS':'FAIL'} ${report.armories} armory rewards, supply parachute, conveyor and ${report.ballTriangles}-triangle swarm ball`);
   for (const boss of report.bosses) console.log(`${boss.pass?'PASS':'FAIL'} ${boss.type}: ${boss.meshes} meshes, ${boss.triangles} triangles, top ${boss.top.toFixed(2)}/${boss.height}`);
@@ -135,5 +150,5 @@ try {
   console.log(`${report.rosterPass?'PASS':'FAIL'} every boss and theme in the ${report.worlds} worlds has a contract`);
   fs.mkdirSync(new URL('./out/',import.meta.url),{recursive:true});
   fs.writeFileSync(new URL('./out/asset-checks.json',import.meta.url),JSON.stringify({...report,errors},null,2));
-  if (errors.length || !report.projectiles.every(p=>p.pass) || !report.supplyPass || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass || !report.roadPass) { console.error(errors.join('\n')); process.exitCode=1; }
+  if (errors.length || !report.guardPass || !report.projectiles.every(p=>p.pass) || !report.supplyPass || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass || !report.roadPass) { console.error(errors.join('\n')); process.exitCode=1; }
 } finally { await browser.close(); }

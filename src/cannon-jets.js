@@ -29,6 +29,8 @@ export function cannonJets(fleet, maxBarrels) {
   const mount = new THREE.Matrix4(), local = new THREE.Object3D(), tint = new THREE.Color();
   mesh.name = 'cannon-jets'; mesh.count = 0; mesh.visible = false; mesh.frustumCulled = false;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.setColorAt(0, tint);
+  mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
   function pose(time) {
     mesh.count = 0;
     for (const actor of fleet) {
@@ -39,11 +41,11 @@ export function cannonJets(fleet, maxBarrels) {
       if (!(fade > 0 && fade <= 1)) continue;
       actor.barrels.updateWorldMatrix(true,true);
       tint.setHex(heavy ? 0xffd78b : actor.jetColor);
+      const girth = (.52 + .48 * fade) * (heavy ? 1.45 : 1);
+      local.position.set(0,0,-1.235);
+      local.scale.set(girth,girth,(heavy ? 1.65 : 1) * (.16 + fade*.94));
+      local.updateMatrix();
       for (const barrel of actor.barrels.children) {
-        const girth = (.52 + .48 * fade) * (heavy ? 1.45 : 1);
-        local.position.set(0,0,-1.235);
-        local.scale.set(girth,girth,(heavy ? 1.65 : 1) * (.16 + fade*.94));
-        local.updateMatrix();
         mount.multiplyMatrices(barrel.matrixWorld, local.matrix);
         mesh.setMatrixAt(mesh.count,mount);
         mesh.setColorAt(mesh.count++,tint);

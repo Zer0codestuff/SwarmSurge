@@ -20,6 +20,20 @@ window.runGameChecks = (g) => {
     G.stage.counterShots=0; updateEffects(.34);
     return {pass:early && hit && late && G.stage.counterShots===0,early,hit,late};
   })()`);
+  check('Fleet jets seat in every recoiling muzzle and disappear between volleys', `(() => {
+    G.barrels=6; G.squad=4; G.twin=true; twinCannon.group.visible=true; setBarrels(6);
+    fireCannon(STEP); renderWorld(.01); muzzleJets.pose(G.t);
+    const mesh=muzzleJets.mesh, matrix=new THREE.Matrix4(), point=new THREE.Vector3(), bore=new THREE.Vector3();
+    let n=0, error=0;
+    for(const c of fleet) for(const b of c.barrels.children) {
+      mesh.getMatrixAt(n++,matrix); point.setFromMatrixPosition(matrix);
+      bore.set(0,0,-1.235).applyMatrix4(b.matrixWorld); error=Math.max(error,bore.distanceTo(point));
+    }
+    const all=mesh.count===36 && n===36 && error<.00001;
+    muzzleJets.pose(G.t+.1); const dark=!mesh.visible;
+    launchGiant(1,0); muzzleJets.pose(G.t+.12);
+    return {pass:all && dark && mesh.count===6,all,dark,error};
+  })()`);
   check('Counterfire counts volleys across the fleet and stacks with reactor giants', `(() => {
     const S=G.stage;
     S.counterShots=2; G.twin=true; G.squad=1; G.overdrive=3; G.charge=CHARGE_MAX-1;

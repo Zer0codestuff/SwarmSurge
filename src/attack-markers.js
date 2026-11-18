@@ -29,6 +29,8 @@ const material = new THREE.ShaderMaterial({
       float radius = size.x * .5;
       float d = length(pos);
       vec2 inset = size * .5 - abs(pos);
+      // The extra shoulder of a cannon sweep only reaches the carriage.
+      if (mode > 1.5 && mode < 2.5) inset.x -= .3 * smoothstep(1., 2.5, coord.y * size.y);
       float edge = disc ? radius - d : min(inset.x, inset.y);
       if (edge < 0.) discard;
       float border = line(edge - .13, .047);

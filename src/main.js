@@ -931,11 +931,15 @@ function startLevel(idx, stageIdx = 0, hardcore = false) {
 }
 // Later stages are hidden until the cannon reaches them. Compiling their programs while the
 // level opens keeps the advance between stages free of shader hitches.
+let markerWarmed = false;
 function warmShaders() {
   if (TURBO) return;
   const hidden = G.stages.filter((S) => !S.group.visible);
   for (const S of hidden) S.group.visible = true;
+  const marker = markerWarmed ? null : attackMarker('circle', 0, 0, 1, 0, false);
+  if (marker) scene.add(marker);
   renderer.compile(scene, camera);
+  if (marker) { scene.remove(marker); markerWarmed = true; }
   for (const S of hidden) S.group.visible = false;
 }
 function setBarrels(n) {
