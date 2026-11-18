@@ -6,6 +6,7 @@ import { Music } from './music.js';
 import { CRUSH_SECONDS, MEDALS, SWIFT_SECONDS, clock, loadRecords, medalTotal, medalsOf, recordRun, saveRecords } from './records.js';
 import * as FX from './fx.js';
 import * as P from './props.js';
+import { cannonJets } from './cannon-jets.js';
 import { createImpactShield } from './impact-shield.js';
 import { attackMarker } from './attack-markers.js';
 import { bossProjectile } from './boss-projectiles.js';
@@ -560,6 +561,9 @@ const cannonShield = createImpactShield();
 cannon.group.add(cannonShield);
 const twinCannon = M.buildCannon(0xff4fd8);
 const squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.group.scale.setScalar(0.85); c.group.visible = false; scene.add(c.group); return c; });
+const fleet = [cannon, twinCannon, ...squadCannons];
+const muzzleJets = cannonJets(fleet, 6);
+scene.add(muzzleJets.mesh);
 const airWings = new Map();
 function supportAircraft(tier) {
   if (!airWings.has(tier)) {
@@ -571,7 +575,6 @@ function supportAircraft(tier) {
 scene.add(cannon.group, twinCannon.group);
 const weaponMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1), unitMat, MAX_BLUE, false))];
 const weaponFarMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1, 'low'), unitMat, MAX_BLUE, false))];
-const cannonMuzzle = new THREE.Vector3();
 const defenseMuzzle = new THREE.Vector3();
 cannon.group.visible = twinCannon.group.visible = false;
 const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
@@ -911,6 +914,8 @@ function startLevel(idx, stageIdx = 0, hardcore = false) {
     recoil: 0, cannonPulse: 0, kick: 0,
     chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
   });
+  for (const actor of fleet) actor.firedAt = actor.giantAt = -Infinity;
+  muzzleJets.mesh.visible = false;
   setBarrels(1);
   cannon.setChassis(0); twinCannon.setChassis(0);
   cannon.group.visible = true;
@@ -1072,15 +1077,12 @@ function fireFrom(cx, actor = cannon, power = volleyPower(), kind = G.stage.reac
     const off = (b - (G.barrels - 1) / 2) * sp;
     const i = cannonUnit(clamp(cx+off+rand(-.06,.06),-XLIM,XLIM),power,kind);
     if (i >= 0) { B.vz[i] = -BLUE_SPEED; B.flash[i] = 0.7; }
-    if (!TURBO) {
-      const barrel = actor.barrels.children[b];
-      barrel.localToWorld(cannonMuzzle.set(0, 0, -1.245));
-      cannonMuzzle.x += cx - actor.group.position.x;
-      spark(cannonMuzzle.x, cannonMuzzle.y, cannonMuzzle.z, (kind & AEGIS) ? PCOL.green : G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, .12, 0);
-    }
   }
+  actor.firedAt = G.t;
+  actor.jetColor = (kind & AEGIS) ? 0x8affe1 : (kind & SUNWING) || power > 1 ? 0xffcf78 : 0xa9f5ff;
 }
 function launchGiant(power,kind) {
+  cannon.giantAt = G.t;
   const i = cannonUnit(G.cx, GIANT_HP * power, GIANT | kind);
   if (i >= 0) { B.vz[i] = -GIANT_SPEED; B.flash[i] = 1; }
   burst(G.cx, 1.5, G.z0 - 1.5, PCOL.blue, 12, 5);
@@ -3477,7 +3479,6 @@ function renderWorld(dt) {
   for (const w of cannon.wheels) w.rotation.x -= roll;
   for (const w of twinCannon.wheels) w.rotation.x -= roll;
   if (Math.abs(vel) > 6 && Math.random() < 0.5) spark(G.cx, 0.2, G.cannonZ + 0.8, PCOL.dust, 1, 1.5, 0.9, 0.4, 1);
-  cannon.barrels.children.forEach((b, k) => { b.position.z = -Math.max(0, G.recoil - k * 0.15) * 0.25; });
   const reactor = G.stage.reactor;
   const heat = reactor.phase === 'charging' ? reactor.time / VENT_TIME : reactor.phase === 'burst' ? 1 : 0;
   cannon.glow.scale.setScalar(.8 + Math.max(heat, G.charge / CHARGE_MAX) * .9 + (reducedMotion ? 0 : heat * .12 * Math.sin(G.t * 16)));
@@ -3489,7 +3490,6 @@ function renderWorld(dt) {
     c.group.rotation.z = cannon.group.rotation.z;
     c.glowMat.color.copy(cannon.glowMat.color);
     for (const w of c.wheels) w.rotation.x -= roll;
-    c.barrels.children.forEach((b, j) => { b.position.z = -Math.max(0, G.recoil - j * 0.15) * 0.25; });
   });
   if (G.twin) {
     twinCannon.animateVehicle(G.t, dt, G.recoil, drive, G.charge / CHARGE_MAX);
@@ -3499,6 +3499,10 @@ function renderWorld(dt) {
     twinCannon.glowMat.color.copy(cannon.glowMat.color);
   }
 
+  for (const actor of fleet) if (actor.group.visible) {
+    for (const barrel of actor.barrels.children) barrel.position.z = G.recoil * .19;
+  }
+  if (!TURBO && !reducedMotion) muzzleJets.pose(G.t);
   for (const model of airWings.values()) model.group.visible = false;
   if (G.airPass > 0 && G.aircraft && G.phase !== 'menu') {
     const airWing = supportAircraft(G.airTier || G.aircraft);
@@ -3720,6 +3724,9 @@ function renderWorld(dt) {
   setHud('supplyStatus', $('surge'), supply ? 'supply' : '', 'className');
   setHud('surge', $('surge'), supply || counter || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
   renderReactor(reactor);
+  const giantLaunched = G.t - cannon.giantAt < .4;
+  setHud('giantCount', $('giant-count'), giantLaunched ? 'Launched' : (CHARGE_MAX-G.charge) + (CHARGE_MAX-G.charge === 1 ? ' volley' : ' volleys'));
+  setHud('giantReady', $('charge'), giantLaunched || G.charge >= CHARGE_MAX - 5 ? 'ready' : '', 'className');
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) hud.banner.className = ''; }
   if (tipTimer > 0) { tipTimer -= dt; if (tipTimer <= 0) hud.tip.className = 'stroke'; }

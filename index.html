@@ -229,8 +229,13 @@
   #sweep-zone { position: absolute; height: 100%; background: repeating-linear-gradient(125deg,#ff9875 0 4px,#973848 4px 7px); }
   #sweep-cannon { position: absolute; width: 5px; height: 12px; border-radius: 2px; top: -3px; transform: translateX(-50%);
     background: #fff; box-shadow: 0 0 0 1px #142330; }
-  #charge { height: 12px; border: 1px solid #d8f2ff; background: var(--glass); }
-  #charge span { font-size: 8px; line-height: 10px; vertical-align: top; }
+  #charge { height: auto; min-width: 0; padding: 6px 9px; border: 1px solid #87b5ca; border-radius: 9px;
+    display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px;
+    color: #e0f4fa; background: var(--glass); text-align: left; font: 700 12px/1.1 system-ui,sans-serif; }
+  #charge span { font-size: 10px; line-height: inherit; text-align: right; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+  .giant-track { grid-column: span 2; height: 4px; border-radius: 2px; overflow: hidden; position: relative; background: #0a1d2f; }
+  #charge.ready { color: #ffe4a3; border-color: #dfbb75; }
+  #charge.ready #chargefill { background: #ffcc6c; }
   #banner { top: 34%; max-width: 94vw; white-space: normal; text-align: center; font-size: clamp(26px, 6vw, 50px); line-height: 1.05; }
   #tip { top: auto; bottom: 18%; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 750; width: min(490px, 88vw); padding: 8px 12px; border-radius: 10px; background: var(--glass); text-shadow: none; line-height: 1.35; }
   #hint { font-family: system-ui, sans-serif; font-weight: 800; font-size: 14px; bottom: 27%; }
@@ -307,7 +312,7 @@
     <div id="ups"></div>
     <div id="rank"><i id="rankdot"></i><span id="rankname">Recruit</span></div>
     <div id="cannon-controls">
-      <div id="charge"><div id="chargefill"></div><span>GIANT</span></div>
+      <div id="charge"><b>Giant</b><span id="giant-count"></span><div class="giant-track"><div id="chargefill"></div></div></div>
       <button type="button" id="reactor" aria-keyshortcuts="R" title="Tap or press R to divert cannon fire. Tap again to launch before overheat." disabled>
         <span id="reactor-fill" aria-hidden="true"></span><kbd aria-hidden="true">R</kbd>
         <span><b id="reactor-action">Charge reactor</b><small id="reactor-hint"></small></span>
