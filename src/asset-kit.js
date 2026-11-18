@@ -6,6 +6,17 @@ export const assetSurface = new THREE.MeshStandardMaterial({ vertexColors: true,
 export const assetGlow = new THREE.MeshBasicMaterial({ vertexColors: true });
 assetSurface.userData.shared = assetGlow.userData.shared = true;
 
+// A cool reflected shadow on undersides, baked in model space so it follows
+// moving parts without another render pass or an extra attribute.
+export function shadeUndersides(geometry) {
+  const { normal, color } = geometry.attributes;
+  for (let i = 0; i < color.count; i++) {
+    const under = Math.max(0, -normal.getY(i));
+    color.setXYZ(i, color.getX(i) * (1 - .18 * under),
+      color.getY(i) * (1 - .11 * under), color.getZ(i) * (1 - .045 * under));
+  }
+}
+
 export function bevelBox(w, h, d, bevel = 0.06) {
   const b = Math.min(bevel, w * 0.18, h * 0.18, d * 0.18);
   const x = w / 2 - b, y = h / 2 - b, cut = b * 0.5;
@@ -72,6 +83,7 @@ export function assetBatch() {
       if (!parts.length) throw new Error('Cannot finish an empty asset batch');
       const geometry = mergeGeometries(parts, false);
       parts.forEach(part => part.dispose()); parts.length = 0;
+      if (!material.isMeshBasicMaterial) shadeUndersides(geometry);
       geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = name; mesh.castShadow = !material.isMeshBasicMaterial; mesh.receiveShadow = !material.isMeshBasicMaterial;

@@ -1,3 +1,4 @@
+import { shadeUndersides } from './asset-kit.js';
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { loftGeometry, sweepGeometry } from './boss-shapes.js';
@@ -134,15 +135,16 @@ function batch() {
       start.add(end).multiplyScalar(0.5);
       return add(geo, color, start.x, start.y, start.z);
     },
-    geometry() {
+    geometry(shaded = true) {
       const geometry = mergeGeometries(parts, false);
       parts.forEach(part => part.dispose());
+      if (shaded) shadeUndersides(geometry);
       geometry.computeBoundingSphere();
       geometry.userData.shared = true;
       return geometry;
     },
     finish(parent, name = '', material = surface) {
-      const mesh = new THREE.Mesh(api.geometry(), material);
+      const mesh = new THREE.Mesh(api.geometry(material === surface), material);
       mesh.name = name; mesh.castShadow = material === surface; mesh.receiveShadow = material === surface;
       parent.add(mesh);
       return mesh;
