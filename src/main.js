@@ -6,6 +6,7 @@ import { Music } from './music.js';
 import { CRUSH_SECONDS, MEDALS, SWIFT_SECONDS, clock, loadRecords, medalTotal, medalsOf, recordRun, saveRecords } from './records.js';
 import * as FX from './fx.js';
 import * as P from './props.js';
+import { createImpactShield } from './impact-shield.js';
 import { attackMarker } from './attack-markers.js';
 import { bossProjectile } from './boss-projectiles.js';
 import { buildBoss2 } from './bosses.js';
@@ -549,6 +550,8 @@ const G = {
   chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
 };
 const cannon = M.buildCannon();
+const cannonShield = createImpactShield();
+cannon.group.add(cannonShield);
 const twinCannon = M.buildCannon(0xff4fd8);
 const squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.group.scale.setScalar(0.85); c.group.visible = false; scene.add(c.group); return c; });
 const airWings = new Map();
@@ -1936,7 +1939,7 @@ function moveRed(S, dt) {
     if (R.flash[i] > 0) R.flash[i] -= dt * 4;
     if (!T.ghost && !T.fly && S.saws.length && sawHit(S, x, z)) { R.hp[i] -= 4 + R.mx[i] * 0.05; if (R.hp[i] <= 0) { killRed(i); continue; } }
     if (z >= G.z0 - 0.9 && G.phase === 'play') {
-      damageCannon(T.dmg);
+      damageCannon(T.dmg, x, z);
       R.hp[i] = 0;
       burst(x, 0.8, z, PCOL.red, 12, 5);
       G.shake = 0.6;
@@ -2201,7 +2204,7 @@ function attackSweep(b) {
     for (let k = 0; k < 10; k++) spark(x + rand(-1.4, 1.4), 1, z1 + (k / 10) * len, PCOL.orange, 3, 4, 1.2, 0.6);
     G.shake = 0.7; sound.play('boom');
     if (Math.abs(G.cx - x) < SWEEP_RADIUS) {
-      const damage = damageCannon(1);
+      const damage = damageCannon(1, x, z1);
       burst(G.cx, 1.2, G.cannonZ, PCOL.orange, 30, 7);
       if (damage) popup('BURNED! -1 ❤', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 1.0);
     } else if (sweep.lateExposure) {
@@ -2483,7 +2486,7 @@ function ballDies(S, b, crashed) {
   G.shake = Math.max(G.shake, 0.8);
   sound.play('boom');
   if (crashed) {
-    const damage = damageCannon(b.def.dmg ?? 3);
+    const damage = damageCannon(b.def.dmg ?? 3, b.x, b.z);
     if (damage) popup(`-${damage} ♥`, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.0);
   } else {
     G.overdrive = Math.max(G.overdrive, 4);
@@ -2491,9 +2494,10 @@ function ballDies(S, b, crashed) {
     addRing(b.x, b.z, b.r * 2.5, 0xffce55, 0.6);
   }
 }
-function damageCannon(amount) {
+function damageCannon(amount, x = G.cx, z = G.z0 - 1) {
   const blocked = Math.min(G.shield, amount), damage = amount - blocked;
   if (blocked > 0) {
+    cannonShield.material.uniforms.hitDir.value.set(x - G.cx, Math.max(.6, Math.abs(z - G.z0) * .35), z - G.z0).normalize();
     G.shield -= blocked; G.guardFlash = 1; G.cannonPulse = .45;
     if (G.t >= G.armorPopupT) {
       G.armorPopupT = G.t + .4;
@@ -3034,7 +3038,7 @@ function step(dt) {
       const event = stepSupplyDrop(S.drop,G.cx,dt,r.phase === 'charging');
       if (event === 'catch') {
         G.shield = Math.min(6,G.shield+1);
-        G.guardFlash = 1;
+        G.guardFlash = 1; cannonShield.material.uniforms.hitDir.value.set(0,1,0);
         popup('RESERVES READY!', 'combo c2',G.cx,3,G.z0-2);
         sound.play('supply');
       } else if (event === 'fire') {
@@ -3450,10 +3454,13 @@ function renderWorld(dt) {
   cannon.group.position.set(G.cx, 0, G.cannonZ + G.recoil * 0.12);
   cannon.group.rotation.y = (G.cx - G.aim) * 0.08;
   cannon.group.rotation.z = clamp(-vel * 0.012, -0.18, 0.18);
-  cannon.shield.visible = (G.shield > 0 || G.guardFlash > 0) && G.phase !== 'menu';
-  cannon.shield.rotation.y += dt * 0.3;
-  cannon.shield.material.opacity = .06 + G.cannonPulse * .25 + G.guardFlash * .35;
-  cannon.shield.material.color.setHex(G.guardFlash > 0 ? 0xd4fbff : 0x75ebff);
+  cannonShield.visible = (G.shield > 0 || G.guardFlash > 0) && G.phase !== 'menu';
+  if (cannonShield.visible) {
+    const height = cannon.rig.glowAnchor.y + .43;
+    cannonShield.scale.set(Math.max(1.65,height*.90), height, height*1.12);
+    cannonShield.material.uniforms.plates.value = G.shield;
+    cannonShield.material.uniforms.flash.value = G.guardFlash;
+  }
   cannon.group.scale.setScalar((G.chassis ? 1.12 : 1) + G.cannonPulse * 0.25 + G.recoil * 0.03);
   const roll = dt * (G.phase === 'move' ? 14 : 0) + Math.abs(vel) * dt * 1.5;
   const drive = Math.abs(vel) + (G.phase === 'move' ? 10 : 0);
