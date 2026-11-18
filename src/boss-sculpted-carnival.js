@@ -1,6 +1,7 @@
+import { characterLoft } from './character-surfaces.js';
 import * as THREE from 'three';
 import { assetBatch, assetGlow, attackPose } from './asset-kit.js';
-import { loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry, crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth, bossShell } from './boss-shapes.js';
+import { loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry, mantleGeometry, crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth, bossShell } from './boss-shapes.js';
 
 // Sculpted carnival bosses for worlds 22 to 36: jack, flipper, ringmaster, mesmer, locomotive and scarecrow.
 // Same contract as boss-sculpted-late.js: buildSculptedCarnival(type) returns fitBoss(group, pose, radius, height, animate) or null.
@@ -62,7 +63,7 @@ function buildJack(){
   tube(spring,pts,rr,RED,{segments:10,steps:66});
   spring.finish(popper,'jack-coil-spring',bossMetal);
   const torso=node(popper,'jack-harlequin-torso',0,2.5,0),suit=assetBatch(),garnish=assetBatch();
-  loft(suit,[[-.4,.5,.44,0,0],[.4,.76,.66,0,0],[1.3,.8,.68,0,0],[1.95,.62,.54,0,0],[2.4,.34,.3,0,0]],BLUE,0,0,0,{segments:24,steps:18});
+  characterLoft(suit, [[-.4,.5,.44,0,0],[.4,.76,.66,0,0],[1.3,.8,.68,0,0],[1.95,.62,.54,0,0],[2.4,.34,.3,0,0]], 'jack', 0, 0, 0, {segments:24,steps:18});
   panel(garnish,[[0,.6],[.36,.06],[0,-.52],[-.36,.06]],RED,0,1.35,.6,.2,.08);
   panel(garnish,[[0,.6],[.36,.06],[0,-.52],[-.36,.06]],RED,0,1.35,-.62,.16,.08,0,Math.PI);
   suit.ring(.82,.07,0,.9,0,C.gold);
@@ -90,7 +91,7 @@ function buildJack(){
   const arms=[];
   for(const s of[-1,1]){
     const arm=node(torso,'jack-long-arm-'+s,s*.98,1.7,0),b=assetBatch();
-    tube(b,[[0,0,0],[s*.28,-1.3,.08],[s*.42,-2.5,.3]],[.32,.28,.2],s>0?BLUE:RED,{segments:12,steps:18});
+    tube(b,[[-s*.38,.15,-.04],[0,0,0],[s*.54,-.75,-.16],[s*.71,-1.43,-.16],[s*.59,-1.99,.19],[s*.42,-2.5,.3]],[.27,.41,.33,.21,.30,.2],s>0?BLUE:RED,{segments:12,steps:18});
     b.ring(.3,.09,s*.4,-2.35,.26,C.gold);
     bulb(b,.6,.78,.52,s>0?BLUE:RED,s*.46,-2.95,.34,{segments:14,steps:12});
     tube(b,[[s*.42,-2.7,.5],[s*.58,-2.5,.74]],[.15,.09],CREAM,{segments:8,steps:8});
@@ -103,7 +104,7 @@ function buildJack(){
     popper.scale.y=1+a*.09;popper.position.z=a*1.35;popper.rotation.x=a*.09;
     torso.rotation.y=Math.sin(t*.7)*.05;
     head.rotation.x=-a*.22+Math.sin(t*.9)*.03;head.rotation.y=Math.sin(t*.66)*.08;
-    for(const l of arms){l.arm.rotation.z=-l.s*(.14+a*.85);l.arm.rotation.x=-a*.25-rock*.06;}
+    for(const l of arms){l.arm.rotation.z=l.s*(.23-a*.83);l.arm.rotation.x=(l.s>0?-.46:.14)-a*.55-rock*.06;}
   });
 }
 
@@ -125,7 +126,7 @@ function buildFlipper(){
   hb.ring(1.02,.09,0,1.0,0,C.gold);
   hb.finish(hips,'flipper-gimbal-pelvis',bossMetal);
   const torso=node(pose,'flipper-barrel-chest',0,3.3,0),chest=assetBatch(),trim=assetBatch(),lamp=assetBatch();
-  loft(chest,[[-.4,1.0,.9,0,0],[.3,1.24,1.1,0,0],[1.1,1.3,1.16,0,0],[1.9,1.22,1.1,0,0],[2.5,1.0,.92,0,0],[2.9,.62,.55,0,0],[3.05,.06,.06,0,0]],CHROME,0,0,0,{segments:32,steps:22,warp(x,y,z,u,v,a){return[x,y,z+.06*Math.sin(v*Math.PI)*Math.max(0,Math.cos(a))**4];}});
+  characterLoft(chest, [[-.4,1.0,.9,0,0],[.3,1.24,1.1,0,0],[1.1,1.3,1.16,0,0],[1.9,1.22,1.1,0,0],[2.5,1.0,.92,0,0],[2.9,.62,.55,0,0],[3.05,.06,.06,0,0]], 'flipper', 0, 0, 0, {segments:32,steps:22,warp(x,y,z,u,v,a){return[x,y,z+.06*Math.sin(v*Math.PI)*Math.max(0,Math.cos(a))**4];}});
   for(const y of[.5,1.35,2.2])chest.ring(1.2-.07*Math.abs(y-1.35),.075,0,y,0,PLATE);
   panel(trim,[[0,.8],[.85,.55],[1.0,0],[.68,-.62],[0,-.72],[-.68,-.62],[-1.0,0],[-.85,.55]],PLATE,0,1.5,1.0,.24,.1);
   panel(trim,[[0,.5],[.95,.34],[1.15,-.06],[.76,-.5],[0,-.6],[-.76,-.5],[-1.15,-.06],[-.95,.34]],DEEP,0,1.52,1.18,.12,.07);
@@ -186,7 +187,7 @@ function buildRingmaster(){
     b.finish(leg,'ringmaster-trouser-and-boot-'+s,bossCloth);legs.push({leg,s});
   }
   const torso=node(pose,'ringmaster-tailcoat',0,3.0,0),coat=assetBatch(),trim=assetBatch();
-  loft(coat,[[-.6,.62,.58,0,0],[.3,.8,.72,0,0],[1.3,.96,.84,0,0],[2.2,1.0,.86,0,0],[2.9,.92,.8,0,0],[3.4,1.06,.96,0,0],[3.62,1.0,.92,0,0]],CRIMSON,0,0,0,{segments:26,steps:22});
+  characterLoft(coat, [[-.6,.62,.58,0,0],[.3,.8,.72,0,0],[1.3,.96,.84,0,0],[2.2,1.0,.86,0,0],[2.9,.92,.8,0,0],[3.4,1.06,.96,0,0],[3.62,1.0,.92,0,0]], 'ringmaster', 0, 0, 0, {segments:26,steps:22});
   panel(coat,[[0,.9],[.3,.5],[.2,0],[0,-.3],[-.2,0],[-.3,.5]],WHITE,0,2.1,.9,.12,.06);
   for(let k=0;k<3;k++)bulb(trim,.11,.11,.07,C.gold,0,1.9-k*.42,1.02,{segments:8,steps:6});
   for(const s of[-1,1]){
@@ -260,33 +261,20 @@ function buildMesmer(){
   belly.finish(pose,'mesmer-coil-belly-scales',bossShell);
   coils.finish(pose,'mesmer-continuous-coils',bossShell);
   const ENDX=Math.sin(-TAU*1.85)*1.1,ENDZ=Math.cos(-TAU*1.85)*.99;
-  const strike=node(pose,'mesmer-strike',0,2.2,0),neck=assetBatch(),bands=assetBatch();
-  const npts=[],nrads=[];
-  for(let j=0;j<=16;j++){const v=j/16;npts.push([ENDX*(1-v*.55)+Math.sin(v*2.2)*.3,.06+v*6.55,ENDZ*(1-v*.55)+v*v*1.3]);nrads.push(.8-v*.06);}
-  tube(neck,npts,nrads,VIOLET,{segments:16,steps:30});
-  neck.finish(strike,'mesmer-rising-neck',bossShell);
-  for(const v of[.5,.78]){const p=npts[Math.round(v*16)];bands.ring(.92-v*.1,.06,p[0],p[1],p[2],GOLD);}
-  bands.finish(strike,'mesmer-gold-collars',bossMetal);
-  const head=node(strike,'mesmer-head',npts[16][0],npts[16][1],npts[16][2]),face=assetBatch(),gleam=assetBatch(),crown=assetBatch();
+  const strike=node(pose,'mesmer-strike',0,2.2,0),neck=assetBatch();
+  // One sinuous throat rises out of the coil and opens continuously into
+  // the flared hood. Its offset sections carry the skull forward to strike.
+  const spine=[[0,.82,.79,ENDX,ENDZ],[.65,.78,.73,1.41,.18],[1.38,.71,.66,1.44,-.13],
+    [2.12,.69,.64,1.16,-.34],[2.86,.80,.64,.68,-.37],[3.52,1.08,.65,.19,-.17],
+    [4.11,1.62,.69,-.10,.08],[4.77,2.12,.72,-.20,.42],[5.38,2.30,.74,-.17,.74],
+    [5.84,1.92,.71,-.08,.98],[6.29,1.25,.69,.05,1.26],[6.59,.68,.63,.17,1.48]];
+  characterLoft(neck,spine,'mesmer',0,0,0,{segments:48,steps:36});
+  neck.finish(strike,'mesmer-neck-and-flaring-hood',bossShell);
+  const head=node(strike,'mesmer-head',.17,6.59,1.50),face=assetBatch(),gleam=assetBatch(),crown=assetBatch();
   face.add(headGeometry(1.95,1.75,2.2,{snout:.38,brow:.12,cheeks:.08,jaw:.72}),VIOLET);
   eye(face,gleam,-.5,.16,1.0,.52,CYAN,-.14);eye(face,gleam,.5,.16,1.0,.52,CYAN,.14);
   for(const s of[-1,1])tube(face,[[s*.5,-.5,1.12],[s*.56,-.85,1.18],[s*.52,-1.05,1.08]],[.09,.07,.012],0xf1e6c8,{segments:8,steps:10});
   face.finish(head,'mesmer-serpent-face',bossSkin);gleam.finish(head,'mesmer-eye-hypnosis',assetGlow);
-  const hoodN=node(head,'mesmer-hood',0,-.3,-.7),hood=assetBatch(),spirals=assetBatch();
-  loft(hood,[[0,.5,.36],[-.4,1.8,.52],[-1.0,2.6,.62],[-1.7,2.3,.56],[-2.3,1.4,.46],[-2.7,.5,.3],[-2.9,.12,.12]],0x7a4ab8,0,0,0,{segments:30,steps:20,warp(x,y,z,u,v,a){const f=1+.05*Math.sin(a*5+y*2);return[x*f,y,z*f];}});
-  for(const s of[-1,1])for(let k=0;k<9;k++){
-    const t2=k/8,ang=t2*4.6+(s>0?0:2.1),r=.22+t2*1.02;
-    bulb(spirals,.3,.3,.16,k%3===2?CYAN:MAGENTA,s*(.26+r*Math.cos(ang)),-1.4+r*Math.sin(ang)*.86,.56,{segments:8,steps:6});
-  }
-  hoodN.rotation.x=-.22;
-  hood.finish(hoodN,'mesmer-flared-hood',bossShell);
-  const inner=assetBatch();
-  loft(inner,[[.2,.34,.26],[-.3,1.3,.4],[-.9,2.1,.5],[-1.5,1.9,.46],[-2.0,1.1,.38],[-2.35,.3,.2]],0x8a55c8,0,0,.28,{segments:24,steps:14});
-  inner.finish(hoodN,'mesmer-hood-inner-layer',bossShell);
-  const trim2=assetBatch();
-  tube(trim2,[[0,.45,.06],[.95,-.15,.06],[1.9,-.75,.06],[2.5,-1.4,.06],[2.2,-2.1,.06],[1.3,-2.6,.06],[0,-2.82,.06],[-1.3,-2.6,.06],[-2.2,-2.1,.06],[-2.5,-1.4,.06],[-1.9,-.75,.06],[-.95,-.15,.06]],[.07,.07],GOLD,{segments:6,steps:34});
-  trim2.finish(hoodN,'mesmer-hood-gold-trim',bossMetal);
-  const spiralMesh=spirals.finish(hoodN,'mesmer-hypno-spirals',assetGlow);
   crown.add(crownGeometry(.8,.7,5),GOLD,0,.9,-.05);
   for(const s of[-1,1])chip(crown,[[0,.14],[.14,.04],[0,-.12],[-.14,.04]],CYAN,s*.36,1.06,.42,.05,.03,0,0,s*.4);
   crown.finish(head,'mesmer-jeweled-crown',bossMetal);
@@ -299,8 +287,7 @@ function buildMesmer(){
     strike.rotation.x=a*.5;strike.position.z=a*1.15;
     strike.position.y=2.2+(live?Math.sin(t*1.6)*.06:0);
     head.rotation.x=.12+a*.3;head.rotation.y=Math.sin(t*.5)*.06;
-    hoodN.scale.set(1+a*.3,1+a*.08,1+a*.3);
-    spiralMesh.scale.setScalar(1+Math.sin(t*2.2)*.06+a*.15);
+    strike.scale.x=1+.12*a+.015*Math.sin(t*2.2);
     tongue.scale.z=live?1+Math.max(0,Math.sin(t*2.4))*.8:1;
   });
 }
@@ -334,7 +321,7 @@ function buildLocomotive(){
     wheels.push({wheel,s});
   }
   const boiler=node(pose,'loco-boiler',0,2.6,-.2),drum=assetBatch(),fit=assetBatch(),lamp=assetBatch();
-  loft(drum,[[0,.95,1.15,0,0],[.5,1.1,1.3,0,0],[1.5,1.18,1.36,0,0],[2.6,1.2,1.38,0,0],[3.5,1.12,1.28,0,0],[4.2,.9,1.05,0,0],[4.55,.5,.6,0,0],[4.7,.06,.06,0,0]],IRON,0,0,0,{segments:34,steps:24,warp(x,y,z,u,v,a){return[x,y,z+.08*Math.sin(v*Math.PI)*Math.max(0,Math.cos(a))**4];}});
+  characterLoft(drum, [[0,.95,1.15,0,0],[.5,1.1,1.3,0,0],[1.5,1.18,1.36,0,0],[2.6,1.2,1.38,0,0],[3.5,1.12,1.28,0,0],[4.2,.9,1.05,0,0],[4.55,.5,.6,0,0],[4.7,.06,.06,0,0]], 'locomotive', 0, 0, 0, {segments:34,steps:24,warp(x,y,z,u,v,a){return[x,y,z+.08*Math.sin(v*Math.PI)*Math.max(0,Math.cos(a))**4];}});
   for(const y of[.9,1.9,2.9])fit.ring(1.26,.09,0,y,0,BRASS);
   bulb(fit,1.0,.8,1.0,BRASS,0,4.15,.1,{segments:16,steps:12});
   fit.cylinder(.12,.7,.5,4.75,.3,BRASS,'y',.12,8);
@@ -395,7 +382,8 @@ function buildScarecrow(){
     b.finish(leg,'scarecrow-stick-leg-'+s,bossShell);legs.push({leg,s});
   }
   const torso=node(pose,'scarecrow-patched-coat',0,2.4,0),coat=assetBatch(),patch=assetBatch(),straw=assetBatch();
-  loft(coat,[[-.2,.5,.44,0,0],[.5,.8,.68,0,0],[1.4,1.0,.82,0,0],[2.3,1.08,.88,0,0],[3.0,1.2,1.0,0,0],[3.5,1.3,1.1,0,0]],BURLAP,0,0,0,{segments:26,steps:20,warp(x,y,z,u,v,a){const f=1+.03*Math.sin(a*6+y*3);return[x*f,y,z*f];}});
+  characterLoft(coat, [[-.2,.5,.44,0,0],[.5,.8,.68,0,0],[1.4,1.0,.82,0,0],[2.3,1.08,.88,0,0],[3.0,1.2,1.0,0,0],[3.5,1.3,1.1,0,0]], 'scarecrow', 0, 0, 0, {segments:26,steps:20,warp(x,y,z,u,v,a){const f=1+.03*Math.sin(a*6+y*3);return[x*f,y,z*f];}});
+  coat.add(mantleGeometry(1.56,2.2,{outer:0xaa8051,lining:0x594733,braid:STRAW,folds:9,ragged:.38}),0xffffff,0,3.62,0);
   coat.ring(1.04,.07,0,.9,0,ROPE);
   panel(patch,[[-.3,.26],[.28,.3],[.34,-.2],[-.24,-.26]],REDF,-.55,1.5,.72,.1,.05,-.15,.2,0);
   panel(patch,[[-.26,.24],[.3,.28],[.24,-.22],[-.3,-.2]],BLUEF,.62,2.3,.68,.1,.05,.12,-.18,0);

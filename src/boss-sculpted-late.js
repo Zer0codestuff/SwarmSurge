@@ -1,6 +1,7 @@
+import { characterLoft } from './character-surfaces.js';
 import * as THREE from 'three';
 import { assetBatch, assetGlow, attackPose } from './asset-kit.js';
-import { loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry, crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth, bossShell } from './boss-shapes.js';
+import { loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry, mantleGeometry, crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth, bossShell } from './boss-shapes.js';
 
 const C={ink:0x181c30,steel:0x8396a8,gold:0xdba94b,ivory:0xffe7bd,red:0xb9364c,cyan:0x8ee9e9};
 const TAU=Math.PI*2;
@@ -48,9 +49,17 @@ function striped(g,a,b,period=.38){
 function buildKraken(){
   const {group,pose}=rig('sculpted-kraken'),head=node(pose,'kraken-flowing-mantle',0,5.1,-.25);
   const skin=assetBatch(),face=assetBatch(),gleam=assetBatch();
-  loft(skin,[[-1.75,1.25,1.05,0,.3],[-1.25,2.05,1.45,0,.15],[0,2.15,1.64],[1.8,1.84,1.43,0,-.1],[3.55,1.18,.95,0,-.25],[4.55,.22,.25,0,-.4],[4.7,.01,.01,0,-.4]],0xb94c79,0,0,0,{segments:36,steps:32,warp(x,y,z,u,v,a){const f=1+.035*Math.sin(a*7+v*3);return[x*f,y,z*f];}});
+  characterLoft(skin, [[-1.75,1.25,1.05,0,.3],[-1.25,2.05,1.45,0,.15],[0,2.15,1.64],[1.8,1.84,1.43,0,-.1],[3.55,1.18,.95,0,-.25],[4.55,.22,.25,0,-.4],[4.7,.01,.01,0,-.4]], 'kraken', 0, 0, 0, {segments:36,steps:32,warp(x,y,z,u,v,a){const f=1+.035*Math.sin(a*7+v*3);return[x*f,y,z*f];}});
   for(const s of[-1,1]){
-    panel(skin,[[0,-.5],[s*.55,.25],[s*.97,2.9],[s*.25,3.8],[0,1.2]],0x82436c,s*1.12,.25,-.9,.25,.13,0,s*.22);
+    // A cuttlefish fin ripples down each flank of the muscular mantle.
+    const fin=loftGeometry([[-.82,.14,.25,s*1.65,.0],[-.23,.55,.33,s*1.89,-.10],
+      [.76,.87,.33,s*1.91,-.14],[1.82,.88,.28,s*1.67,-.22],
+      [2.91,.70,.22,s*1.36,-.28],[3.78,.45,.15,s*.97,-.29],[4.42,.08,.07,s*.48,-.30]],
+      {segments:14,steps:23,warp(x,y,z,u,v,a){
+        const edge=Math.max(0,s*Math.sin(a));
+        return [x,y+.16*edge*Math.sin(9*v),z+.29*edge*Math.sin(v*12)];
+      }});
+    skin.add(fin,(x,y,z)=>Math.abs(x)>1.92+.14*Math.sin(y*4)?0xe69094:0xaa557e);
     eye(face,gleam,s*.96,-.65,1.54,.96,0xa8ffec,-s*.08);
     tube(skin,[[s*.35,.15,1.62],[s*.72,.32,1.65],[s*1.35,.12,1.4]],[.19,.22,.1],0x87355d,{segments:10,steps:12});
   }
@@ -60,7 +69,9 @@ function buildKraken(){
   const limbs=[];
   for(let k=0;k<8;k++){
     const a=k*TAU/8,arm=node(pose,'kraken-arm-'+k,Math.sin(a)*1.25,3.05,Math.cos(a)*1.03);
-    arm.rotation.y=a;
+    arm.rotation.y=a+.12*Math.sin(2*a);
+    const reach=1+.17*Math.cos(3*a);
+    arm.scale.set(1,1,reach);
     const b=assetBatch();
     tube(b,[[0,0,0],[0,-.18,.65],[0,-.65,1.38],[0,-1.45,2.05]],[.55,.51,.38,.27],k%2?0xcc648b:0xae4772,{segments:12,steps:24,flutes:.035});
     for(let j=0;j<4;j++){
@@ -84,9 +95,8 @@ function buildKraken(){
 function buildPumpkin(){
   const {group,pose}=rig('sculpted-pumpkin'),body=node(pose,'pumpkin-draped-robes');
   const robe=assetBatch();
-  loft(robe,[[.14,1.85,1.37],[.7,1.95,1.42],[2.5,1.53,1.2],[4.6,1.18,.86],[5.4,1.55,1.0],[5.8,1.52,.85],[5.95,.7,.55]],0x423350,0,0,0,{segments:40,steps:30,warp(x,y,z,u,v,a){const f=1+.065*Math.cos(a*9)*(1-v*.5);return[x*f,y+.09*Math.sin(a*7)**2*(1-v)**7,z*f];}});
-  for(const s of[-1,1])panel(robe,[[0,0],[s*.85,.6],[s*1.4,-.5],[s*.65,-1.8],[s*.1,-1.45]],0x6c4a66,s*.2,5.6,.9,.16,.08,0,s*.2);
-  robe.add(clothGeometry(2.8,4.95,{folds:7,flare:.35,depth:.19,segments:24,steps:22}),0x2e2944,0,5.35,-1.1);
+  characterLoft(robe, [[.14,1.85,1.37],[.7,1.95,1.42],[2.5,1.53,1.2],[4.6,1.18,.86],[5.4,1.55,1.0],[5.8,1.52,.85],[5.95,.7,.55]], 'pumpkin', 0, 0, 0, {segments:40,steps:30,warp(x,y,z,u,v,a){const f=1+.065*Math.cos(a*9)*(1-v*.5);return[x*f,y+.09*Math.sin(a*7)**2*(1-v)**7,z*f];}});
+  robe.add(mantleGeometry(2.03,4.6,{outer:0x623b55,lining:0x2d253b,braid:0xcb834c,folds:7,ragged:.29}),0xffffff,0,6.14,0);
   for(let k=0;k<4;k++)robe.ring(.14,.045,0,2.0+k*.78,1.31-k*.06,C.gold,'z');
   robe.finish(body,'pumpkin-continuous-folded-cloak',bossCloth);
   const head=node(pose,'pumpkin-carved-head',0,7.7,.12),rind=assetBatch(),cavity=assetBatch(),glow=assetBatch();
@@ -132,7 +142,7 @@ function buildDrill(){
   }
   base.finish(pose,'drill-rounded-tread-pods',bossMetal);
   const cabin=node(pose,'drill-cast-cabin',0,1.35,0),body=assetBatch(),lit=assetBatch();
-  loft(body,[[0,1.25,.96],[.3,1.83,1.36],[1.5,1.92,1.6],[3.1,1.75,1.42],[4.13,1.48,1.18],[4.65,.68,.6],[4.7,.08,.08]],0xb7853d,0,0,0,{segments:32,steps:26,warp(x,y,z,u,v,a){return[x,y,z+.1*Math.sin(v*Math.PI)*Math.max(0,Math.cos(a))**4];}});
+  characterLoft(body, [[0,1.25,.96],[.3,1.83,1.36],[1.5,1.92,1.6],[3.1,1.75,1.42],[4.13,1.48,1.18],[4.65,.68,.6],[4.7,.08,.08]], 'drill', 0, 0, 0, {segments:32,steps:26,warp(x,y,z,u,v,a){return[x,y,z+.1*Math.sin(v*Math.PI)*Math.max(0,Math.cos(a))**4];}});
   panel(body,[[-1.4,.24],[-.8,.55],[.8,.55],[1.4,.24],[1.2,-.32],[-1.2,-.32]],C.ink,0,3.1,1.4,.11,.09);
   panel(lit,[[-1.1,.11],[-.65,.24],[.65,.24],[1.1,.11],[.85,-.08],[-.85,-.08]],0xffd47a,0,3.13,1.56,.05,.04);
   for(const s of[-1,1]){
@@ -148,11 +158,18 @@ function buildDrill(){
     tube(shell,[[0,0,.4],[s*.1,-.08,1.06],[s*.13,-.05,1.78]],[.5,.49,.45],C.ink,{segments:16,steps:14});
     shell.ring(.53,.13,s*.13,-.05,1.68,C.gold,'z');shell.finish(arm,'drill-contoured-gearcase-'+s,bossMetal);
     const spindle=node(arm,'drill-helical-bit-'+s,s*.13,-.05,1.75),tip=assetBatch();
-    const bit=loftGeometry([[0,.56,.56],[.5,.56,.56],[1.3,.4,.4],[2.1,.21,.21],[2.7,.015,.015]],{segments:20,steps:20});bit.rotateX(Math.PI/2);tip.add(bit,0x91a0ad);
-    for(let flank=0;flank<2;flank++){
-      const points=[];for(let j=0;j<=26;j++){const z=j/26*2.55,a=j/26*TAU*2.2+flank*Math.PI,r=.56*(1-z/2.8);points.push([Math.sin(a)*r,Math.cos(a)*r,z]);}
-      tube(tip,points,Array.from({length:points.length},(_,i)=>.105*(1-i/points.length*.75)),0xe2ba64,{segments:6,steps:45});
-    }
+    // Helical cutting lands grow out of the bit. A continuous bright
+    // leading edge runs from the bearing to the tip as the spindle spins.
+    const bit=loftGeometry([[0,.55,.55],[.28,.61,.61],[1.0,.53,.53],[1.69,.37,.37],
+      [2.31,.18,.18],[2.72,.018,.018]],{segments:32,steps:32,warp(x,y,z,u,v,a){
+        const lead=.5+.5*Math.cos(3*a-v*TAU*3.15);
+        const flute=.68+.39*lead**2;
+        return [x*flute,y,z*flute];
+      }});
+    tip.add(bit.rotateX(Math.PI/2),(x,y,z)=>{
+      const phase=3*Math.atan2(x,-y)-z/2.72*TAU*3.15;
+      return Math.cos(phase)>.41?0xdab77a:Math.cos(phase)>-.22?0xb6c1c9:0x657783;
+    });
     tip.finish(spindle,'drill-forged-cutting-flutes-'+s,bossMetal);arms.push({arm,spindle,s});
   }
   return fitBoss(group,pose,3.4,9,(t,progress,state={})=>{
@@ -169,7 +186,7 @@ function buildDice(){
   const {group,pose}=rig('sculpted-dice-lord'),feet=[];
   for(const s of[-1,1])feet.push({leg:shapedLeg(pose,'dice-silk-spat-'+s,s,1.05,1.45,0xbc3a50,0x772f43,1.39),s});
   const body=node(pose,'dice-carved-body',0,4.05,0),b=assetBatch(),gold=assetBatch(),gleam=assetBatch();
-  b.add(dieShape(4.1),0xf6ecd8);
+  characterLoft(b,[[-2.05,.04,.04,0,0,.38],[-1.89,1.64,1.64,0,0,.38],[-1.41,2.05,2.05,0,0,.38],[1.41,2.05,2.05,0,0,.38],[1.89,1.64,1.64,0,0,.38],[2.05,.04,.04,0,0,.38]],'dice');
   for(const s of[-1,1]){
     eye(b,gleam,s*.86,.47,2.03,.64,0xffecc5,-s*.08);
     tube(gold,[[s*1.75,-1.68,1.55],[s*1.9,-.7,1.85],[s*1.9,.8,1.85],[s*1.75,1.69,1.55]],[.075,.075,.075,.075],C.gold,{segments:8,steps:18});
@@ -207,9 +224,8 @@ function buildCommander(){
   const {group,pose}=rig('sculpted-commander'),legs=[];
   for(const s of[-1,1])legs.push({leg:shapedLeg(pose,'commander-riding-boot-'+s,s,.92,2.9,0x563344,0x292b3a,2.84),s});
   const torso=node(pose,'commander-tailored-body',0,2.9,0),body=assetBatch(),metal=assetBatch();
-  loft(body,[[0,1.05,.8],[.52,1.23,.92],[1.5,1.52,1.04],[2.65,1.8,1.09],[3.2,1.59,.9],[3.5,.73,.52]],0xa9364b);
-  panel(body,[[-1.2,.9],[-.9,1.3],[.45,1.1],[1.3,.56],[1.12,-.8],[.2,-1.2],[-1.2,-.75]],0xc14a59,0,1.95,.96,.26,.09);
-  body.add(clothGeometry(2.3,3.0,{folds:5,flare:.45,depth:.13,segments:18,steps:18}),0x753043,0,2.95,-.95);
+  characterLoft(body, [[0,1.05,.8],[.52,1.23,.92],[1.5,1.52,1.04],[2.65,1.8,1.09],[3.2,1.59,.9],[3.5,.73,.52]], 'commander');
+  body.add(mantleGeometry(1.87,2.95,{outer:0xb53f51,lining:0x592d40,braid:0xf3bd71,folds:5,split:.9}),0xffffff,0,3.58,0);
   tube(metal,[[-.55,.35,1.01],[-.63,1.4,1.2],[-.9,2.8,1.05]],[.075,.075,.075],C.gold,{segments:8,steps:14});
   for(let k=0;k<3;k++)panel(metal,[[-.26,.07],[.26,.07],[.23,-.07],[-.23,-.07]],k%2?C.ivory:C.gold,.65,2.3-k*.28,1.26,.025,.035);
   body.finish(torso,'commander-fitted-breastcoat',bossCloth);metal.finish(torso,'commander-braided-trim',bossMetal);
@@ -237,7 +253,8 @@ function buildCommander(){
 
 function buildSpider(){
   const {group,pose}=rig('sculpted-crystal-spider'),body=node(pose,'spider-continuous-carapace',0,3.35,-.6),chitin=assetBatch(),face=assetBatch(),glow=assetBatch();
-  const shell=loftGeometry([[-2.55,.04,.04],[-2.1,1.18,1.05],[-1.2,2.13,1.56],[.0,2.14,1.4],[.9,1.47,.95],[1.6,1.32,.86],[2.15,.97,.64],[2.55,.12,.12]],{segments:36,steps:30,warp(x,y,z,u,v,a){const dorsal=Math.max(0,-Math.cos(a))**3;return[x*(1+.025*Math.sin(y*4)),y,z-dorsal*.13*Math.sin(v*Math.PI*5)**2];}});shell.rotateX(Math.PI/2);chitin.add(shell,0x59416b);
+  const shellBatch=assetBatch();
+  characterLoft(shellBatch,[[-2.55,.04,.04],[-2.1,1.18,1.05],[-1.2,2.13,1.56],[.0,2.14,1.4],[.9,1.47,.95],[1.6,1.32,.86],[2.15,.97,.64],[2.55,.12,.12]],'spider',0,0,0,{segments:36,steps:30,warp(x,y,z,u,v,a){const dorsal=Math.max(0,-Math.cos(a))**3;return[x*(1+.025*Math.sin(y*4)),y,z-dorsal*.13*Math.sin(v*Math.PI*5)**2];}});shellBatch.finish(body,'spider-dorsal-carapace',bossShell).rotation.x=Math.PI/2;
   for(const s of[-1,1]){
     tube(chitin,[[s*.25,1.31,-1.8],[s*1.2,1.35,-1.15],[s*1.65,1.08,-.25],[s*1.0,.76,.85]],[.085,.1,.09,.025],0x9b739d,{segments:8,steps:16});
     eye(face,glow,s*.43,-.06,2.34,.59,0xffc5f0,-s*.16);
@@ -275,8 +292,7 @@ function buildPharaoh(){
   const {group,pose}=rig('sculpted-pharaoh'),legs=[];
   for(const s of[-1,1])legs.push({leg:shapedLeg(pose,'pharaoh-wrapped-calf-'+s,s,.73,2.9,0xc8b68b,0xbd954c,2.84),s});
   const body=node(pose,'pharaoh-wrapped-anatomy',0,2.85,0),wrap=assetBatch(),regalia=assetBatch();
-  const torso=loftGeometry([[0,.94,.74],[.52,1.08,.83],[1.85,1.38,.93],[2.75,1.64,.99],[3.15,1.39,.83],[3.4,.62,.51]],{segments:28,steps:25,warp(x,y,z){const ridge=.035*Math.sin(y*17+x*.6);return[x*(1+ridge),y,z*(1+ridge)];}});
-  wrap.add(torso,0xe0cda2);
+  characterLoft(wrap,[[0,.94,.74],[.52,1.08,.83],[1.85,1.38,.93],[2.75,1.64,.99],[3.15,1.39,.83],[3.4,.62,.51]],'pharaoh',0,0,0,{segments:28,steps:25,warp(x,y,z){const ridge=.035*Math.sin(y*17+x*.6);return[x*(1+ridge),y,z*(1+ridge)];}});
   regalia.add(striped(clothGeometry(2.35,2.9,{folds:5,flare:.19,depth:.15,segments:22,steps:20}),0xb68f43,0x294d80,.32),0xffffff,0,.58,1.0);
   panel(regalia,[[-1.4,.35],[-.8,.65],[0,.1],[.8,.65],[1.4,.35],[.92,-.5],[0,-.8],[-.92,-.5]],C.gold,0,2.6,.93,.21,.12);
   for(const s of[-1,1])tube(regalia,[[s*.12,2.23,1.26],[s*.6,2.39,1.22],[s*1.18,2.68,.97]],[.075,.1,.035],0x315f92,{segments:8,steps:12});
@@ -317,7 +333,7 @@ function buildThunder(){
   const {group,pose}=rig('sculpted-thunder-guardian'),legs=[];
   for(const s of[-1,1])legs.push({leg:shapedLeg(pose,'thunder-stone-greave-'+s,s,1.14,3.2,0x5f7489,0xa3b7be,3.14),s});
   const chest=node(pose,'thunder-weathered-body',0,3.15,0),stone=assetBatch(),runes=assetBatch();
-  loft(stone,[[0,1.28,.94],[.6,1.56,1.14],[1.8,2.05,1.36],[3.1,2.28,1.37],[3.7,1.94,1.15],[4.0,.91,.62]],0x6f8395,0,0,0,{segments:34,steps:28,warp(x,y,z,u,v,a){const f=1+.027*Math.sin(y*4+a*3)+.016*Math.sin(x*8+z*5);return[x*f,y,z*f];}});
+  characterLoft(stone, [[0,1.28,.94],[.6,1.56,1.14],[1.8,2.05,1.36],[3.1,2.28,1.37],[3.7,1.94,1.15],[4.0,.91,.62]], 'thunder', 0, 0, 0, {segments:34,steps:28,warp(x,y,z,u,v,a){const f=1+.027*Math.sin(y*4+a*3)+.016*Math.sin(x*8+z*5);return[x*f,y,z*f];}});
   panel(stone,[[-1.65,.7],[-.9,1.15],[0,.65],[.9,1.15],[1.65,.7],[1.3,-.7],[0,-1.3],[-1.3,-.7]],0x9eb5be,0,2.03,1.13,.28,.13);
   panel(runes,[[-.13,.7],[.39,.13],[.04,-.05],[.3,-.68],[-.45,.02],[-.12,.02]],0xffdf81,0,2.0,1.52,.025,.045);
   for(const s of[-1,1])tube(stone,[[s*.3,3.4,1.03],[s*.84,2.95,1.31],[s*1.61,2.83,1.19]],[.085,.105,.045],0x304861,{segments:8,steps:14});
@@ -353,7 +369,7 @@ function buildThunder(){
 
 function buildMagma(){
   const {group,pose}=rig('sculpted-magma-dragon'),torso=node(pose,'magma-fused-basalt-anatomy',0,5.0,-.1),hide=assetBatch(),heat=assetBatch();
-  loft(hide,[[-2.1,1.16,1.07,0,-.03],[-1.2,1.78,1.52],[.2,2.22,1.65],[1.65,2.16,1.49],[2.7,1.61,1.21],[3.15,.83,.77]],0x48343b,0,0,0,{segments:36,steps:30,warp(x,y,z,u,v,a){const crease=.035*Math.cos(a*7+v*5)+.02*Math.sin(y*7+z*4);return[x*(1+crease),y,z*(1+crease)];}});
+  characterLoft(hide, [[-2.1,1.16,1.07,0,-.03],[-1.2,1.78,1.52],[.2,2.22,1.65],[1.65,2.16,1.49],[2.7,1.61,1.21],[3.15,.83,.77]], 'magma', 0, 0, 0, {segments:36,steps:30,warp(x,y,z,u,v,a){const crease=.035*Math.cos(a*7+v*5)+.02*Math.sin(y*7+z*4);return[x*(1+crease),y,z*(1+crease)];}});
   for(let k=0;k<4;k++){
     const y=1.7-k*.94,w=1.63-Math.abs(k-1.5)*.1,z=1.42-Math.abs(k-1.4)*.13;
     panel(hide,[[-w,.18],[-w*.55,.49],[0,.35],[w*.55,.49],[w,.18],[w*.75,-.35],[0,-.54],[-w*.75,-.35]],k%2?0x785047:0x624148,0,y,z,.19,.12);

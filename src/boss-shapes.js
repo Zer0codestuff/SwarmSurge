@@ -35,7 +35,7 @@ export function loftGeometry(sections, { segments = 32, steps = 28, warp, shade 
       const a=k/segments*TAU;
       let x=p[3]+Math.max(.002,p[1])*signedPower(Math.sin(a),clamp(p[5],.35,2));
       let y=p[0], z=p[4]+Math.max(.002,p[2])*signedPower(Math.cos(a),clamp(p[5],.35,2));
-      if(warp) [x,y,z]=warp(x,y,z,k/segments,v,a);
+      if(warp) [x,y,z]=warp(x,y,z,k/segments,v,a,p);
       vertices.push(x,y,z);
       const tone=shade ? .87+.13*Math.sin(Math.PI*v)+.025*Math.cos(a*2) : 1;
       colors.push(tone,tone,tone);
@@ -56,12 +56,16 @@ export function loftGeometry(sections, { segments = 32, steps = 28, warp, shade 
       indices.push(...(flip?[start,a+1,a]:[start,a,a+1]));
     }
   }
+  // Some sculptors trace a profile from the crown down to the base.
+  if (sections[0][0] > sections[sections.length-1][0]) {
+    for (let i=0;i<indices.length;i+=3) [indices[i+1],indices[i+2]]=[indices[i+2],indices[i+1]];
+  }
   return smoothRingSeams(surface(vertices,indices,colors), segments, steps + 1);
 }
 
 // Indexed rings duplicate the closing vertex. Give both copies the same normal
 // so a travelling highlight crosses the join on armor, horns and tentacles.
-function smoothRingSeams(geometry, segments, rows) {
+export function smoothRingSeams(geometry, segments, rows) {
   const normals = geometry.attributes.normal;
   const normal = new THREE.Vector3(), other = new THREE.Vector3();
   for (let row = 0; row < rows; row++) {
@@ -97,7 +101,7 @@ export function sweepGeometry(points,radii,{segments=12,steps=24,flutes=0,flatte
   const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));
   const frames=curve.computeFrenetFrames(steps,false), positions=[],indices=[],colors=[];
   for(let j=0;j<=steps;j++) {
-    const t=j/steps, p=curve.getPoint(t), f=t*(radii.length-1), i=Math.min(radii.length-2,Math.floor(f)), a=f-i;
+    const t=j/steps, at=curve.getUtoTmapping(t), p=curve.getPoint(at), f=at*(radii.length-1), i=Math.min(radii.length-2,Math.floor(f)), a=f-i;
     const r=Math.max(.003,cubic(radii[Math.max(0,i-1)],radii[i],radii[i+1],radii[Math.min(radii.length-1,i+2)],a));
     for(let k=0;k<=segments;k++) {
       const theta=k/segments*TAU, radius=r*(1+flutes*Math.cos(theta*5));
@@ -150,17 +154,32 @@ export function clothGeometry(width,length,{folds=6,flare=.35,depth=.2,segments=
 }
 
 export function crownGeometry(radius,height,points=7) {
-  const p=[],indices=[],steps=points*12;
-  for(let ring=0;ring<4;ring++)for(let k=0;k<=steps;k++){
-    const a=k/steps*TAU,inner=ring>=2,top=ring===1||ring===2;
-    const r=radius-(inner?.13:0)+(top?.04:0),wave=Math.max(0,Math.cos(a*points))**5;
-    p.push(Math.sin(a)*r,top?height*(.3+.7*wave):0,Math.cos(a)*r);
+  const positions = [], indices = [], shades = [];
+  const segments = points * 16;
+  // A rolled base rail, recessed chased fillet and flared leaf points form
+  // one closed gold band. The inner return is visible from above.
+  const profile = [
+    [-.025, .01, 0, .64], [.032, .05, 0, .95], [.048, .14, 0, 1.0],
+    [.008, .18, 0, .61], [.024, .24, .04, .94], [.017, .29, .27, .78],
+    [.045, .32, .68, 1.0], [-.045, .32, .68, .85], [-.11, .22, .17, .55],
+    [-.11, .05, 0, .68], [-.08, .01, 0, .76],
+  ];
+  for (const [offset, band, relief, brightness] of profile) {
+    for (let k = 0; k <= segments; k++) {
+      const a = k * TAU / segments, petal = (.5 + .5 * Math.cos(a * points)) ** 2.25;
+      const radiusAtAngle = radius + offset + relief * (.08 * petal + .04 * petal**8);
+      positions.push(Math.sin(a) * radiusAtAngle, height * (band + relief * petal), Math.cos(a) * radiusAtAngle);
+      const tint = brightness + .10 * relief * petal;
+      shades.push(tint, tint, tint);
+    }
   }
-  for(let ring=0;ring<4;ring++)for(let k=0;k<steps;k++){
-    const a=ring*(steps+1)+k,b=((ring+1)%4)*(steps+1)+k;
-    indices.push(a,a+1,b,a+1,b+1,b);
+  for (let j = 0; j < profile.length; j++) for (let k = 0; k < segments; k++) {
+    const a = j * (segments+1) + k, b = ((j+1) % profile.length) * (segments+1) + k;
+    indices.push(a, a+1, b, a+1, b+1, b);
   }
-  return surface(p,indices);
+  const geometry = surface(positions, indices, shades);
+  smoothRingSeams(geometry, segments, profile.length);
+  return geometry;
 }
 
 export function fitBoss(group,pose,radius,height,animate) {
@@ -168,4 +187,33 @@ export function fitBoss(group,pose,radius,height,animate) {
   const bounds=new THREE.Box3().setFromObject(pose);
   pose.scale.setScalar(height/bounds.max.y);
   return {group,radius,height,animate};
+}
+
+// An open mantle cut around the shoulders. Its collar, lining, turned edge
+// and hanging hem form one garment, including the surfaces visible from below.
+export function mantleGeometry(width, length, { outer, lining, braid, folds=7, split=.74, ragged=.12 }) {
+  const p=[],colors=[],indices=[], cols=36, rows=14, layer=(cols+1)*(rows+1);
+  const coat=new THREE.Color(outer),inside=new THREE.Color(lining),trim=new THREE.Color(braid),c=new THREE.Color();
+  for(let face=0;face<2;face++)for(let j=0;j<=rows;j++)for(let k=0;k<=cols;k++) {
+    const v=j/rows,u=k/cols,angle=split+u*(TAU-2*split);
+    const back=(1-Math.cos(angle))*.5, edge=Math.sin(u*Math.PI);
+    const pleat=Math.cos(angle*folds+.85*Math.sin(2*angle+v*3.2));
+    const shoulder=1-Math.exp(-v*10);
+    const span=.37+.64*shoulder+.12*v;
+    const billow=span+v*(.058*pleat-.055*face);
+    const drop=(.29+.71*back)*length;
+    const hem=ragged*length*(.5+.5*Math.cos(angle*folds+.5))*(.3+.7*edge)*v**5;
+    p.push(width*Math.sin(angle)*billow,-v*drop+hem+.09*length*back*(1-v),
+      width*(.64*Math.cos(angle)*billow-.34*v*v-.1*back));
+    c.copy(face?inside:coat).multiplyScalar(.75+.25*(.5+.5*pleat));
+    if(j===rows-1 || k===1 || k===cols-1)c.lerp(trim,.88);
+    colors.push(c.r,c.g,c.b);
+    if(j===rows||k===cols)continue;
+    const n=face*layer+j*(cols+1)+k,b=n+cols+1;
+    indices.push(...(face?[n,n+1,b,n+1,b+1,b]:[n,b,n+1,n+1,b,b+1]));
+  }
+  const join=(a,b)=>indices.push(a,b,a+layer,b,b+layer,a+layer);
+  for(let k=0;k<cols;k++){join(k+1,k);join(rows*(cols+1)+k,rows*(cols+1)+k+1);}
+  for(let j=0;j<rows;j++){join(j*(cols+1),(j+1)*(cols+1));join((j+1)*(cols+1)+cols,j*(cols+1)+cols);}
+  return surface(p,indices,colors);
 }
