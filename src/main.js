@@ -3239,14 +3239,19 @@ function lose(msg) {
 // ---------------------------------------------------------------- rendering
 let troopPixelScale = 1;
 function troopInstance(P, i, near, far) {
-  const distance = Math.hypot(P.x[i] - camera.position.x, camera.position.y, P.z[i] - camera.position.z);
-  const pixels = P.sc[i] * troopPixelScale / Math.max(1, distance);
-  P.detail[i] = pixels > (P.detail[i] ? 20 : 24) ? 1 : 0;
+  const dx = P.x[i] - camera.position.x, dz = P.z[i] - camera.position.z;
+  const distanceSq = Math.max(1, dx*dx + camera.position.y*camera.position.y + dz*dz);
+  const size = P.sc[i] * troopPixelScale, threshold = P.detail[i] ? 20 : 24;
+  P.detail[i] = size*size > distanceSq * threshold*threshold ? 1 : 0;
   const mesh = P.detail[i] ? near : far, at = mesh.count++;
   const motion = mesh.geometry.attributes.unitMotion.array;
   motion[at * 2] = P.phase[i];
   const floating = P === R && (RED_TYPES[P.kind[i]].fly || RED_TYPES[P.kind[i]].ghost);
-  motion[at * 2 + 1] = P.st[i] || P.adur[i] > 0 || floating ? 0 : Math.min(1, Math.hypot(P.vx[i], P.vz[i]) / 6);
+  const vx = P.vx[i], vz = P.vz[i], speed = Math.sqrt(vx*vx + vz*vz);
+  const stride = Math.min(1, speed / 6);
+  motion[at * 2 + 1] = P.st[i] || P.adur[i] > 0 || floating ? 0 : stride;
+  const lean = P === B ? 1 : P.st[i] ? 0 : .8;
+  writeMatrix(mesh.instanceMatrix.array, i, P, speed, stride * lean, at);
   return mesh;
 }
 function finishTroopMeshes(near, far) {
@@ -3269,6 +3274,12 @@ function specialTint(form) {
   if (form === SUNWING_FORM) return SUNWING_RGB;
   return null;
 }
+// Copy directly between the two instance buffers. A subarray here creates
+// a temporary typed-array view for every equipped soldier on every frame.
+function copyTroopPose(mesh, source, index) {
+  const at = mesh.count++ * 16, from = index * 16, target = mesh.instanceMatrix.array;
+  for (let k = 0; k < 16; k++) target[at+k] = source[from+k];
+}
 function writeBlue() {
   for (const form of blueForms) form.near.count = form.far.count = 0;
   for (let k = 1; k < weaponMeshes.length; k++) weaponMeshes[k].count = weaponFarMeshes[k].count = 0;
@@ -3282,14 +3293,12 @@ function writeBlue() {
     const form = special == null ? FORM_BY_RANK[tier] : blueForms[special];
     const body = troopInstance(B, i, form.near, form.far), index = body.count - 1;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
-    writeMatrix(m, i, B, s, 1, index);
     if (tier >= 5 && haloCount < 24 && i % 7 === 0) {
       halos.add(B.x[i], 0.3, B.z[i], col, 1.45 * s, 0.19); haloCount++;
     }
     const weapon = B.weapon[i];
     if (weapon) {
-      const mesh = (B.detail[i] ? weaponMeshes : weaponFarMeshes)[weapon], at = mesh.count++;
-      mesh.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), at * 16);
+      copyTroopPose((B.detail[i] ? weaponMeshes : weaponFarMeshes)[weapon], m, index);
     }
     const f = Math.max(0, B.flash[i]) * 0.45;
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
@@ -3304,11 +3313,8 @@ function writeBlue() {
 // Victory hop strength for allied troops, set by the renderer while a stage is cleared.
 let cheer = 0;
 // unit matrix: heading + forward lean while running, squash & stretch on each step, pop-in when spawned
-function writeMatrix(m, i, P, s, lean, instance = i) {
-  const vx = P.vx[i], vz = P.vz[i];
-  const ang = Math.atan2(vx, vz);
-  const c = Math.cos(ang), si = Math.sin(ang);
-  const run = Math.min(1, Math.hypot(vx, vz) / 6) * lean;
+function writeMatrix(m, i, P, speed, run, instance) {
+  const s = P.sc[i], c = speed ? P.vz[i]/speed : 1, si = speed ? P.vx[i]/speed : 0;
   const pitch = 0.22 * run, cp = Math.cos(pitch), sp = Math.sin(pitch);
   const ph = P.phase[i];
   const age = P.age[i];
@@ -3344,11 +3350,10 @@ function writeRed() {
     if (R.st[i]) { R.vx[i] = 0; R.vz[i] = 0.01; }
     const body = troopInstance(R, i, redMesh, redFarMesh), index = body.count - 1;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
-    writeMatrix(m, i, R, R.sc[i], R.st[i] ? 0 : 0.8, index);
     const f = Math.max(0, R.flash[i]) * 0.75;
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
     const ov = (body === redMesh ? overlays : overlaysFar)[kind];
-    if (ov) ov.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), ov.count++ * 16);
+    if (ov) copyTroopPose(ov, m, index);
     if (body === redMesh && specialGlow < 12) {
       if (kind === 7 && specialGlow <= 10) {
         for (const side of [-1, 1]) {
