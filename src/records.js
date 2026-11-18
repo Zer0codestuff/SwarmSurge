@@ -9,15 +9,15 @@ export const MEDALS = [
 ];
 const clean = (value) => (Number.isFinite(value) && value > 0 ? value : 0);
 
-export function loadRecords(storage = globalThis.localStorage) {
+export function loadRecords(storage) {
   try {
-    const saved = JSON.parse(storage.getItem(KEY));
+    const saved = JSON.parse((storage ?? globalThis.localStorage).getItem(KEY));
     if (saved && typeof saved === 'object' && saved.worlds && typeof saved.worlds === 'object') return saved;
   } catch {}
   return { worlds: {} };
 }
-export function saveRecords(records, storage = globalThis.localStorage) {
-  try { storage.setItem(KEY, JSON.stringify(records)); return true; } catch { return false; }
+export function saveRecords(records, storage) {
+  try { (storage ?? globalThis.localStorage).setItem(KEY, JSON.stringify(records)); return true; } catch { return false; }
 }
 export const medalsOf = (records, world) => MEDALS.filter((medal) => records.worlds[world]?.medals?.includes(medal.id));
 export function medalTotal(records) {
@@ -45,7 +45,13 @@ export function recordRun(records, world, run) {
   const earned = [];
   if (run.full) {
     const time = clean(run.time);
-    if (time && (!clean(before.time) || time < before.time)) { entry.time = Math.round(time * 10) / 10; fresh.time = clean(before.time) > 0; }
+    const rounded = Math.round(time * 10) / 10;
+    const faster = rounded > 0 && (!clean(before.time) || rounded < before.time);
+    if (faster) { entry.time = rounded; fresh.time = clean(before.time) > 0; delete entry.splits; }
+    // Old saves can acquire their missing splits by matching the displayed best.
+    if ((faster || (!entry.splits && rounded === entry.time)) && run.splits?.length === 3 && run.splits.every(t => clean(t) > 0)) {
+      entry.splits = run.splits.map(t => Math.round(t * 100) / 100);
+    }
     const wins = {
       flawless: run.heartsLost === 0,
       swift: time > 0 && time < SWIFT_SECONDS,

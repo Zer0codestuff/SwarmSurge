@@ -278,6 +278,7 @@
   }
 </style>
 <link rel="stylesheet" href="./src/map.css">
+<link rel="stylesheet" href="./src/results.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -343,8 +344,8 @@
 
 <div id="result" class="overlay hidden">
   <div class="box">
-    <div id="rtitle"></div>
-    <div id="rstars"></div>
+    <header class="result-header"><div><small id="rworld"></small><h2 id="rtitle"></h2>
+      <div id="rstars"></div></div><div id="rart" aria-hidden="true"></div></header>
     <div id="rmsg"></div>
     <button id="rnext" class="btn">NEXT LEVEL</button>
     <button id="rretry" class="btn alt">RETRY STAGE</button>

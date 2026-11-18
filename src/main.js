@@ -580,13 +580,15 @@ const tutorials = createTutorials();
 let records = loadRecords();
 // Stars stay in the legacy progress key; personal bests and medals live beside it.
 function recordVictory() {
+  if (G.victory) return G.victory;
   const stars = G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1;
   if (stars > (progress.stars[G.levelIdx] || 0)) {
     progress.stars[G.levelIdx] = stars;
     try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
   }
-  const outcome = recordRun(records, G.levelIdx, { army: G.maxArmy, combo: G.bestCombo, kills: G.kills, time: G.time, bossTime: G.stage.boss ? G.stage.time : 0, heartsLost: G.hurt, full: G.fullRun, hardcore: G.hardcore });
+  const outcome = recordRun(records, G.levelIdx, { army: G.maxArmy, combo: G.bestCombo, kills: G.kills, time: G.time, splits: G.stageTimes, bossTime: G.stage.boss ? G.stage.time : 0, heartsLost: G.hurt, full: G.fullRun, hardcore: G.hardcore });
   saveRecords(records);
+  G.victory = outcome;
   return outcome;
 }
 
@@ -898,7 +900,7 @@ function startLevel(idx, stageIdx = 0, hardcore = false) {
   G.effects.length = 0;
   Object.assign(G, {
     paused: false, resumePhase: null, weaponCursor: 0, t: 0,
-    log: [], hardcore, lives: hardcore ? 1 : BASE_LIVES, hurt: 0, fullRun: stageIdx === 0, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
+    log: [], stageTimes: def.stages.map(() => 0), victory: null, hardcore, lives: hardcore ? 1 : BASE_LIVES, hurt: 0, fullRun: stageIdx === 0, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, army: 0, armyShown: 0, armyPrev: 0, pumpT: 0, squad: 0, nextMile: 1000, armyAvg: 0,
     recoil: 0, cannonPulse: 0, kick: 0,
     chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
@@ -3026,6 +3028,7 @@ function step(dt) {
   if (G.phase === 'intro' && G.phaseT > 1.2) { G.phase = 'play'; G.phaseT = 0; G.fireT = 0; }
   if (G.phase === 'play') {
     G.time += dt;
+    G.stageTimes[S.i] += dt;
     const r = S.reactor;
     if (r.phase === 'charging' || r.phase === 'burst') {
       const power = chargePower(r);
@@ -3821,15 +3824,28 @@ function showMenu(preserveRun = false) {
     for (const s of [...S.spawners, ...S.turrets, ...S.pillars, ...S.balls]) hideLabel(s.label);
   }
 }
+function renderStageTimes(win, reference) {
+  const compare = G.fullRun && Array.isArray(reference) && reference.length === G.stageTimes.length && reference.every(t => Number.isFinite(t) && t > 0);
+  const cells = G.stageTimes.map((t, i) => {
+    const complete = win || i < G.stageIdx;
+    const delta = compare && complete && t > 0 ? Math.round((t-reference[i])*10) : null;
+    const note = delta === null ? '' : delta === 0 ? 'Even' : `${delta > 0 ? '+' : '−'}${(Math.abs(delta)/10).toFixed(1)} s`;
+    return `<li><span>${i === 2 ? 'Boss' : 'Fort ' + (i+1)}</span><b>${t ? clock(t) : '–'}</b>${note ? `<small class="${delta < 0 ? 'ahead' : delta > 0 ? 'behind' : ''}">${note}</small>` : ''}</li>`;
+  }).join('');
+  return `<section class="stage-times"><h3>Stage times${compare ? '<small>vs. best run</small>' : ''}</h3><ol>${cells}</ol></section>`;
+}
 function showResult(win) {
   const stars = win ? (G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1) : 0;
   const outcome = win ? recordVictory() : null;
-  $('rtitle').textContent = win ? 'LEVEL COMPLETE!' : 'DEFEATED';
+  const level = LEVELS[G.levelIdx];
+  $('rworld').textContent = `World ${G.levelIdx + 1} · ${level.name}${G.hardcore ? ' · Hardcore' : ''}`;
+  $('rart').innerHTML = biomeArt(level.theme, THEMES[level.theme]);
+  $('rtitle').textContent = win ? 'World cleared' : 'Defeated';
   $('rtitle').className = win ? 'win' : 'lose';
   $('rstars').innerHTML = win ? starsHtml(stars) : '';
   const last = G.levelIdx >= LEVELS.length - 1;
   const bossLoss = !!G.stage.boss;
-  const tip = bossLoss
+  const tip = G.stage.boss?.sweep ? 'Leave the striped lane before impact. A last-second dodge gives you twelve ×6 Vanguard volleys.' : bossLoss
     ? 'Tip: chain gates in a row and grab POWER/upgrades first. A huge army pushes the boss back!'
     : 'Tip: gates in a row multiply each other. Break fences, ice and barriers to reach the big ones!';
   // Each tile shows the run; after a win it also shows the record it beat or still has to beat.
@@ -3838,29 +3854,31 @@ function showResult(win) {
     return `<span>${label}<b ${value == null ? '' : `data-v="${value}" data-p="${prefix}"`}>${value == null ? text(G.time) : prefix + '0'}</b>${note}</span>`;
   };
   const stats = `<div class="stats">${tile('MAX ARMY', G.maxArmy, '', 'army', fmt)}${tile('BEST COMBO', G.bestCombo, 'x', 'combo', (v) => 'x' + fmt(v))}${tile('CRUSHED', G.kills, '', 'kills', fmt)}${tile('TIME', null, '', G.fullRun ? 'time' : 'none', clock)}</div>`;
+  const times = renderStageTimes(win, (win ? outcome.before : records.worlds[G.levelIdx])?.splits);
   const held = win ? medalsOf(records, G.levelIdx) : [];
   const medals = win ? `<div class="medals">${MEDALS.map((medal, k) => {
     const fresh = outcome.earned.includes(medal.id), has = held.includes(medal);
     return `<span class="medal${has ? ' on' : ''}${fresh ? ' fresh' : ''}" style="--k:${k}" title="${medal.hint}"><i>${medal.icon}</i>${medal.name}<small>${fresh ? 'NEW!' : has ? 'earned' : medal.hint}</small></span>`;
   }).join('')}</div>` : '';
   $('rmsg').innerHTML = win
-    ? stats + medals + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
+    ? stats + times + medals + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
       (last ? `<br><b class="champ">ALL ${LEVELS.length} LEVELS CLEARED! You are the Swarm Master!</b>` : '')
-    : stats + `${G.loseMsg}<br><small>${tip}</small>`;
+    : stats + times + `${G.loseMsg}<br><small>${tip}</small>`;
   $('rretry').classList.toggle('hidden', win);
   $('rrestart').textContent = win ? 'REPLAY' : 'RESTART LEVEL';
   $('rnext').classList.toggle('hidden', !win || last);
   $('result').classList.remove('hidden');
   countUp();
-  if (win) for (let k = 0; k < stars; k++) setTimeout(() => sound.play('combo', k + 1), 380 + k * 250);
-  if (outcome?.earned.length) setTimeout(() => { sound.play('evolve', 2); buzz([40, 40, 90]); }, 1300);
+  if (win) for (let k = 0; k < stars; k++) setTimeout(() => { if (G.phase === 'won' && G.victory === outcome) sound.play('combo', k + 1); }, 380 + k * 250);
+  if (outcome?.earned.length) setTimeout(() => { if (G.phase === 'won' && G.victory === outcome) { sound.play('evolve', 2); buzz([40, 40, 90]); } }, 1300);
 }
 // result numbers roll up (log scale, so 1e20 counts as nicely as 200)
 function countUp() {
   const els = [...document.querySelectorAll('#rmsg b[data-v]')];
   const t0 = performance.now();
   const tick = (now) => {
-    const p = Math.min(1, (now - t0) / 1100), e = 1 - (1 - p) ** 3;
+    if (els.length && !els[0].isConnected) return;
+    const p = reducedMotion ? 1 : Math.min(1, (now - t0) / 1100), e = 1 - (1 - p) ** 3;
     for (const el of els) {
       const v = +el.dataset.v, shown = Math.expm1(Math.log1p(v) * e);
       el.textContent = (el.dataset.p || '') + fmt(p >= 1 ? v : shown);
@@ -3873,7 +3891,7 @@ $('rnext').addEventListener('click', () => startLevel(G.levelIdx + 1));
 $('rretry').addEventListener('click', () => {
   const snap = G.snap;
   // A retry continues the same run: its clock, tallies and lost hearts carry over.
-  const run = { time: G.time, kills: G.kills, maxArmy: G.maxArmy, bestCombo: G.bestCombo, hurt: G.hurt, fullRun: G.fullRun };
+  const run = { time: G.time, stageTimes: G.stageTimes, kills: G.kills, maxArmy: G.maxArmy, bestCombo: G.bestCombo, hurt: G.hurt, fullRun: G.fullRun };
   startLevel(G.levelIdx, snap.stage, G.hardcore);
   Object.assign(G, run);
   Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, weaponMask: snap.weaponMask, aircraft: snap.aircraft, shield: snap.shield, lives: G.hardcore ? 1 : Math.max(snap.lives, 5) });

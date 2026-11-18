@@ -335,6 +335,27 @@ window.runGameChecks = (g) => {
     startLevel(0,1); const partial=G.fullRun; startLevel(0); const full=G.fullRun && G.hurt===0;
     return {pass:a.earned.length===0 && !a.fresh.army && b.fresh.army && !b.fresh.combo && b.fresh.time && b.earned.join()==='flawless,swift,overpowered' && c.earned.length===0 && recordRun({worlds:{}},1,{time:90,bossTime:30,heartsLost:1,full:true,hardcore:true}).earned.join()==='hardcore' && e.time===60 && e.army===1e9 && e.combo===20 && e.wins===3 && medalTotal(r)===3 && clock(65.04)==='1:05.0' && clock(9.96)==='0:10.0' && !partial && full,a,b,c,e,partial,full};
   })()`);
+  check('Results credit a victory once and compare splits to the previous best run', `(() => {
+    startLevel(5,2); G.phase='play'; G.fullRun=true; G.time=62; G.stageTimes=[18,24,20]; G.stage.time=20;
+    const prev=records.worlds[5]; records.worlds[5]={wins:2,time:65,splits:[20,22,23],medals:[]};
+    try {
+      bossDefeated(G.stage); const saved=G.victory;
+      showResult(true); const entry=records.worlds[5], ui=$('rmsg');
+      return {pass:recordVictory()===saved && entry.wins===3 && entry.splits.join()==='18,24,20' &&
+        ui.querySelectorAll('.stage-times .ahead').length===2 && ui.querySelectorAll('.stage-times .behind').length===1 &&
+        !!ui.querySelector('.medal.fresh') && ui.textContent.includes('NEW BEST')};
+    } finally { if(prev) records.worlds[5]=prev; else delete records.worlds[5]; saveRecords(records); }
+  })()`);
+  check('Stage times include retries, and old records gain a reference on a tied full run', `(() => {
+    for(let i=0;i<15;i++)step(STEP); const first=G.stageTimes[0];
+    $('rretry').click(); G.phase='play'; step(STEP);
+    const retry=first>0 && Math.abs(G.stageTimes[0]-G.time)<1e-8 && G.time>first;
+    const r={worlds:{2:{time:60,medals:[]}}};
+    const run={full:true,time:60,splits:[12,22,26],heartsLost:2,bossTime:26};
+    recordRun(r,2,run); recordRun(r,2,{...run,full:false,time:20,splits:[5,5,10]});
+    recordRun(r,2,{...run,time:70,splits:[10,40,20]});
+    return {pass:retry && r.worlds[2].splits.join()==='12,22,26'};
+  })()`);
   check('Every world has its own score and the arrangement grows with the battle', `(() => {
     const ids=new Set(LEVELS.map(L=>{music.setMode('battle',L.theme,THEMES[L.theme].sky);const s=music.score;return [s.root,s.bpm,s.scale,s.loop,s.arp,s.bass,s.melody].join('|');}));
     const kinds=(level,mode,boss)=>{const set=new Set();for(let i=0;i<64;i++)for(const n of music.plan(i,level,mode,boss))set.add(n[0]);return [...set].sort().join();};
