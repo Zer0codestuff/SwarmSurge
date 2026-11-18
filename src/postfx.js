@@ -9,10 +9,12 @@ const PREFILTER = `
   void main() {
     vec3 c = (texture2D(tMap, vUv + uTexel * vec2(-1.0, -1.0)).rgb + texture2D(tMap, vUv + uTexel * vec2(1.0, -1.0)).rgb
       + texture2D(tMap, vUv + uTexel * vec2(-1.0, 1.0)).rgb + texture2D(tMap, vUv + uTexel * vec2(1.0, 1.0)).rgb) * 0.25;
-    float peak = max(c.r, max(c.g, c.b));
-    float soft = clamp(peak - uThreshold + uKnee, 0.0, 2.0 * uKnee);
+    // The scene is display encoded. A saturated midtone can have a full red or blue
+    // channel without being bright enough to cast a halo.
+    float brightness = mix(dot(c, vec3(0.2126, 0.7152, 0.0722)), max(c.r, max(c.g, c.b)), 0.55);
+    float soft = clamp(brightness - uThreshold + uKnee, 0.0, 2.0 * uKnee);
     soft = soft * soft / (4.0 * uKnee + 1e-4);
-    gl_FragColor = vec4(c * max(soft, peak - uThreshold) / max(peak, 1e-4), 1.0);
+    gl_FragColor = vec4(c * max(soft, brightness - uThreshold) / max(brightness, 1e-4), 1.0);
   }`;
 const DOWN = `
   varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel;
@@ -23,13 +25,13 @@ const DOWN = `
     gl_FragColor = vec4(c / 8.0, 1.0);
   }`;
 const UP = `
-  varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uWeight;
+  varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel;
   void main() {
     vec3 c = (texture2D(tMap, vUv + uTexel * vec2(-1.0, -1.0)).rgb + texture2D(tMap, vUv + uTexel * vec2(1.0, -1.0)).rgb
       + texture2D(tMap, vUv + uTexel * vec2(-1.0, 1.0)).rgb + texture2D(tMap, vUv + uTexel * vec2(1.0, 1.0)).rgb) * 2.0;
     c += texture2D(tMap, vUv + uTexel * vec2(-2.0, 0.0)).rgb + texture2D(tMap, vUv + uTexel * vec2(2.0, 0.0)).rgb;
     c += texture2D(tMap, vUv + uTexel * vec2(0.0, -2.0)).rgb + texture2D(tMap, vUv + uTexel * vec2(0.0, 2.0)).rgb;
-    gl_FragColor = vec4(c / 12.0 * uWeight, 1.0);
+    gl_FragColor = vec4(c / 12.0, 0.62);
   }`;
 const COMPOSITE = `
   varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tBloom;
@@ -61,10 +63,10 @@ export function createPostFX(renderer) {
     vertexShader: VERT, fragmentShader, uniforms, depthTest: false, depthWrite: false, toneMapped: false, ...extra,
   });
   const texel = () => ({ value: new THREE.Vector2() });
-  const prefilter = pass(PREFILTER, { tMap: { value: null }, uTexel: texel(), uThreshold: { value: 0.7 }, uKnee: { value: 0.18 } });
+  const prefilter = pass(PREFILTER, { tMap: { value: null }, uTexel: texel(), uThreshold: { value: 0.76 }, uKnee: { value: 0.09 } });
   const down = pass(DOWN, { tMap: { value: null }, uTexel: texel() });
-  const up = pass(UP, { tMap: { value: null }, uTexel: texel(), uWeight: { value: 1 } }, {
-    transparent: true, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendEquation: THREE.AddEquation,
+  const up = pass(UP, { tMap: { value: null }, uTexel: texel() }, {
+    transparent: true, blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendEquation: THREE.AddEquation,
   });
   const composite = pass(COMPOSITE, {
     tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0 }, uVignette: { value: 0.22 },
@@ -119,11 +121,11 @@ export function createPostFX(renderer) {
         down.uniforms.uTexel.value.set(1 / mips[i - 1].width, 1 / mips[i - 1].height);
         draw(down, mips[i]);
       }
-      // Wider levels carry more weight so the glow reads as a soft halo, not a thin outline.
+      // Crossfade the wide halo with the finer level already in the target. Their
+      // weights sum to one, so a large bright surface has the same gain at every size.
       for (let i = levels - 1; i > 0; i--) {
         up.uniforms.tMap.value = mips[i].texture;
         up.uniforms.uTexel.value.set(0.5 / mips[i].width, 0.5 / mips[i].height);
-        up.uniforms.uWeight.value = 1.15;
         draw(up, mips[i - 1]);
       }
       renderer.autoClear = clear;
@@ -136,11 +138,15 @@ export function createPostFX(renderer) {
   }
   return {
     render, setSize, state,
-    /** Bright biomes need a high threshold or the whole road would glow. */
+    /**
+     * Only lights should glow: below ~0.75 the threshold catches lava fields, road lines and
+     * lit armor, which washes dark biomes out. Dark biomes get a slightly lower threshold and
+     * more strength so their neon still reads; bright biomes need the highest threshold.
+     */
     setLook(luminance) {
       const t = Math.min(1, Math.max(0, (luminance - 0.22) / 0.5)), k = t * t * (3 - 2 * t);
-      state.strength = 0.95 + (0.2 - 0.95) * k;
-      prefilter.uniforms.uThreshold.value = 0.5 + 0.34 * k;
+      state.strength = 0.45 + (0.2 - 0.45) * k;
+      prefilter.uniforms.uThreshold.value = 0.76 + 0.08 * k;
       composite.uniforms.uVignette.value = 0.3 - 0.12 * k;
     },
     flash: composite.uniforms.uFlash.value,

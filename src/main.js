@@ -840,12 +840,12 @@ function disposeLevel() {
 const LIGHTS = {
   desert: [0xffffff, 0xb09a7a, 1.7, 0xfff4e0, 2.3],
   mob: [0xffffff, 0xb09a7a, 1.75, 0xfff4e0, 2.3],
-  lava: [0xffd0b0, 0x502020, 1.5, 0xffc090, 2.0],
+  lava: [0xd6becb, 0x713328, 1.05, 0xffc5a0, 1.75],
   frost: [0xeaf6ff, 0x9fb0c8, 1.6, 0xffffff, 2.1],
   jungle: [0xf0ffe0, 0x5a7a3a, 1.6, 0xfff0c0, 2.3],
-  neon: [0x9a8aff, 0x302050, 1.5, 0xff9af0, 1.6],
+  neon: [0xa5aedc, 0x3d294a, 1.15, 0xdfcfed, 1.6],
   candy: [0xfff0fa, 0xc08ab0, 1.75, 0xffffff, 2.1],
-  moon: [0xb0b8ff, 0x404058, 1.4, 0xffffff, 2.2],
+  moon: [0xa4b4d5, 0x343747, .8, 0xf3f2ed, 1.7],
   sky: [0xffffff, 0xa0c0e0, 1.8, 0xfff8e0, 2.2],
   void: [0xc08aff, 0x301040, 1.5, 0xff9af0, 1.8],
   factory: [0xfff0d8, 0x6a5a4a, 1.6, 0xffe0b0, 2.2],
@@ -854,24 +854,26 @@ const LIGHTS = {
   spooky: [0xb0a0ff, 0x302838, 1.45, 0xe0d0ff, 1.8],
   arena: [0xffffff, 0xb08a5a, 1.75, 0xfff0d0, 2.3],
   crystal: [0x9af0ff, 0x302850, 1.5, 0xd0b0ff, 1.9],
-  volcano: [0xffc0a0, 0x502018, 1.5, 0xffb080, 2.0],
+  volcano: [0xd6bfc3, 0x633023, 1.15, 0xffc9a5, 1.85],
   tomb: [0xffffff, 0xb08a5a, 1.75, 0xfff0c8, 2.3],
   storm: [0xd0e0ff, 0x404a50, 1.5, 0xe0e8ff, 1.9],
   blackhole: [0xd0b0ff, 0x201030, 1.45, 0xffd0a0, 1.9],
   ...LATE_LIGHTS,
 };
+function setBattleGlow(T) {
+  const lum = (hex) => { const c = new THREE.Color(hex).convertLinearToSRGB(); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
+  post.setLook(lum(T.ground) * 0.5 + lum(T.fog) * 0.3 + lum(T.road) * 0.2);
+}
 function applyTheme(theme) {
   const T = THEMES[theme];
   scene.background = new THREE.Color(T.sky);
   scene.fog = new THREE.Fog(T.fog, 70, 170);
   const su = sky.material.uniforms;
-  su.uTop.value.set(T.sky).offsetHSL(0, 0.08, -0.08); su.uMid.value.set(T.fog); su.uBottom.value.set(T.fog);
+  su.uTop.value.set(T.sky).multiplyScalar(.82); su.uHorizon.value.set(T.fog);
   ambient.setTheme(theme);
   const L = LIGHTS[theme];
   hemi.color.set(L[0]); hemi.groundColor.set(L[1]); hemi.intensity = L[2]; sun.color.set(L[3]); sun.intensity = L[4];
-  // Glow strength follows how bright the biome already is.
-  const lum = (hex) => { const c = new THREE.Color(hex).convertLinearToSRGB(); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
-  post.setLook(lum(T.ground) * 0.5 + lum(T.fog) * 0.3 + lum(T.road) * 0.2);
+  setBattleGlow(T);
 }
 
 function startLevel(idx, stageIdx = 0, hardcore = false) {
@@ -3981,6 +3983,7 @@ function resumeGame() {
 function resumeRun() {
   if (!G.resumePhase) return;
   G.phase = G.resumePhase; G.resumePhase = null; G.paused = false;
+  setBattleGlow(THEMES[LEVELS[G.levelIdx].theme]);
   $('menu').classList.add('hidden'); hud.root.classList.remove('hidden');
   labelBoundsDirty = true;
   resetInput(); acc = 0; last = performance.now(); sound.setPaused(false);

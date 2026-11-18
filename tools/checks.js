@@ -9,6 +9,31 @@ window.runGameChecks = (g) => {
       results.push({ name, pass: detail.pass, detail });
     } catch (error) { results.push({ name, pass: false, error: error.message }); }
   };
+  check('Glow keeps saturated terrain steady and leaves a halo beside a white light', `(() => {
+    const world = new THREE.Scene(), view = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 4);
+    view.position.z = 1;
+    world.background = new THREE.Color(0xe05430);
+    const light = new THREE.Mesh(new THREE.PlaneGeometry(1, 2), new THREE.MeshBasicMaterial({color: 0xffffff, toneMapped: false}));
+    light.position.x = -.5; world.add(light);
+    const gl = renderer.getContext(), initialGlow = post.state.glow;
+    const sample = (x) => {
+      const pixel = new Uint8Array(4);
+      gl.readPixels(x, gl.drawingBufferHeight >> 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+      return pixel[1];
+    };
+    const render = (on) => {
+      post.state.glow = on; post.render(world, view);
+      return [sample((gl.drawingBufferWidth >> 1) + 2), sample(Math.floor(gl.drawingBufferWidth * .8))];
+    };
+    try {
+      post.setLook(.1);
+      const off = render(false), on = render(true);
+      return {pass: off[1] > 75 && off[1] < 95 && Math.abs(on[1] - off[1]) <= 3 && on[0] - off[0] >= 2, off, on};
+    } finally {
+      post.state.glow = initialGlow; setBattleGlow(THEMES[LEVELS[G.levelIdx].theme]);
+      light.geometry.dispose(); light.material.dispose();
+    }
+  })()`);
   check('Sweep timing uses cannon position and rewards a late escape exactly once', `(() => {
     const b={z:G.z0-48}, life=G.lives;
     attackSweep(b); G.cx=3; updateEffects(1.26);
