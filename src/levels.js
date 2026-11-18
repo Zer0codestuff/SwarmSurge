@@ -478,15 +478,16 @@ export const LEVELS = prepareCampaign([
         ],
       },
       {
-        tip: 'MOON GOLEM! Twin cannon + power + crusher ladder!',
+        tip: 'Feed the right redline to buy triple power before the crushers. The left bay unlocks a mirror cannon. Aim along the outer rails to cool the dial with both guns firing.',
         boss: { type: 'moon', hp: 6000000, speed: 0.5 },
         waves: { every: 3.0, swarm: 12, runner: 8, tank: { every: 2, hp: 70 }, ramp: 0.4 },
         walls: [{ x: 0, d1: 9, d2: 36 }],
         gates: [
           { t: 'upgrade', up: 'twin', need: 80, x: -3.3, d: 11, w: 5.6 },
-          { t: 'upgrade', up: 'power', need: 120, x: 3.3, d: 11, w: 5.6 },
+          { t: 'upgrade', up: 'power', need: 120, x: 3.3, d: 12.7, w: 5.6 },
           ...ladder(-3.3, 16, 3, 7, 3.6, 5.6),
-          ...ladder(3.3, 16, 3, 7, 3.6, 5.6),
+          { t: 'mul', v: 3, x: 3.3, d: 8.5, w: 4.2 },
+          ...ladder(3.3, 19.6, 4, 7, 3.6, 5.6),
         ],
         crushers: [
           { x: -3.3, d: 22, w: 5.4, period: 2.0 },
