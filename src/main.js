@@ -6,6 +6,9 @@ import { Music } from './music.js';
 import { CRUSH_SECONDS, MEDALS, SWIFT_SECONDS, clock, loadRecords, medalTotal, medalsOf, recordRun, saveRecords } from './records.js';
 import * as FX from './fx.js';
 import * as P from './props.js';
+import { cannonJets } from './cannon-jets.js';
+import { createImpactShield } from './impact-shield.js';
+import { attackMarker } from './attack-markers.js';
 import { bossProjectile } from './boss-projectiles.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
@@ -17,7 +20,7 @@ import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-
 import { TREAD_PITCH } from './conveyor-assets.js';
 import { createSupplyDrop, callSupplyDrop, stepSupplyDrop, supplyMessage, poseSupplyDrop } from './supply-drop.js';
 import { newReactor, chargePower, triggerReactor, tickReactor, VENT_TIME, BURST_TIME } from './reactor.js';
-import { SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
+import { AEGIS_FORM, SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
 import { LATE_LIGHTS } from './biomes-late.js';
 import * as PL from './props-late.js';
@@ -158,7 +161,9 @@ const blueForms = TROOP_FORMS.map((_, form) => ({
   far: instanced(troopFormGeometry(form, 'low').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
 }));
 // Allied kind bits are inherited by gate copies and combined on pool overflow.
-const GIANT = 1, SUNWING = 2;
+const GIANT = 1, SUNWING = 2, AEGIS = 4;
+const AEGIS_RGB = rgb(0xd7fff0);
+const SWEEP_RADIUS = 1.9, COUNTER_WINDOW = .36, COUNTER_POWER = 6, COUNTER_VOLLEYS = 12;
 const SUNWING_RGB = rgb(0xffe4a2);
 const FORM_BY_RANK = RANKS.map((_, rank) => blueForms[troopForm(rank)]);
 const redMesh = instanced(M.redUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x400808, gradientMap: M.toonGradient() }), MAX_RED);
@@ -444,15 +449,18 @@ function popup(text, cls, x, y, z, life = 1.3) {
   if (TURBO) return;
   const p = popups[popHead]; popHead = (popHead + 1) % popups.length;
   p.x = x; p.y = y; p.z = z; p.life = life; p.target = null;
-  // stack combo popups that are still fresh so they don't overlap
   p.combo = cls.startsWith('combo');
+  p.el.classList.toggle('combo-popup', p.combo);
+  p.dy = 0;
   p.serial = ++popSerial;
   if (p.combo) {
-    const previous = popups.filter(q => q !== p && q.combo && q.life > 0).sort((a,b) => b.serial - a.serial);
-    for (const q of previous.slice(1)) { q.life = 0; q.el.style.display = 'none'; }
+    let newest = null;
+    for (const q of popups) if (q !== p && q.combo && q.life > 0 && (!newest || q.serial > newest.serial)) newest = q;
+    for (const q of popups) if (q !== p && q.combo && q.life > 0) {
+      if (q === newest) q.dy = -1;
+      else { q.life = 0; q.el.style.display = 'none'; }
+    }
   }
-  p.dy = 0;
-  if (p.combo) for (const q of popups) if (q !== p && q.combo && q.life > 0.6) p.dy = Math.min(p.dy, q.dy - 1);
   p.inner.textContent = text;
   p.inner.className = '';
   void p.inner.offsetWidth;
@@ -491,9 +499,12 @@ function updatePopups(dt) {
       continue;
     }
     if (!project(p.x, p.y, p.z)) { p.el.style.display = 'none'; p.life = 0; p.target = null; continue; }
-    let sx = tmpV.x, sy = tmpV.y;
-    if (p.combo) { sx = clamp(sx, innerWidth * 0.3, innerWidth * 0.7); sy = Math.max(innerHeight * 0.2, sy) + p.dy * 40; }
-    p.el.style.transform = `translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px)`;
+    const sx = tmpV.x.toFixed(1) + 'px';
+    const sy = p.combo ? Math.max(innerHeight * .2, tmpV.y) + p.dy * 48 : tmpV.y;
+    // Percentages resolve against this popup's width. Reserve its largest
+    // animated scale without reading layout as each label or viewport changes.
+    const x = p.combo ? `clamp(calc(8px + 62.5%), ${sx}, calc(100vw - 8px - 62.5%))` : sx;
+    p.el.style.transform = `translate(${x},${sy.toFixed(1)}px)`;
   }
 }
 
@@ -546,8 +557,13 @@ const G = {
   chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
 };
 const cannon = M.buildCannon();
+const cannonShield = createImpactShield();
+cannon.group.add(cannonShield);
 const twinCannon = M.buildCannon(0xff4fd8);
 const squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.group.scale.setScalar(0.85); c.group.visible = false; scene.add(c.group); return c; });
+const fleet = [cannon, twinCannon, ...squadCannons];
+const muzzleJets = cannonJets(fleet, 6);
+scene.add(muzzleJets.mesh);
 const airWings = new Map();
 function supportAircraft(tier) {
   if (!airWings.has(tier)) {
@@ -559,7 +575,6 @@ function supportAircraft(tier) {
 scene.add(cannon.group, twinCannon.group);
 const weaponMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1), unitMat, MAX_BLUE, false))];
 const weaponFarMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1, 'low'), unitMat, MAX_BLUE, false))];
-const cannonMuzzle = new THREE.Vector3();
 const defenseMuzzle = new THREE.Vector3();
 cannon.group.visible = twinCannon.group.visible = false;
 const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
@@ -574,13 +589,15 @@ const tutorials = createTutorials();
 let records = loadRecords();
 // Stars stay in the legacy progress key; personal bests and medals live beside it.
 function recordVictory() {
+  if (G.victory) return G.victory;
   const stars = G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1;
   if (stars > (progress.stars[G.levelIdx] || 0)) {
     progress.stars[G.levelIdx] = stars;
     try { localStorage.setItem('swarm-progress', JSON.stringify(progress)); } catch {}
   }
-  const outcome = recordRun(records, G.levelIdx, { army: G.maxArmy, combo: G.bestCombo, kills: G.kills, time: G.time, bossTime: G.stage.boss ? G.stage.time : 0, heartsLost: G.hurt, full: G.fullRun, hardcore: G.hardcore });
+  const outcome = recordRun(records, G.levelIdx, { army: G.maxArmy, combo: G.bestCombo, kills: G.kills, time: G.time, splits: G.stageTimes, bossTime: G.stage.boss ? G.stage.time : 0, heartsLost: G.hurt, full: G.fullRun, hardcore: G.hardcore });
   saveRecords(records);
+  G.victory = outcome;
   return outcome;
 }
 
@@ -892,11 +909,13 @@ function startLevel(idx, stageIdx = 0, hardcore = false) {
   G.effects.length = 0;
   Object.assign(G, {
     paused: false, resumePhase: null, weaponCursor: 0, t: 0,
-    log: [], hardcore, lives: hardcore ? 1 : BASE_LIVES, hurt: 0, fullRun: stageIdx === 0, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
+    log: [], stageTimes: def.stages.map(() => 0), victory: null, hardcore, lives: hardcore ? 1 : BASE_LIVES, hurt: 0, fullRun: stageIdx === 0, barrels: 1, rate: 1, power: 1, twin: false, fireT: 0, charge: 0, kills: 0, time: 0, aim: 0, cx: 0, shake: 0,
     maxArmy: 0, bestCombo: 1, slow: 0, dmgAcc: 0, dmgT: 0, dmgTotal: 0, army: 0, armyShown: 0, armyPrev: 0, pumpT: 0, squad: 0, nextMile: 1000, armyAvg: 0,
     recoil: 0, cannonPulse: 0, kick: 0,
     chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
   });
+  for (const actor of fleet) actor.firedAt = actor.giantAt = -Infinity;
+  muzzleJets.mesh.visible = false;
   setBarrels(1);
   cannon.setChassis(0); twinCannon.setChassis(0);
   cannon.group.visible = true;
@@ -912,11 +931,15 @@ function startLevel(idx, stageIdx = 0, hardcore = false) {
 }
 // Later stages are hidden until the cannon reaches them. Compiling their programs while the
 // level opens keeps the advance between stages free of shader hitches.
+let markerWarmed = false;
 function warmShaders() {
   if (TURBO) return;
   const hidden = G.stages.filter((S) => !S.group.visible);
   for (const S of hidden) S.group.visible = true;
+  const marker = markerWarmed ? null : attackMarker('circle', 0, 0, 1, 0, false);
+  if (marker) scene.add(marker);
   renderer.compile(scene, camera);
+  if (marker) { scene.remove(marker); markerWarmed = true; }
   for (const S of hidden) S.group.visible = false;
 }
 function setBarrels(n) {
@@ -961,6 +984,8 @@ function enterStage(i) {
   G.zones.length = 0;
   G.stageIdx = i;
   G.stage = G.stages[i];
+  G.stage.counterShots = 0;
+  G.stage.sweep = null;
   G.stage.reactor = newReactor(G.stage.def.surge);
   priceStageSupplies(G.stage, G.snap.supplyFlux);
   G.shown = false;
@@ -1056,15 +1081,12 @@ function fireFrom(cx, actor = cannon, power = volleyPower(), kind = G.stage.reac
     const off = (b - (G.barrels - 1) / 2) * sp;
     const i = cannonUnit(clamp(cx+off+rand(-.06,.06),-XLIM,XLIM),power,kind);
     if (i >= 0) { B.vz[i] = -BLUE_SPEED; B.flash[i] = 0.7; }
-    if (!TURBO) {
-      const barrel = actor.barrels.children[b];
-      barrel.localToWorld(cannonMuzzle.set(0, 0, -1.245));
-      cannonMuzzle.x += cx - actor.group.position.x;
-      spark(cannonMuzzle.x, cannonMuzzle.y, cannonMuzzle.z, G.power >= 2 ? PCOL.gold : PCOL.ice, 1, 2.5, 1.3, .12, 0);
-    }
   }
+  actor.firedAt = G.t;
+  actor.jetColor = (kind & AEGIS) ? 0x8affe1 : (kind & SUNWING) || power > 1 ? 0xffcf78 : 0xa9f5ff;
 }
 function launchGiant(power,kind) {
+  cannon.giantAt = G.t;
   const i = cannonUnit(G.cx, GIANT_HP * power, GIANT | kind);
   if (i >= 0) { B.vz[i] = -GIANT_SPEED; B.flash[i] = 1; }
   burst(G.cx, 1.5, G.z0 - 1.5, PCOL.blue, 12, 5);
@@ -1075,10 +1097,14 @@ function fireCannon(dt) {
   const interval = BASE_INTERVAL / G.rate;
   if (G.fireT > 0) return;
   const reactor = G.stage.reactor;
-  const kind = reactor.phase === 'burst' ? SUNWING : 0;
-  const power = volleyPower();
+  const baseKind = reactor.phase === 'burst' ? SUNWING : 0;
+  const basePower = volleyPower();
   while (G.fireT <= 0) {
     G.fireT += interval;
+    const counter = G.stage.counterShots > 0;
+    const power = basePower * (counter ? COUNTER_POWER : 1);
+    const kind = baseKind | (counter ? AEGIS : 0);
+    if (counter) G.stage.counterShots--;
     fireFrom(G.cx, cannon, power, kind);
     if (G.twin) fireFrom(twinX(), twinCannon, power, kind);
     for (let k = 0; k < G.squad; k++) fireFrom(squadX(k), squadCannons[k], power, kind);
@@ -1383,8 +1409,8 @@ function killBlue(i, fx = true) {
   if (fx) {
     burst(B.x[i], 0.5, B.z[i], PCOL.blue, B.kind[i] || B.hp[i] > 30 ? 10 : 3, 3.5);
     const rank = rankOf(B.hp[i] > 0 ? B.hp[i] : B.mx[i]);
-    const wing = B.kind[i] & SUNWING;
-    toss(blueToss[wing ? SUNWING_FORM : troopForm(rank)], B.x[i], 0.2, B.z[i], B.sc[i], wing ? SUNWING_RGB : TIER_RGB[rank], 1);
+    const form = specialForm(B.kind[i]);
+    toss(blueToss[form ?? troopForm(rank)], B.x[i], 0.2, B.z[i], B.sc[i], specialTint(form) ?? TIER_RGB[rank], 1);
   }
   B.hp[i] = 0;
 }
@@ -1927,7 +1953,7 @@ function moveRed(S, dt) {
     if (R.flash[i] > 0) R.flash[i] -= dt * 4;
     if (!T.ghost && !T.fly && S.saws.length && sawHit(S, x, z)) { R.hp[i] -= 4 + R.mx[i] * 0.05; if (R.hp[i] <= 0) { killRed(i); continue; } }
     if (z >= G.z0 - 0.9 && G.phase === 'play') {
-      damageCannon(T.dmg);
+      damageCannon(T.dmg, x, z);
       R.hp[i] = 0;
       burst(x, 0.8, z, PCOL.red, 12, 5);
       G.shake = 0.6;
@@ -2073,7 +2099,7 @@ function scheduleFlank(S, def = S.def.flanks) {
   S.flankN++;
   popup('FLANK INCOMING', 'combo c1', x, 2, z, 1.1);
   sound.play('warn');
-  addTelegraph('circle',x,z,1.6,0,def.warning,() => {
+  addTelegraph('flank',x,z,1.6,0,def.warning,() => {
     if (S !== G.stage || G.phase !== 'play') return;
     const hp = RED_TYPES[def.kind].hp * threat(S) * (def.hpScale ?? 1);
     for (let k = 0; k < def.count; k++) {
@@ -2093,23 +2119,32 @@ function addBeam(x1, y1, z1, x2, y2, z2, color, life = 0.14, width = .08) {
   tracers.emit(x1,y1,z1,x2,y2,z2,color,life,width);
 }
 function addTelegraph(shape, x, z, a, b, time, onHit, cannon = false) {
-  let outer = null, inner = null;
-  if (!TURBO) {
-    const geo = shape === 'circle' ? new THREE.CircleGeometry(1, 40) : new THREE.PlaneGeometry(1, 1);
-    outer = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.22, depthWrite: false }));
-    inner = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff3a1a, transparent: true, opacity: 0.45, depthWrite: false }));
-    for (const m of [outer, inner]) { m.rotation.x = -Math.PI / 2; m.position.set(x, 0.04, z); G.root.add(m); }
-    inner.position.y = 0.05;
-    if (shape === 'circle') outer.scale.set(a, a, 1); else outer.scale.set(a, b, 1);
+  const mesh = TURBO ? null : attackMarker(shape, x, z, a, b, cannon);
+  if (mesh) G.root.add(mesh);
+  const warning = { kind: 'tele', mesh, x, a, life: time, max: time, onHit, cannon, lateExposure: false };
+  G.effects.push(warning);
+  return warning;
+}
+function blastTroop(i) {
+  if (B.kind[i] & AEGIS) {
+    B.kind[i] &= ~AEGIS;
+    B.flash[i] = 1;
+    if (!TURBO && G.t >= (G.stage.guardFxAt ?? 0)) {
+      G.stage.guardFxAt = G.t + .18;
+      addRing(B.x[i], B.z[i], 1.25 * B.sc[i], 0x88ffdc, .26);
+      spark(B.x[i], B.sc[i], B.z[i], PCOL.ice, 5, 2.8, .7, .28);
+      sound.play('shield');
+    }
+    return;
   }
-  G.effects.push({ kind: 'tele', shape, outer, inner, x, z, a, b, life: time, max: time, onHit, cannon });
+  hurt(i, 8, .5);
 }
 function blueInCircle(x, z, r) {
   const r2 = r * r;
-  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && (B.x[i] - x) ** 2 + (B.z[i] - z) ** 2 < r2) hurt(i, 8, 0.5);
+  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && (B.x[i] - x) ** 2 + (B.z[i] - z) ** 2 < r2) blastTroop(i);
 }
 function blueInRect(x, z, w, d) {
-  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && Math.abs(B.x[i] - x) < w / 2 && Math.abs(B.z[i] - z) < d / 2) hurt(i, 8, 0.5);
+  for (let i = 0; i < B.n; i++) if (B.hp[i] > 0 && Math.abs(B.x[i] - x) < w / 2 && Math.abs(B.z[i] - z) < d / 2) blastTroop(i);
 }
 function randomBlueAhead(minZ, maxZ) {
   for (let tries = 0; tries < 14 && B.n; tries++) {
@@ -2182,17 +2217,21 @@ function attackShockwave(b) {
 // fire column aimed at the cannon itself: dodge it or lose a heart (and burn the units in it)
 function attackSweep(b) {
   const x = clamp(G.aim, -5.4, 5.4), z1 = b.z + 3, z2 = G.z0 + 1, len = z2 - z1;
-  popup('⚠ FIRE! MOVE!', 'combo c2', x, 2.5, G.z0 - 7, 1.1);
   sound.play('warn');
-  addTelegraph('band', x, z1 + len / 2, 3.2, len, 1.25, () => {
+  G.stage.sweep = addTelegraph('band', x, z1 + len / 2, SWEEP_RADIUS * 2, len, 1.25, (sweep) => {
     blueInRect(x, z1 + len / 2, 3.2, len);
     for (let k = 0; k < 24; k++) burst(x + rand(-1.4, 1.4), 0.5, z1 + (k / 24) * len, PCOL.orange, 3, 4);
     for (let k = 0; k < 10; k++) spark(x + rand(-1.4, 1.4), 1, z1 + (k / 10) * len, PCOL.orange, 3, 4, 1.2, 0.6);
     G.shake = 0.7; sound.play('boom');
-    if (Math.abs(G.cx - x) < 1.9) {
-      const damage = damageCannon(1);
+    if (Math.abs(G.cx - x) < SWEEP_RADIUS) {
+      const damage = damageCannon(1, x, z1);
       burst(G.cx, 1.2, G.cannonZ, PCOL.orange, 30, 7);
       if (damage) popup('BURNED! -1 ❤', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 1.0);
+    } else if (sweep.lateExposure) {
+      G.stage.counterShots = COUNTER_VOLLEYS;
+      popup('COUNTERFIRE ×' + COUNTER_POWER, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.3);
+      addRing(G.cx, G.cannonZ, 2.4, 0x82ffe0, .4);
+      sound.play('counter');
     } else popup('DODGED!', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 0.9);
   }, true);
 }
@@ -2324,12 +2363,12 @@ function updateEffects(dt) {
     e.life -= dt;
     const p = 1 - Math.max(0, e.life) / e.max;
     if (e.kind === 'tele') {
-      if (e.inner) {
-        if (e.shape === 'circle') e.inner.scale.set(e.a * p, e.a * p, 1);
-        else { e.inner.scale.set(e.a, e.b * p, 1); e.inner.position.z = e.z + e.b / 2 - (e.b * p) / 2; }
-        e.outer.material.opacity = 0.2 + Math.sin(G.t * 20) * 0.08;
+      if (e.mesh) e.mesh.userData.progress = p;
+      if (e.cannon && e.life > 0 && e.life <= COUNTER_WINDOW && Math.abs(G.cx - e.x) < SWEEP_RADIUS) e.lateExposure = true;
+      if (e.life <= 0) {
+        if (e === G.stage.sweep) G.stage.sweep = null;
+        if (G.phase === 'play') e.onHit(e);
       }
-      if (e.life <= 0 && G.phase === 'play') e.onHit();
     } else if (e.kind === 'mush') {
       e.mesh.position.set(0, 0, e.z);
       e.mesh.scale.setScalar(2 + p * 16);
@@ -2343,7 +2382,8 @@ function updateEffects(dt) {
       e.mesh.rotation.set(p * 8, p * 5, 0);
     }
     if (e.life <= 0) {
-      for (const m of [e.mesh, e.outer, e.inner]) if (m) {
+      const m = e.mesh;
+      if (m) {
         G.root.remove(m);
         m.traverse((o) => { if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); if (o.material && !o.material.userData.shared) o.material.dispose(); });
       }
@@ -2466,7 +2506,7 @@ function ballDies(S, b, crashed) {
   G.shake = Math.max(G.shake, 0.8);
   sound.play('boom');
   if (crashed) {
-    const damage = damageCannon(b.def.dmg ?? 3);
+    const damage = damageCannon(b.def.dmg ?? 3, b.x, b.z);
     if (damage) popup(`-${damage} ♥`, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.0);
   } else {
     G.overdrive = Math.max(G.overdrive, 4);
@@ -2474,9 +2514,10 @@ function ballDies(S, b, crashed) {
     addRing(b.x, b.z, b.r * 2.5, 0xffce55, 0.6);
   }
 }
-function damageCannon(amount) {
+function damageCannon(amount, x = G.cx, z = G.z0 - 1) {
   const blocked = Math.min(G.shield, amount), damage = amount - blocked;
   if (blocked > 0) {
+    cannonShield.material.uniforms.hitDir.value.set(x - G.cx, Math.max(.6, Math.abs(z - G.z0) * .35), z - G.z0).normalize();
     G.shield -= blocked; G.guardFlash = 1; G.cannonPulse = .45;
     if (G.t >= G.armorPopupT) {
       G.armorPopupT = G.t + .4;
@@ -3005,6 +3046,7 @@ function step(dt) {
   if (G.phase === 'intro' && G.phaseT > 1.2) { G.phase = 'play'; G.phaseT = 0; G.fireT = 0; }
   if (G.phase === 'play') {
     G.time += dt;
+    G.stageTimes[S.i] += dt;
     const r = S.reactor;
     if (r.phase === 'charging' || r.phase === 'burst') {
       const power = chargePower(r);
@@ -3017,7 +3059,7 @@ function step(dt) {
       const event = stepSupplyDrop(S.drop,G.cx,dt,r.phase === 'charging');
       if (event === 'catch') {
         G.shield = Math.min(6,G.shield+1);
-        G.guardFlash = 1;
+        G.guardFlash = 1; cannonShield.material.uniforms.hitDir.value.set(0,1,0);
         popup('RESERVES READY!', 'combo c2',G.cx,3,G.z0-2);
         sound.play('supply');
       } else if (event === 'fire') {
@@ -3207,14 +3249,19 @@ function lose(msg) {
 // ---------------------------------------------------------------- rendering
 let troopPixelScale = 1;
 function troopInstance(P, i, near, far) {
-  const distance = Math.hypot(P.x[i] - camera.position.x, camera.position.y, P.z[i] - camera.position.z);
-  const pixels = P.sc[i] * troopPixelScale / Math.max(1, distance);
-  P.detail[i] = pixels > (P.detail[i] ? 20 : 24) ? 1 : 0;
+  const dx = P.x[i] - camera.position.x, dz = P.z[i] - camera.position.z;
+  const distanceSq = Math.max(1, dx*dx + camera.position.y*camera.position.y + dz*dz);
+  const size = P.sc[i] * troopPixelScale, threshold = P.detail[i] ? 20 : 24;
+  P.detail[i] = size*size > distanceSq * threshold*threshold ? 1 : 0;
   const mesh = P.detail[i] ? near : far, at = mesh.count++;
   const motion = mesh.geometry.attributes.unitMotion.array;
   motion[at * 2] = P.phase[i];
   const floating = P === R && (RED_TYPES[P.kind[i]].fly || RED_TYPES[P.kind[i]].ghost);
-  motion[at * 2 + 1] = P.st[i] || P.adur[i] > 0 || floating ? 0 : Math.min(1, Math.hypot(P.vx[i], P.vz[i]) / 6);
+  const vx = P.vx[i], vz = P.vz[i], speed = Math.sqrt(vx*vx + vz*vz);
+  const stride = Math.min(1, speed / 6);
+  motion[at * 2 + 1] = P.st[i] || P.adur[i] > 0 || floating ? 0 : stride;
+  const lean = P === B ? 1 : P.st[i] ? 0 : .8;
+  writeMatrix(mesh.instanceMatrix.array, i, P, speed, stride * lean, at);
   return mesh;
 }
 function finishTroopMeshes(near, far) {
@@ -3227,6 +3274,22 @@ function finishTroopMeshes(near, far) {
   const proxy = near.userData.shadowProxy;
   proxy.count = near.count; proxy.visible = near.visible;
 }
+function specialForm(kind) {
+  if (kind & AEGIS) return AEGIS_FORM;
+  if (kind & SUNWING) return SUNWING_FORM;
+  return null;
+}
+function specialTint(form) {
+  if (form === AEGIS_FORM) return AEGIS_RGB;
+  if (form === SUNWING_FORM) return SUNWING_RGB;
+  return null;
+}
+// Copy directly between the two instance buffers. A subarray here creates
+// a temporary typed-array view for every equipped soldier on every frame.
+function copyTroopPose(mesh, source, index) {
+  const at = mesh.count++ * 16, from = index * 16, target = mesh.instanceMatrix.array;
+  for (let k = 0; k < 16; k++) target[at+k] = source[from+k];
+}
 function writeBlue() {
   for (const form of blueForms) form.near.count = form.far.count = 0;
   for (let k = 1; k < weaponMeshes.length; k++) weaponMeshes[k].count = weaponFarMeshes[k].count = 0;
@@ -3235,19 +3298,17 @@ function writeBlue() {
   for (let i = 0; i < B.n; i++) {
     const hp = B.hp[i], s = B.sc[i], tier = rankOf(hp);
     topRank = Math.max(topRank, tier);
-    const wing = B.kind[i] & SUNWING;
-    const col = wing ? SUNWING_RGB : tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : B.kind[i] && tier < 2 ? GIANT_RGB : TIER_RGB[tier];
-    const form = wing ? blueForms[SUNWING_FORM] : FORM_BY_RANK[tier];
+    const special = specialForm(B.kind[i]);
+    const col = specialTint(special) ?? (tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : (B.kind[i] & GIANT) && tier < 2 ? GIANT_RGB : TIER_RGB[tier]);
+    const form = special == null ? FORM_BY_RANK[tier] : blueForms[special];
     const body = troopInstance(B, i, form.near, form.far), index = body.count - 1;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
-    writeMatrix(m, i, B, s, 1, index);
     if (tier >= 5 && haloCount < 24 && i % 7 === 0) {
       halos.add(B.x[i], 0.3, B.z[i], col, 1.45 * s, 0.19); haloCount++;
     }
     const weapon = B.weapon[i];
     if (weapon) {
-      const mesh = (B.detail[i] ? weaponMeshes : weaponFarMeshes)[weapon], at = mesh.count++;
-      mesh.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), at * 16);
+      copyTroopPose((B.detail[i] ? weaponMeshes : weaponFarMeshes)[weapon], m, index);
     }
     const f = Math.max(0, B.flash[i]) * 0.45;
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
@@ -3262,11 +3323,8 @@ function writeBlue() {
 // Victory hop strength for allied troops, set by the renderer while a stage is cleared.
 let cheer = 0;
 // unit matrix: heading + forward lean while running, squash & stretch on each step, pop-in when spawned
-function writeMatrix(m, i, P, s, lean, instance = i) {
-  const vx = P.vx[i], vz = P.vz[i];
-  const ang = Math.atan2(vx, vz);
-  const c = Math.cos(ang), si = Math.sin(ang);
-  const run = Math.min(1, Math.hypot(vx, vz) / 6) * lean;
+function writeMatrix(m, i, P, speed, run, instance) {
+  const s = P.sc[i], c = speed ? P.vz[i]/speed : 1, si = speed ? P.vx[i]/speed : 0;
   const pitch = 0.22 * run, cp = Math.cos(pitch), sp = Math.sin(pitch);
   const ph = P.phase[i];
   const age = P.age[i];
@@ -3302,11 +3360,10 @@ function writeRed() {
     if (R.st[i]) { R.vx[i] = 0; R.vz[i] = 0.01; }
     const body = troopInstance(R, i, redMesh, redFarMesh), index = body.count - 1;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
-    writeMatrix(m, i, R, R.sc[i], R.st[i] ? 0 : 0.8, index);
     const f = Math.max(0, R.flash[i]) * 0.75;
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
     const ov = (body === redMesh ? overlays : overlaysFar)[kind];
-    if (ov) ov.instanceMatrix.array.set(m.subarray(index * 16, index * 16 + 16), ov.count++ * 16);
+    if (ov) copyTroopPose(ov, m, index);
     if (body === redMesh && specialGlow < 12) {
       if (kind === 7 && specialGlow <= 10) {
         for (const side of [-1, 1]) {
@@ -3423,10 +3480,13 @@ function renderWorld(dt) {
   cannon.group.position.set(G.cx, 0, G.cannonZ + G.recoil * 0.12);
   cannon.group.rotation.y = (G.cx - G.aim) * 0.08;
   cannon.group.rotation.z = clamp(-vel * 0.012, -0.18, 0.18);
-  cannon.shield.visible = (G.shield > 0 || G.guardFlash > 0) && G.phase !== 'menu';
-  cannon.shield.rotation.y += dt * 0.3;
-  cannon.shield.material.opacity = .06 + G.cannonPulse * .25 + G.guardFlash * .35;
-  cannon.shield.material.color.setHex(G.guardFlash > 0 ? 0xd4fbff : 0x75ebff);
+  cannonShield.visible = (G.shield > 0 || G.guardFlash > 0) && G.phase !== 'menu';
+  if (cannonShield.visible) {
+    const height = cannon.rig.glowAnchor.y + .43;
+    cannonShield.scale.set(Math.max(1.65,height*.90), height, height*1.12);
+    cannonShield.material.uniforms.plates.value = G.shield;
+    cannonShield.material.uniforms.flash.value = G.guardFlash;
+  }
   cannon.group.scale.setScalar((G.chassis ? 1.12 : 1) + G.cannonPulse * 0.25 + G.recoil * 0.03);
   const roll = dt * (G.phase === 'move' ? 14 : 0) + Math.abs(vel) * dt * 1.5;
   const drive = Math.abs(vel) + (G.phase === 'move' ? 10 : 0);
@@ -3434,7 +3494,6 @@ function renderWorld(dt) {
   for (const w of cannon.wheels) w.rotation.x -= roll;
   for (const w of twinCannon.wheels) w.rotation.x -= roll;
   if (Math.abs(vel) > 6 && Math.random() < 0.5) spark(G.cx, 0.2, G.cannonZ + 0.8, PCOL.dust, 1, 1.5, 0.9, 0.4, 1);
-  cannon.barrels.children.forEach((b, k) => { b.position.z = -Math.max(0, G.recoil - k * 0.15) * 0.25; });
   const reactor = G.stage.reactor;
   const heat = reactor.phase === 'charging' ? reactor.time / VENT_TIME : reactor.phase === 'burst' ? 1 : 0;
   cannon.glow.scale.setScalar(.8 + Math.max(heat, G.charge / CHARGE_MAX) * .9 + (reducedMotion ? 0 : heat * .12 * Math.sin(G.t * 16)));
@@ -3446,7 +3505,6 @@ function renderWorld(dt) {
     c.group.rotation.z = cannon.group.rotation.z;
     c.glowMat.color.copy(cannon.glowMat.color);
     for (const w of c.wheels) w.rotation.x -= roll;
-    c.barrels.children.forEach((b, j) => { b.position.z = -Math.max(0, G.recoil - j * 0.15) * 0.25; });
   });
   if (G.twin) {
     twinCannon.animateVehicle(G.t, dt, G.recoil, drive, G.charge / CHARGE_MAX);
@@ -3456,6 +3514,10 @@ function renderWorld(dt) {
     twinCannon.glowMat.color.copy(cannon.glowMat.color);
   }
 
+  for (const actor of fleet) if (actor.group.visible) {
+    for (const barrel of actor.barrels.children) barrel.position.z = G.recoil * .19;
+  }
+  if (!TURBO && !reducedMotion) muzzleJets.pose(G.t);
   for (const model of airWings.values()) model.group.visible = false;
   if (G.airPass > 0 && G.aircraft && G.phase !== 'menu') {
     const airWing = supportAircraft(G.airTier || G.aircraft);
@@ -3671,13 +3733,37 @@ function renderWorld(dt) {
   const danger = G.lives <= 2 && !G.hardcore && G.phase === 'play';
   if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
   setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
+  renderSweep(G.phase === 'play' ? G.stage.sweep : null);
+  const counter = G.phase === 'play' && G.stage.counterShots ? `Aegis guards ×${COUNTER_POWER} · ${G.stage.counterShots} ${G.stage.counterShots === 1 ? 'volley' : 'volleys'}` : '';
   const supply = G.phase === 'play' ? supplyMessage(G.stage.drop,G.cx) : '';
   setHud('supplyStatus', $('surge'), supply ? 'supply' : '', 'className');
-  setHud('surge', $('surge'), supply || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
+  setHud('surge', $('surge'), supply || counter || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
   renderReactor(reactor);
+  const giantLaunched = G.t - cannon.giantAt < .4;
+  setHud('giantCount', $('giant-count'), giantLaunched ? 'Launched' : (CHARGE_MAX-G.charge) + (CHARGE_MAX-G.charge === 1 ? ' volley' : ' volleys'));
+  setHud('giantReady', $('charge'), giantLaunched || G.charge >= CHARGE_MAX - 5 ? 'ready' : '', 'className');
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) hud.banner.className = ''; }
   if (tipTimer > 0) { tipTimer -= dt; if (tipTimer <= 0) hud.tip.className = 'stroke'; }
+}
+
+const sweepPanel = $('sweep-readout'), sweepZone = $('sweep-zone'), sweepCannon = $('sweep-cannon');
+function renderSweep(sweep) {
+  setHud('sweepHidden', sweepPanel, !sweep, 'hidden');
+  if (!sweep) return;
+  const safe = Math.abs(G.cx - sweep.x) >= SWEEP_RADIUS, late = sweep.life <= COUNTER_WINDOW;
+  setHud('sweepClass', sweepPanel, safe ? 'safe' : late ? 'late' : '', 'className');
+  setHud('sweepAction', $('sweep-action'), safe ? 'Lane clear' : late ? 'Dodge now!' : 'Boss sweep');
+  setHud('sweepTime', $('sweep-clock'), (Math.ceil(sweep.life * 10) / 10).toFixed(1) + ' s');
+  const lane = x => clamp((x / XLIM + 1) * 50, 0, 100);
+  if (hudCache.sweepX !== sweep.x) {
+    hudCache.sweepX = sweep.x;
+    const left = lane(sweep.x - SWEEP_RADIUS);
+    sweepZone.style.left = left + '%';
+    sweepZone.style.width = lane(sweep.x + SWEEP_RADIUS) - left + '%';
+  }
+  const point = Math.round(lane(G.cx) * 2) / 2;
+  if (hudCache.sweepPoint !== point) { hudCache.sweepPoint = point; sweepCannon.style.left = point + '%'; }
 }
 
 const reactorButton = $('reactor'), reactorAction = $('reactor-action'), reactorMeter = $('reactor-fill');
@@ -3721,8 +3807,8 @@ function openWorldCard(index) {
     <div class="wc-stars" aria-label="${stars} of 3 stars">${starsHtml(stars)}</div>
     <div class="wc-stats">${stat('BEST ARMY', best.army && fmt(best.army))}${stat('BEST COMBO', best.combo > 1 && 'x' + fmt(best.combo))}${stat('BEST TIME', best.time && clock(best.time))}</div>
     <details class="field-notes"><summary>Scout the stages</summary><ol>${level.stages.map((stage, i) =>
-      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}</p></li>`).join('')}</ol></details>
-    <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medal.icon}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
+      `<li><b>${i === 2 ? 'Boss' : 'Fort'} · ${stage.surge ? '×64' : '×24'} reactor</b><p>${stage.tip}${index >= 2 && i === 1 ? ' The first equipment pickup calls a supply drop across the road. Catch it for armor and three reserve giants.' : ''}${stage.boss?.sweep ? ' Dodge a boss sweep just before impact to fire twelve ×6 Aegis Guard volleys. Their shields absorb one blast.' : ''}</p></li>`).join('')}</ol></details>
+    <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medalIcon(medal)}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
   $('wc-play').textContent = resumable ? `RESUME ${index + 1}.${G.stageIdx + 1}` : 'PLAY';
   $('wc-hard').disabled = !stars;
   $('wc-hard').textContent = stars ? '☠ HARDCORE' : '☠ Clear the world first';
@@ -3734,6 +3820,9 @@ $('wc-play').addEventListener('click', () => { closeWorldCard(); sound.unlock();
 $('wc-hard').addEventListener('click', () => { closeWorldCard(); sound.unlock(); startLevel(cardWorld, 0, true); });
 $('wc-close').addEventListener('click', closeWorldCard);
 $('worldcard').addEventListener('click', (event) => { if (event.target === $('worldcard')) closeWorldCard(); });
+function medalIcon(medal) {
+  return `<svg viewBox="0 0 24 24" class="medal-icon" aria-hidden="true" fill="currentColor">${medal.icon}</svg>`;
+}
 function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
 function showMenu(preserveRun = false) {
   titleScreen?.hide();
@@ -3766,15 +3855,28 @@ function showMenu(preserveRun = false) {
     for (const s of [...S.spawners, ...S.turrets, ...S.pillars, ...S.balls]) hideLabel(s.label);
   }
 }
+function renderStageTimes(win, reference) {
+  const compare = G.fullRun && Array.isArray(reference) && reference.length === G.stageTimes.length && reference.every(t => Number.isFinite(t) && t > 0);
+  const cells = G.stageTimes.map((t, i) => {
+    const complete = win || i < G.stageIdx;
+    const delta = compare && complete && t > 0 ? Math.round((t-reference[i])*10) : null;
+    const note = delta === null ? '' : delta === 0 ? 'Even' : `${delta > 0 ? '+' : '−'}${(Math.abs(delta)/10).toFixed(1)} s`;
+    return `<li><span>${i === 2 ? 'Boss' : 'Fort ' + (i+1)}</span><b>${t ? clock(t) : '–'}</b>${note ? `<small class="${delta < 0 ? 'ahead' : delta > 0 ? 'behind' : ''}">${note}</small>` : ''}</li>`;
+  }).join('');
+  return `<section class="stage-times"><h3>Stage times${compare ? '<small>vs. best run</small>' : ''}</h3><ol>${cells}</ol></section>`;
+}
 function showResult(win) {
   const stars = win ? (G.lives >= 8 ? 3 : G.lives >= 4 ? 2 : 1) : 0;
   const outcome = win ? recordVictory() : null;
-  $('rtitle').textContent = win ? 'LEVEL COMPLETE!' : 'DEFEATED';
+  const level = LEVELS[G.levelIdx];
+  $('rworld').textContent = `World ${G.levelIdx + 1} · ${level.name}${G.hardcore ? ' · Hardcore' : ''}`;
+  $('rart').innerHTML = biomeArt(level.theme, THEMES[level.theme]);
+  $('rtitle').textContent = win ? 'World cleared' : 'Defeated';
   $('rtitle').className = win ? 'win' : 'lose';
   $('rstars').innerHTML = win ? starsHtml(stars) : '';
   const last = G.levelIdx >= LEVELS.length - 1;
   const bossLoss = !!G.stage.boss;
-  const tip = bossLoss
+  const tip = G.stage.boss?.sweep ? 'Leave the striped lane before impact. A last-second dodge gives you twelve ×6 Aegis Guard volleys.' : bossLoss
     ? 'Tip: chain gates in a row and grab POWER/upgrades first. A huge army pushes the boss back!'
     : 'Tip: gates in a row multiply each other. Break fences, ice and barriers to reach the big ones!';
   // Each tile shows the run; after a win it also shows the record it beat or still has to beat.
@@ -3783,29 +3885,31 @@ function showResult(win) {
     return `<span>${label}<b ${value == null ? '' : `data-v="${value}" data-p="${prefix}"`}>${value == null ? text(G.time) : prefix + '0'}</b>${note}</span>`;
   };
   const stats = `<div class="stats">${tile('MAX ARMY', G.maxArmy, '', 'army', fmt)}${tile('BEST COMBO', G.bestCombo, 'x', 'combo', (v) => 'x' + fmt(v))}${tile('CRUSHED', G.kills, '', 'kills', fmt)}${tile('TIME', null, '', G.fullRun ? 'time' : 'none', clock)}</div>`;
+  const times = renderStageTimes(win, (win ? outcome.before : records.worlds[G.levelIdx])?.splits);
   const held = win ? medalsOf(records, G.levelIdx) : [];
   const medals = win ? `<div class="medals">${MEDALS.map((medal, k) => {
     const fresh = outcome.earned.includes(medal.id), has = held.includes(medal);
-    return `<span class="medal${has ? ' on' : ''}${fresh ? ' fresh' : ''}" style="--k:${k}" title="${medal.hint}"><i>${medal.icon}</i>${medal.name}<small>${fresh ? 'NEW!' : has ? 'earned' : medal.hint}</small></span>`;
+    return `<span class="medal${has ? ' on' : ''}${fresh ? ' fresh' : ''}" style="--k:${k}" title="${medal.hint}"><i>${medalIcon(medal)}</i>${medal.name}<small>${fresh ? 'NEW!' : has ? 'earned' : medal.hint}</small></span>`;
   }).join('')}</div>` : '';
   $('rmsg').innerHTML = win
-    ? stats + medals + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
+    ? stats + times + medals + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
       (last ? `<br><b class="champ">ALL ${LEVELS.length} LEVELS CLEARED! You are the Swarm Master!</b>` : '')
-    : stats + `${G.loseMsg}<br><small>${tip}</small>`;
+    : stats + times + `${G.loseMsg}<br><small>${tip}</small>`;
   $('rretry').classList.toggle('hidden', win);
   $('rrestart').textContent = win ? 'REPLAY' : 'RESTART LEVEL';
   $('rnext').classList.toggle('hidden', !win || last);
   $('result').classList.remove('hidden');
   countUp();
-  if (win) for (let k = 0; k < stars; k++) setTimeout(() => sound.play('combo', k + 1), 380 + k * 250);
-  if (outcome?.earned.length) setTimeout(() => { sound.play('evolve', 2); buzz([40, 40, 90]); }, 1300);
+  if (win) for (let k = 0; k < stars; k++) setTimeout(() => { if (G.phase === 'won' && G.victory === outcome) sound.play('combo', k + 1); }, 380 + k * 250);
+  if (outcome?.earned.length) setTimeout(() => { if (G.phase === 'won' && G.victory === outcome) { sound.play('evolve', 2); buzz([40, 40, 90]); } }, 1300);
 }
 // result numbers roll up (log scale, so 1e20 counts as nicely as 200)
 function countUp() {
   const els = [...document.querySelectorAll('#rmsg b[data-v]')];
   const t0 = performance.now();
   const tick = (now) => {
-    const p = Math.min(1, (now - t0) / 1100), e = 1 - (1 - p) ** 3;
+    if (els.length && !els[0].isConnected) return;
+    const p = reducedMotion ? 1 : Math.min(1, (now - t0) / 1100), e = 1 - (1 - p) ** 3;
     for (const el of els) {
       const v = +el.dataset.v, shown = Math.expm1(Math.log1p(v) * e);
       el.textContent = (el.dataset.p || '') + fmt(p >= 1 ? v : shown);
@@ -3818,7 +3922,7 @@ $('rnext').addEventListener('click', () => startLevel(G.levelIdx + 1));
 $('rretry').addEventListener('click', () => {
   const snap = G.snap;
   // A retry continues the same run: its clock, tallies and lost hearts carry over.
-  const run = { time: G.time, kills: G.kills, maxArmy: G.maxArmy, bestCombo: G.bestCombo, hurt: G.hurt, fullRun: G.fullRun };
+  const run = { time: G.time, stageTimes: G.stageTimes, kills: G.kills, maxArmy: G.maxArmy, bestCombo: G.bestCombo, hurt: G.hurt, fullRun: G.fullRun };
   startLevel(G.levelIdx, snap.stage, G.hardcore);
   Object.assign(G, run);
   Object.assign(G, { barrels: snap.barrels, rate: snap.rate, power: snap.power, twin: snap.twin, squad: snap.squad, chassis: snap.chassis, weapon: snap.weapon, weaponMask: snap.weaponMask, aircraft: snap.aircraft, shield: snap.shield, lives: G.hardcore ? 1 : Math.max(snap.lives, 5) });
@@ -3858,11 +3962,12 @@ function pauseGame() {
   resetInput(); G.paused = true; acc = 0; sound.setPaused(true);
   document.body.classList.add('game-paused');
   $('pausewhere').textContent = `${LEVELS[G.levelIdx].name} / Stage ${G.stageIdx+1}`;
+  $('pause-sweep').hidden = !G.stage.boss?.sweep;
   syncPauseOptions();
   // Medal goals for this world: earned ones are lit, ones this run can no longer reach are struck out.
   const held = medalsOf(records, G.levelIdx);
   const gone = { flawless: !G.fullRun || G.hurt > 0, swift: !G.fullRun || G.time >= SWIFT_SECONDS, overpowered: !G.fullRun || (!!G.stage.boss && G.stage.time >= CRUSH_SECONDS), hardcore: !G.fullRun || !G.hardcore };
-  $('pausemedals').innerHTML = MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : gone[medal.id] ? 'gone' : ''}"><i>${medal.icon}</i><span>${medal.name}: ${medal.hint}${held.includes(medal) ? ' (earned)' : ''}</span></li>`).join('');
+  $('pausemedals').innerHTML = MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : gone[medal.id] ? 'gone' : ''}"><i>${medalIcon(medal)}</i><span>${medal.name}: ${medal.hint}${held.includes(medal) ? ' (earned)' : ''}</span></li>`).join('');
   $('pause').showModal();
   return true;
 }

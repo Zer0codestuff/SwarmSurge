@@ -9,6 +9,50 @@ window.runGameChecks = (g) => {
       results.push({ name, pass: detail.pass, detail });
     } catch (error) { results.push({ name, pass: false, error: error.message }); }
   };
+  check('Sweep timing uses cannon position and rewards a late escape exactly once', `(() => {
+    const b={z:G.z0-48}, life=G.lives;
+    attackSweep(b); G.cx=3; updateEffects(1.26);
+    const early=G.stage.counterShots===0 && G.lives===life;
+    G.cx=G.aim=0; attackSweep(b); updateEffects(.92); G.aim=4; updateEffects(.34);
+    const hit=G.stage.counterShots===0 && G.lives===life-1;
+    G.cx=G.aim=0; attackSweep(b); updateEffects(.92); G.cx=2; updateEffects(.34);
+    const late=G.stage.counterShots===COUNTER_VOLLEYS && !G.stage.sweep && G.lives===life-1;
+    G.stage.counterShots=0; updateEffects(.34);
+    return {pass:early && hit && late && G.stage.counterShots===0,early,hit,late};
+  })()`);
+  check('Fleet jets seat in every recoiling muzzle and disappear between volleys', `(() => {
+    G.barrels=6; G.squad=4; G.twin=true; twinCannon.group.visible=true; setBarrels(6);
+    fireCannon(STEP); renderWorld(.01); muzzleJets.pose(G.t);
+    const mesh=muzzleJets.mesh, matrix=new THREE.Matrix4(), point=new THREE.Vector3(), bore=new THREE.Vector3();
+    let n=0, error=0;
+    for(const c of fleet) for(const b of c.barrels.children) {
+      mesh.getMatrixAt(n++,matrix); point.setFromMatrixPosition(matrix);
+      bore.set(0,0,-1.235).applyMatrix4(b.matrixWorld); error=Math.max(error,bore.distanceTo(point));
+    }
+    const all=mesh.count===36 && n===36 && error<.00001;
+    muzzleJets.pose(G.t+.1); const dark=!mesh.visible;
+    launchGiant(1,0); muzzleJets.pose(G.t+.12);
+    return {pass:all && dark && mesh.count===6,all,dark,error};
+  })()`);
+  check('Counterfire counts volleys across the fleet and stacks with reactor giants', `(() => {
+    const S=G.stage;
+    S.counterShots=2; G.twin=true; G.squad=1; G.overdrive=3; G.charge=CHARGE_MAX-1;
+    triggerReactor(S.reactor); tickReactor(S.reactor,3.2); triggerReactor(S.reactor);
+    G.fireT=0; fireCannon(BASE_INTERVAL*2+.001);
+    const factor=2*S.reactor.power, mixed=AEGIS|SUNWING;
+    return {pass:B.n===10 && !S.counterShots && B.kind[3]===(mixed|GIANT) && B.hp[3]===factor*COUNTER_POWER*GIANT_HP
+      && [0,1,2,4,5,6].every(i=>B.kind[i]===mixed && B.hp[i]===factor*COUNTER_POWER)
+      && [7,8,9].every(i=>B.kind[i]===SUNWING && B.hp[i]===factor)};
+  })()`);
+  check('Aegis Guard armor follows gate copies and absorbs exactly one blast per soldier', `(() => {
+    const g={cur:{t:'mul',v:3},x:0,w:4,z:-9,boost:1,flash:1};
+    const i=spawn(B,0,-9,40,AEGIS|SUNWING); B.weapon[i]=3; applyGate(G.stage,g,i);
+    writeBlue(); const mesh=blueForms[AEGIS_FORM], visible=mesh.near.count+mesh.far.count===3;
+    blueInCircle(0,-9,3); const blocked=Array.from(B.hp.slice(0,3)).every(n=>n===40) && B.kind.slice(0,3).every(k=>k===SUNWING);
+    blueInRect(0,-9,6,6); const hurt=B.hp.slice(0,3).every(n=>n===12);
+    G.stage.counterShots=8; $('rretry').click();
+    return {pass:visible && blocked && hurt && G.stage.counterShots===0 && !G.stage.sweep};
+  })()`);
   check('Reactor diverts fire, launches every cannon, then restores normal output', `(() => {
     G.paused=false; G.overdrive=4; G.squad=1; G.twin=true; G.charge=CHARGE_MAX-1;
     useReactor(); for(let n=0;n<50;n++) step(STEP);
@@ -304,6 +348,27 @@ window.runGameChecks = (g) => {
     const e=r.worlds[3];
     startLevel(0,1); const partial=G.fullRun; startLevel(0); const full=G.fullRun && G.hurt===0;
     return {pass:a.earned.length===0 && !a.fresh.army && b.fresh.army && !b.fresh.combo && b.fresh.time && b.earned.join()==='flawless,swift,overpowered' && c.earned.length===0 && recordRun({worlds:{}},1,{time:90,bossTime:30,heartsLost:1,full:true,hardcore:true}).earned.join()==='hardcore' && e.time===60 && e.army===1e9 && e.combo===20 && e.wins===3 && medalTotal(r)===3 && clock(65.04)==='1:05.0' && clock(9.96)==='0:10.0' && !partial && full,a,b,c,e,partial,full};
+  })()`);
+  check('Results credit a victory once and compare splits to the previous best run', `(() => {
+    startLevel(5,2); G.phase='play'; G.fullRun=true; G.time=62; G.stageTimes=[18,24,20]; G.stage.time=20;
+    const prev=records.worlds[5]; records.worlds[5]={wins:2,time:65,splits:[20,22,23],medals:[]};
+    try {
+      bossDefeated(G.stage); const saved=G.victory;
+      showResult(true); const entry=records.worlds[5], ui=$('rmsg');
+      return {pass:recordVictory()===saved && entry.wins===3 && entry.splits.join()==='18,24,20' &&
+        ui.querySelectorAll('.stage-times .ahead').length===2 && ui.querySelectorAll('.stage-times .behind').length===1 &&
+        !!ui.querySelector('.medal.fresh') && ui.textContent.includes('NEW BEST')};
+    } finally { if(prev) records.worlds[5]=prev; else delete records.worlds[5]; saveRecords(records); }
+  })()`);
+  check('Stage times include retries, and old records gain a reference on a tied full run', `(() => {
+    for(let i=0;i<15;i++)step(STEP); const first=G.stageTimes[0];
+    $('rretry').click(); G.phase='play'; step(STEP);
+    const retry=first>0 && Math.abs(G.stageTimes[0]-G.time)<1e-8 && G.time>first;
+    const r={worlds:{2:{time:60,medals:[]}}};
+    const run={full:true,time:60,splits:[12,22,26],heartsLost:2,bossTime:26};
+    recordRun(r,2,run); recordRun(r,2,{...run,full:false,time:20,splits:[5,5,10]});
+    recordRun(r,2,{...run,time:70,splits:[10,40,20]});
+    return {pass:retry && r.worlds[2].splits.join()==='12,22,26'};
   })()`);
   check('Every world has its own score and the arrangement grows with the battle', `(() => {
     const ids=new Set(LEVELS.map(L=>{music.setMode('battle',L.theme,THEMES[L.theme].sky);const s=music.score;return [s.root,s.bpm,s.scale,s.loop,s.arp,s.bass,s.melody].join('|');}));

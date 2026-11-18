@@ -30,6 +30,7 @@
   .lbl.spawner { font-size: 20px; background: #e8243a; border: 2px solid #fff; border-radius: 8px; padding: 0 9px; }
   /* floating popups: the outer div is positioned every frame, the inner span animates */
   .pop { position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform; }
+  .pop.combo-popup { width: max-content; max-width: min(510px, calc(80vw - 14px)); white-space: normal; text-align: center; text-wrap: balance; line-height: 1.09; }
   .pop span { display: block; transform: translate(-50%, -100%); font-weight: 900; -webkit-text-stroke: 2px #1b0a33; paint-order: stroke fill; text-shadow: 0 2px 2px #1b0a33; }
   .pop span.combo { animation: rise 1.4s ease-out forwards; }
   .pop span.c1 { font-size: min(26px, 6.5vw); color: #fff; }
@@ -209,14 +210,32 @@
   #hud.cine #danger { opacity: 0; animation: none; }
   #bottom { width: min(440px, 90vw); bottom: max(10px, env(safe-area-inset-bottom)); }
   #ups { gap: 4px; margin-bottom: 7px; }
+  #ups:empty { display: none; }
   .up { font-family: system-ui, sans-serif; font-weight: 800; border: 1px solid #ffffffbb; font-size: 10px; padding: 2px 7px; border-radius: 6px; box-shadow: 0 2px 0 #142c4633; }
   #rank { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 6px; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 800; }
   #rankdot { width: 9px; height: 9px; border-radius: 3px; border: 1px solid #fff; }
   #surge { color: #ffe091; font-size: 12px; min-height: 16px; margin-bottom: 3px; }
   #surge.supply { width: fit-content; max-width: 100%; margin-inline: auto; padding: 2px 9px; border-radius: 7px;
     color: #effffb; background: #143b42ed; border-left: 3px solid #78f4d4; font: 750 12px/1.35 system-ui,sans-serif; }
-  #charge { height: 12px; border: 1px solid #d8f2ff; background: var(--glass); }
-  #charge span { font-size: 8px; line-height: 10px; vertical-align: top; }
+  #sweep-readout { position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%);
+    width: min(205px, 100%); box-sizing: border-box; padding: 7px 10px 8px; border-radius: 9px;
+    background: #211e2df2; border: 1px solid #e99c72; color: #fff2d3; text-shadow: none;
+    font: 700 12px/1.2 system-ui, sans-serif; text-align: left; }
+  #bottom:has(#sweep-readout:not([hidden])) #surge:empty { display: none; }
+  #sweep-readout.safe { border-color: #7edec9; color: #b9ffe6; }
+  #sweep-readout.late { border-color: #fff0a6; background: #492e2bf5; }
+  #sweep-clock { float: right; font-variant-numeric: tabular-nums; }
+  #sweep-lanes { position: relative; display: block; height: 6px; margin-top: 7px; border-radius: 2px; background: #536872; overflow: visible; }
+  #sweep-zone { position: absolute; height: 100%; background: repeating-linear-gradient(125deg,#ff9875 0 4px,#973848 4px 7px); }
+  #sweep-cannon { position: absolute; width: 5px; height: 12px; border-radius: 2px; top: -3px; transform: translateX(-50%);
+    background: #fff; box-shadow: 0 0 0 1px #142330; }
+  #charge { height: auto; min-width: 0; padding: 6px 9px; border: 1px solid #87b5ca; border-radius: 9px;
+    display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px;
+    color: #e0f4fa; background: var(--glass); text-align: left; font: 700 12px/1.1 system-ui,sans-serif; }
+  #charge span { font-size: 10px; line-height: inherit; text-align: right; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+  .giant-track { grid-column: span 2; height: 4px; border-radius: 2px; overflow: hidden; position: relative; background: #0a1d2f; }
+  #charge.ready { color: #ffe4a3; border-color: #dfbb75; }
+  #charge.ready #chargefill { background: #ffcc6c; }
   #banner { top: 34%; max-width: 94vw; white-space: normal; text-align: center; font-size: clamp(26px, 6vw, 50px); line-height: 1.05; }
   #tip { top: auto; bottom: 18%; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 750; width: min(490px, 88vw); padding: 8px 12px; border-radius: 10px; background: var(--glass); text-shadow: none; line-height: 1.35; }
   #hint { font-family: system-ui, sans-serif; font-weight: 800; font-size: 14px; bottom: 27%; }
@@ -267,6 +286,7 @@
   }
 </style>
 <link rel="stylesheet" href="./src/map.css">
+<link rel="stylesheet" href="./src/results.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -285,11 +305,14 @@
   </div>
   <div id="target"><div id="targettrack"><div id="targetghost"></div><div id="targetfill"></div></div><span id="targetname"></span></div>
   <div id="bottom" class="stroke">
+    <div id="sweep-readout" hidden><span id="sweep-action"></span><span id="sweep-clock"></span>
+      <span id="sweep-lanes" aria-hidden="true"><i id="sweep-zone"></i><i id="sweep-cannon"></i></span>
+    </div>
     <div id="surge"></div>
     <div id="ups"></div>
     <div id="rank"><i id="rankdot"></i><span id="rankname">Recruit</span></div>
     <div id="cannon-controls">
-      <div id="charge"><div id="chargefill"></div><span>GIANT</span></div>
+      <div id="charge"><b>Giant</b><span id="giant-count"></span><div class="giant-track"><div id="chargefill"></div></div></div>
       <button type="button" id="reactor" aria-keyshortcuts="R" title="Tap or press R to divert cannon fire. Tap again to launch before overheat." disabled>
         <span id="reactor-fill" aria-hidden="true"></span><kbd aria-hidden="true">R</kbd>
         <span><b id="reactor-action">Charge reactor</b><small id="reactor-hint"></small></span>
@@ -329,8 +352,8 @@
 
 <div id="result" class="overlay hidden">
   <div class="box">
-    <div id="rtitle"></div>
-    <div id="rstars"></div>
+    <header class="result-header"><div><small id="rworld"></small><h2 id="rtitle"></h2>
+      <div id="rstars"></div></div><div id="rart" aria-hidden="true"></div></header>
     <div id="rmsg"></div>
     <button id="rnext" class="btn">NEXT LEVEL</button>
     <button id="rretry" class="btn alt">RETRY STAGE</button>
@@ -350,6 +373,7 @@
   <div id="pausetitle">Paused</div>
   <p id="pausewhere"></p>
   <details class="field-notes"><summary>How to use the reactor</summary><p>Tap Charge reactor or press R to divert your cannon fire. Tap again to launch powered Sunwings for 2.4 seconds. Wait for a higher multiplier, but launch before the reactor vents. You get one charge per stage.</p></details>
+  <details id="pause-sweep" class="field-notes" hidden><summary>How to counter a boss sweep</summary><p>The white marker is your cannon. Leave the striped lane before the timer ends. If you are still inside when “Dodge now!” appears, escaping in time launches twelve ×6 volleys of Aegis guards. Each guard can block one blast.</p></details>
   <ul id="pausemedals" aria-label="Medals for this world"></ul>
   <button id="resume" class="btn" autofocus>Resume</button>
   <button id="pauseretry" class="btn alt">Retry stage</button>

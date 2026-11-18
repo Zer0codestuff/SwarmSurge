@@ -153,9 +153,6 @@ export function buildCannon(tint = 0x2f8bff) {
   glow.position.set(0, 1.6, 0.2); g.add(glow);
   const socket = new THREE.Mesh(orbSocketGeometry(), body.material); socket.visible = false; g.add(socket);
   const rig = createVehicleRig(tint); g.add(rig.group);
-  const shield = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2),
-    new THREE.MeshPhongMaterial({ color: 0x75ebff, emissive: 0x124762, transparent: true, opacity: 0.1, depthWrite: false, shininess: 90 }));
-  shield.visible = false; g.add(shield);
   const collar = fittingCollar(); g.add(collar);
   let fittingAt = null;
   function fittingPose(time) {
@@ -200,7 +197,7 @@ export function buildCannon(tint = 0x2f8bff) {
     }
   }
   setBarrels(1);
-  return { group: g, setBarrels, setChassis, animateVehicle, rig, barrels, glow, glowMat, bodyMat: body.material, wheels, shield };
+  return { group: g, setBarrels, setChassis, animateVehicle, rig, barrels, glow, glowMat, bodyMat: body.material, wheels };
 }
 
 // ---------- gates ----------

@@ -93,6 +93,7 @@ export class Sound {
       case 'nuke': this.burst(1.2, 0.8, 300); this.tone(60, 1.0, 'sine', 0.5, -30); this.tone(900, 0.5, 'sawtooth', 0.06, -800); break;
       case 'star': [784, 988, 1175, 1568, 1976].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.1, 0, i * 0.05)); break;
       case 'roar': this.tone(95, .9, 'sawtooth', .16, -45); this.tone(142, .8, 'square', .07, -70, .04); this.burst(.7, .22, 420); break;
+      case 'counter': this.tone(330,.10,'triangle',.11,165); this.tone(660,.14,'triangle',.10,220,.08); this.tone(990,.24,'sine',.08,0,.15); break;
       case 'reactor': {
         const root = p === 1 ? 220 : p === 3 ? 330 : p === 8 ? 440 : 660;
         this.tone(root,.14,'triangle',.09,root*.3);

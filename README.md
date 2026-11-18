@@ -16,6 +16,8 @@ A mobile-first 3D crowd shooter that runs in the browser. Drag to aim your canno
 - 13 troop ranks with distinct colors. Crowded armies fuse power into fewer troops, with extra crowd capacity in surge stages
 - Rolling swarms absorb damage even before rolling, shed troops as they shrink, and grant a four-second x2 wreck bonus
 - Once per stage, tap Charge reactor or press R to divert cannon fire. Tap again before overheat to launch Sunwings for 2.4 seconds. Peak releases reach ×24, or ×64 in surge stages. Gold Sunforge wheels give Sunwings another ×10. The world card’s stage scout lists the routes.
+- A late dodge through a boss sweep earns twelve ×6 Aegis Guard volleys. Each guard can block one marked blast, and counterfire stacks with the Sunwing reactor, giants and gate copies.
+- Results show all three stage times, including retries, with splits against your previous fastest full run when available.
 - NUKE, gate-boosting stars, hearts and tesla coils
 - Enemy gates, rival cannons, tornadoes, black holes (feed them for a SUPERNOVA), rolling swarm balls, toppling pillars and meteors
 - Announced side reinforcements in later worlds give you reasons to change lanes. Surge stages preserve uninterrupted multiplier runs
