@@ -6,6 +6,7 @@ import { Music } from './music.js';
 import { CRUSH_SECONDS, MEDALS, SWIFT_SECONDS, clock, loadRecords, medalTotal, medalsOf, recordRun, saveRecords } from './records.js';
 import * as FX from './fx.js';
 import * as P from './props.js';
+import { attackMarker } from './attack-markers.js';
 import { bossProjectile } from './boss-projectiles.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
@@ -2073,7 +2074,7 @@ function scheduleFlank(S, def = S.def.flanks) {
   S.flankN++;
   popup('FLANK INCOMING', 'combo c1', x, 2, z, 1.1);
   sound.play('warn');
-  addTelegraph('circle',x,z,1.6,0,def.warning,() => {
+  addTelegraph('flank',x,z,1.6,0,def.warning,() => {
     if (S !== G.stage || G.phase !== 'play') return;
     const hp = RED_TYPES[def.kind].hp * threat(S) * (def.hpScale ?? 1);
     for (let k = 0; k < def.count; k++) {
@@ -2093,16 +2094,11 @@ function addBeam(x1, y1, z1, x2, y2, z2, color, life = 0.14, width = .08) {
   tracers.emit(x1,y1,z1,x2,y2,z2,color,life,width);
 }
 function addTelegraph(shape, x, z, a, b, time, onHit, cannon = false) {
-  let outer = null, inner = null;
-  if (!TURBO) {
-    const geo = shape === 'circle' ? new THREE.CircleGeometry(1, 40) : new THREE.PlaneGeometry(1, 1);
-    outer = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.22, depthWrite: false }));
-    inner = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff3a1a, transparent: true, opacity: 0.45, depthWrite: false }));
-    for (const m of [outer, inner]) { m.rotation.x = -Math.PI / 2; m.position.set(x, 0.04, z); G.root.add(m); }
-    inner.position.y = 0.05;
-    if (shape === 'circle') outer.scale.set(a, a, 1); else outer.scale.set(a, b, 1);
-  }
-  G.effects.push({ kind: 'tele', shape, outer, inner, x, z, a, b, life: time, max: time, onHit, cannon });
+  const mesh = TURBO ? null : attackMarker(shape, x, z, a, b, cannon);
+  if (mesh) G.root.add(mesh);
+  const warning = { kind: 'tele', mesh, x, a, life: time, max: time, onHit, cannon, lateExposure: false };
+  G.effects.push(warning);
+  return warning;
 }
 function blueInCircle(x, z, r) {
   const r2 = r * r;
@@ -2324,12 +2320,8 @@ function updateEffects(dt) {
     e.life -= dt;
     const p = 1 - Math.max(0, e.life) / e.max;
     if (e.kind === 'tele') {
-      if (e.inner) {
-        if (e.shape === 'circle') e.inner.scale.set(e.a * p, e.a * p, 1);
-        else { e.inner.scale.set(e.a, e.b * p, 1); e.inner.position.z = e.z + e.b / 2 - (e.b * p) / 2; }
-        e.outer.material.opacity = 0.2 + Math.sin(G.t * 20) * 0.08;
-      }
-      if (e.life <= 0 && G.phase === 'play') e.onHit();
+      if (e.mesh) e.mesh.userData.progress = p;
+      if (e.life <= 0 && G.phase === 'play') e.onHit(e);
     } else if (e.kind === 'mush') {
       e.mesh.position.set(0, 0, e.z);
       e.mesh.scale.setScalar(2 + p * 16);
@@ -2343,7 +2335,8 @@ function updateEffects(dt) {
       e.mesh.rotation.set(p * 8, p * 5, 0);
     }
     if (e.life <= 0) {
-      for (const m of [e.mesh, e.outer, e.inner]) if (m) {
+      const m = e.mesh;
+      if (m) {
         G.root.remove(m);
         m.traverse((o) => { if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); if (o.material && !o.material.userData.shared) o.material.dispose(); });
       }
