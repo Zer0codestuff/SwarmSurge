@@ -434,6 +434,43 @@ function flagGeometry() {
   return g;
 }
 
+// Woven standards frame the gatehouse. Each badge is painted on the curved
+// cloth itself so it remains intact on flying masonry after the gate falls.
+const BLAZONS = {
+  bastion:[[0,-.8],[.64,-.25],[.72,.47],[.25,.47],[.25,.18],[-.25,.18],[-.25,.47],[-.72,.47],[-.64,-.25]],
+  temple:[[0,.78],[.80,-.58],[.28,-.58],[0,-.1],[-.28,-.58],[-.80,-.58]],
+  crown:[[-.78,.42],[-.3,.03],[0,.72],[.3,.03],[.78,.42],[.56,-.5],[-.56,-.5]],
+  station:[[0,.82],[.23,.25],[.76,-.42],[.28,-.30],[0,-.7],[-.28,-.30],[-.76,-.42],[-.23,.25]],
+  gothic:[[0,.9],[.23,.24],[.75,.32],[.46,-.10],[.18,-.12],[0,-.85],[-.18,-.12],[-.46,-.1],[-.75,.32],[-.23,.24]],
+  reef:[[-.18,-.73],[.20,-.73],[.28,-.19],[.73,.06],[.80,.52],[.47,.18],[.19,.14],[.11,.75],[-.14,.60],[-.19,.04],[-.54,.18],[-.7,.46],[-.74,-.01],[-.25,-.2]],
+  prism:[[0,.86],[.57,.06],[0,-.83],[-.57,.06]],
+  casino:[[0,.82],[.67,.03],[.54,-.33],[.15,-.34],[.36,-.68],[-.36,-.68],[-.15,-.34],[-.54,-.33],[-.67,.03]],
+};
+
+function standard(batch,x,family,roof,trim) {
+  const pos=[],colors=[],indices=[], cols=8, rows=10;
+  const dye=new THREE.Color(roof).lerp(new THREE.Color(0x572e46),.29);
+  const gold=new THREE.Color(trim).lerp(new THREE.Color(0xffdd95),.54), ink=new THREE.Color();
+  const point=(u,v)=>[x+u*.39*(1-.16*v),2.99-v*1.50-.26*v*v*(1-Math.abs(u)),
+    1.48+.075*Math.cos(u*5-v*2)+.06*v+.025*Math.sin(v*5)];
+  for(let j=0;j<=rows;j++)for(let k=0;k<=cols;k++){
+    const u=2*k/cols-1,v=j/rows;pos.push(...point(u,v));
+    ink.copy(j===1 || j===rows-1 || Math.abs(u)>.94?gold:dye).multiplyScalar(.83+.17*Math.cos(u*5-v*2));
+    colors.push(ink.r,ink.g,ink.b);
+    if(j<rows&&k<cols){const n=j*(cols+1)+k,d=n+cols+1;indices.push(n,d,n+1,n+1,d,d+1);}
+  }
+  const panel=new THREE.BufferGeometry();panel.setIndex(indices);
+  panel.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  panel.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));panel.computeVertexNormals();
+  batch.add(panel,0xffffff);
+  const badge=slab(BLAZONS[family],.018),bp=badge.attributes.position;
+  for(let i=0;i<bp.count;i++){
+    const q=point(bp.getX(i)*.84,.49-.26*bp.getY(i));
+    bp.setXYZ(i,q[0],q[1],q[2]+.023+.5*bp.getZ(i));
+  }
+  badge.computeVertexNormals();batch.add(badge,gold);
+}
+
 export function buildBattleTower(theme = 'desert') {
   const palette = THEMES[theme] || THEMES.desert, family = FAMILY[theme] || 'bastion', style = STYLE[family];
   const group = new THREE.Group(); group.name = `fort-${theme}`;
@@ -459,10 +496,7 @@ export function buildBattleTower(theme = 'desert') {
     k.wallTrim.add(slab(archPoints(.24, .52, style.arch === 'pointed' ? 'pointed' : 'round'), .07), DARK, x, 1.15, .99);
     k.wallGlow.add(slab(archPoints(.13, .48, style.arch === 'pointed' ? 'pointed' : 'round'), .04), lightC, x, 1.2, 1.03);
   }
-  for (const x of [-1.95, 1.95]) {
-    k.wallTrim.box(.3, .9, .08, x, 2.25, 1.3, DARK);
-    k.wallGlow.box(.1, .6, .05, x, 2.25, 1.34, lightC);
-  }
+  for (const x of [-1.95,1.95]) standard(k.wallTrim,x,family,roof,trimC);
   if (style.corbels) for (const [x0, x1] of [[-5.8, -2.4], [2.4, 5.8]]) {
     for (let x = x0 + .2; x < x1; x += .52) k.wallTrim.add(new THREE.BoxGeometry(.13, .2, .16), trimC, x, 2.17, 1.06);
   }

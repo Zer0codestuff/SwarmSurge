@@ -4,7 +4,7 @@
 // Math.random, so building a stage does not move the seeded simulation stream.
 import * as THREE from 'three';
 import { assetBatch, assetGlow, bevelBox } from './asset-kit.js';
-import { loftGeometry, sweepGeometry, headGeometry } from './boss-shapes.js';
+import { loftGeometry, sweepGeometry } from './boss-shapes.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -87,7 +87,25 @@ export function sculptFence(group, w, H) {
 // ---------- sand golem statue ----------
 const SAND = 0xdfba82, SAND_DARK = 0xa87c48, RUNE = 0x5ff3df;
 function golemHead(b, x, y, z, rx, rz, scale = 1) {
-  b.add(headGeometry(0.78 * scale, 0.84 * scale, 0.74 * scale, { brow: 0.26, jaw: 0.95, snout: 0.08, cheeks: 0.04 }), SAND, x, y, z, rx, 0, rz);
+  // The headdress, sloping brow, nose and blunt chin are cut from one stone.
+  const mask = loftGeometry([
+    [-.40,.15,.14,0,.035,.65],[-.32,.25,.22,0,.02,.68],
+    [-.12,.31,.28,0,0,.72],[.055,.35,.30,0,0,.67],[.16,.43,.36,0,-.03,.72],
+    [.27,.495,.39,0,-.065,.8],[.36,.44,.32,0,-.085,.77],[.44,.22,.16,0,-.05,.8],
+  ], {segments:24,steps:14,warp(px,py,pz,u,v,a) {
+    const front=Math.max(0,Math.cos(a));
+    const bridge=.14*Math.exp(-80*px*px-16*py*py);
+    const eye=.09*Math.exp(-90*(Math.abs(px)-.16)**2-165*(py-.06)**2);
+    return [px,py,pz+front*(bridge-eye)];
+  }});
+  const colors=mask.attributes.color, stone=new THREE.Color(SAND), inlay=new THREE.Color(0x936d50), tone=new THREE.Color();
+  for(let j=0;j<=14;j++)for(let k=0;k<=24;k++){
+    const a=k*TAU/24, i=j*25+k;
+    const chase=j===10 || (j>=11 && j<=13 && k%4===0);
+    tone.copy(stone).lerp(inlay,chase?.85:j<4?.22:0).multiplyScalar(.86+.14*Math.cos(a));
+    colors.setXYZ(i,tone.r,tone.g,tone.b);
+  }
+  b.add(mask.scale(scale,scale,scale),0xffffff,x,y,z,rx,0,rz);
 }
 // Large: a carved guardian on a stepped plinth. Small: its toppled head and a broken forearm.
 export function sculptStatue(group, w, small) {
@@ -106,15 +124,31 @@ export function sculptStatue(group, w, small) {
     const at = (geo, color, x, y, z, rx = 0, ry = 0, rz = 0) => b.add(geo.scale(s, s, s), color, x * s, base + y * s, z * s, rx, ry, rz);
     for (const sx of [-1, 1]) {
       at(upright([[0, 0.44, 0.5, 0.06, 0.7], [0.22, 0.42, 0.44, 0.02, 0.7], [0.6, 0.32, 0.36], [0.95, 0.38, 0.4], [1.2, 0.3, 0.34]], 14), stone, sx * 0.52, 0, 0);
-      at(new THREE.SphereGeometry(0.52, 14, 10).scale(1, 0.82, 1), SAND_DARK, sx * 1.3, 2.52, 0);
-      at(sweepGeometry([[sx * 1.3, 2.4, 0], [sx * 1.6, 1.75, 0.08], [sx * 1.5, 1.15, 0.3]], [0.36, 0.3, 0.4], { segments: 12, steps: 10 }), stone, 0, 0, 0);
-      at(upright([[-0.34, 0.3, 0.3], [-0.05, 0.44, 0.42], [0.3, 0.36, 0.36], [0.36, 0.2, 0.2]], 14), SAND, sx * 1.48, 0.86, 0.36);
-      at(new THREE.TorusGeometry(0.37, 0.07, 6, 16).rotateX(Math.PI / 2), SAND_DARK, sx * 1.52, 1.3, 0.26, 0.3);
+      // One silhouette from the shoulder to the knuckles, including the
+      // elbow and wrist. A chiseled transverse groove turns around each cuff.
+      const arm = loftGeometry([
+        [.55,.25,.28,sx*1.46,.39,.65],[.66,.41,.40,sx*1.49,.38,.61],
+        [.98,.43,.39,sx*1.53,.29,.62],[1.17,.32,.31,sx*1.54,.24,.73],
+        [1.26,.36,.34,sx*1.54,.21,.67],[1.57,.37,.35,sx*1.55,.15,.71],
+        [1.89,.29,.28,sx*1.48,-.01,.76],[2.17,.41,.39,sx*1.42,-.025,.8],
+        [2.46,.52,.46,sx*1.26,-.02,.78],[2.68,.47,.41,sx*1.16,-.01,.72],
+        [2.78,.27,.22,sx*1.06,0,.7],
+      ],{segments:16,steps:22,warp(x,y,z,u,v,a){
+        const grooves=v<.16 ? .043*Math.cos(a*5)*(1-v/.16) : 0;
+        return [x,y+grooves,z];
+      }});
+      const stripe = arm.attributes.color;
+      const c = new THREE.Color();
+      for(let j=0;j<=22;j++){
+        c.set(j===8 || j===18 ? SAND_DARK : SAND).multiplyScalar(.85+.15*j/22);
+        for(let k=0;k<=16;k++)stripe.setXYZ(j*17+k,c.r,c.g,c.b);
+      }
+      at(arm,0xffffff,0,0,0);
     }
     at(upright([[0.95, 0.74, 0.5], [1.2, 0.64, 0.46], [1.5, 0.82, 0.56]], 20), SAND_DARK, 0, 0, 0);
     at(upright([[1.36, 0.72, 0.5, 0, 0.7], [1.72, 1.0, 0.66, 0.02, 0.7], [2.2, 1.24, 0.74, 0.04, 0.7], [2.62, 1.14, 0.66, 0, 0.7], [2.86, 0.7, 0.46, -0.02, 0.7], [2.96, 0.3, 0.26, -0.02, 0.7]], 26), stone, 0, 0, 0);
     at(new THREE.TorusGeometry(0.34, 0.07, 6, 20), SAND_DARK, 0, 2.2, 0.72);
-    b.add(headGeometry(0.78 * s, 0.84 * s, 0.74 * s, { brow: 0.26, jaw: 0.95, snout: 0.08, cheeks: 0.04 }), SAND, 0, base + 3.3 * s, 0.14 * s);
+    golemHead(b,0,base+3.3*s,.14*s,0,0,s);
     b.add(new THREE.TorusGeometry(0.42 * s, 0.09 * s, 6, 18).rotateX(Math.PI / 2), SAND_DARK, 0, base + 2.92 * s, 0.06 * s);
     for (const sx of [-1, 1]) glow.sphere(0.07 * s, sx * 0.18 * s, base + 3.37 * s, 0.49 * s, RUNE, 1, 0.6, 0.5);
     glow.add(new THREE.OctahedronGeometry(0.2 * s, 0).scale(1, 1.25, 0.5), RUNE, 0, base + 2.2 * s, 0.76 * s);
@@ -133,7 +167,17 @@ export function sculptSaw(group, r) {
     rim.push([Math.cos(a) * (r + 0.17), Math.sin(a) * (r + 0.17)], [Math.cos(a + step * 0.34) * (r - 0.03), Math.sin(a + step * 0.34) * (r - 0.03)], [Math.cos(a + step * 0.9) * (r + 0.02), Math.sin(a + step * 0.9) * (r + 0.02)]);
   }
   const slots = [];
-  for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; slots.push(arc(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, r * 0.1, r * 0.1, 0, TAU, 10).slice(0, -1).reverse()); }
+  for (let k = 0; k < 6; k++) {
+    const outline = [];
+    // Swept through-slots leave a hooked spoke between the hub and the teeth.
+    for (let i = 0; i < 18; i++) {
+      const a = i * TAU / 18, along = (1 - Math.cos(a)) * .5;
+      const angle = k * TAU / 6 + .63 * along + .125 * Math.sin(a);
+      const radius = r * (.43 + .38 * along);
+      outline.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
+    }
+    slots.push(outline);
+  }
   const disc = assetBatch();
   disc.add(extrude(rim, 0.09, 0.02, slots), (x, y) => { const d = Math.hypot(x, y); return d > r - 0.05 ? 0xf4f8fb : d > r * 0.8 ? 0xaab4c0 : 0xd0d7e0; });
   disc.add(lathe([[r * 0.34, -0.09], [r * 0.34, 0.06], [r * 0.28, 0.1], [r * 0.12, 0.11], [0.001, 0.13]], 16).rotateX(Math.PI / 2), 0xe2343c);

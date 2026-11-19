@@ -74,8 +74,15 @@ function batch() {
 // Airfoil loft across the span. Sections are [x, chordCenterZ, halfChord, halfThickness, y].
 function wing(sections, segments = 14) {
   const sorted = [...sections].sort((a, b) => a[0] - b[0]);
-  return loftGeometry(sorted.map(([x, z, c, t, y = 0]) => [x, t, c, -y, z, 1]),
-    { segments, steps: Math.max(6, sorted.length * 2 + 2), shade: false }).rotateZ(-Math.PI / 2);
+  // A blunt leading edge turns into a sharp, cambered trailing edge. Keep
+  // the chord endpoints intact where outer wing panels meet the inner wing.
+  return loftGeometry(sorted.map(([x,z,chord,thickness,y=0])=>[x,thickness,chord,-y,z,1]),
+    {segments,steps:Math.max(8,sorted.length*3),shade:false,warp(x,y,z,u,v,a,section){
+      const chord=(Math.cos(a)+1)*.5;
+      const center=section[3], thickness=section[1];
+      const trailing=chord*chord;
+      return [(x-center)*(1-.64*trailing)+center-.32*thickness*Math.sin(Math.PI*chord),y,z];
+    }}).rotateZ(-Math.PI/2);
 }
 function mirror(sections, side) { return sections.map(([x, ...rest]) => [x * side, ...rest]); }
 // Vertical fin: a wing rotated upright and canted outward.
@@ -85,9 +92,17 @@ function nacelle(profile, sides = 12) { return lathe(profile, sides).rotateX(Mat
 
 function canopy(body, z0, z1, y, width, height) {
   const mid = (z0 + z1) / 2, half = (z1 - z0) / 2;
-  body.add(pod([[z0 - 0.03, 0.03, 0.02, y], [z0 + half * 0.25, width * 1.08, height * 0.65, y], [mid, width * 1.12, height * 0.8, y], [z1, width * 0.7, height * 0.5, y], [z1 + 0.08, 0.04, 0.03, y]], 14), NAVY);
-  body.add(pod([[z0, 0.02, 0.02, y + 0.02], [z0 + half * 0.3, width * 0.9, height * 0.75, y + 0.02, 0.9], [mid, width, height, y + 0.02, 0.9], [z1 - 0.06, width * 0.6, height * 0.55, y + 0.02, 0.9], [z1, 0.03, 0.03, y + 0.02]], 14),
-    (x, yy) => (yy > y + 0.02 + height * 0.55 && Math.abs(x) < width * 0.35 ? 0xd8fbff : 0x46c9e6));
+  // Coaming, tinted glazing and windshield reflections occupy one bubble.
+  const shell=pod([[z0-.045,.018,.024,y],[z0+half*.25,width*.88,height*.72,y+.016],
+    [mid,width*1.08,height*1.05,y+.020],[z1-.055,width*.77,height*.69,y+.014],
+    [z1+.085,.016,.025,y]],22,24);
+  body.add(shell,(x,yy,z)=>{
+    const h=(yy-y)/height, t=(z-z0)/(z1-z0);
+    if(h<.16 || t<.055 || t>.965 || Math.abs(t-.72)<.024)return NAVY;
+    if(h>.68 && Math.abs(x/width+.29+t*.27)<.28)return 0xccf5ee;
+    if(h>.43)return 0x57cbdc;
+    return 0x317caa;
+  });
 }
 
 function engines(body, x, y, front, rear, r) {
