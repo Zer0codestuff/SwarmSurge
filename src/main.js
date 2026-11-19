@@ -847,7 +847,7 @@ function disposeLevel() {
     if (o.isInstancedMesh) o.dispose();
     if (o.geometry && !o.geometry.userData.shared) geometries.add(o.geometry);
     for (const material of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
-      if (material.map && material.map !== M.shineTexture()) textures.add(material.map);
+      if (material.map && !material.map.userData.shared) textures.add(material.map);
       if (!material.userData.shared) materials.add(material);
     }
   });

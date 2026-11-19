@@ -74,8 +74,9 @@ export function troopBuilder(animated = false, lowDetail = false) {
     const colors = new Float32Array(p.count * 3);
     const stride = animated ? new Float32Array(p.count * 3) : null;
     for (let i = 0; i < p.count; i++) {
-      const k = shade ? shade.getX(i) : 1;
-      colors.set([tint.r * k, tint.g * k, tint.b * k], i * 3);
+      colors[i*3] = tint.r * (shade ? shade.getX(i) : 1);
+      colors[i*3+1] = tint.g * (shade ? shade.getY(i) : 1);
+      colors[i*3+2] = tint.b * (shade ? shade.getZ(i) : 1);
       if (leg) {
         // A ratio keeps the hip pivot correct when the merged model is scaled.
         const radius = Math.hypot(p.getX(i), p.getY(i), p.getZ(i));

@@ -570,6 +570,22 @@ window.runGameChecks = (g) => {
     impactRings.emit(0,0,2,0xffffff,.2); impactRings.update(.01); startLevel(0);
     return {pass:bounded && expired && impactRings.mesh.count===0};
   })()`);
+  check('Restart preserves the shared boss atlas and releases level textures', `(() => {
+    const shared = new Set();
+    G.root.traverse(o => { if (o.material?.map?.userData.shared) shared.add(o.material.map); });
+    let sharedDisposals = 0, privateDisposals = 0;
+    const onShared = () => sharedDisposals++;
+    for (const texture of shared) texture.addEventListener('dispose',onShared);
+    const local = new THREE.Texture();
+    local.addEventListener('dispose',() => privateDisposals++);
+    G.root.add(new THREE.Mesh(new THREE.PlaneGeometry(),new THREE.MeshBasicMaterial({map:local})));
+    try {
+      startLevel(0);
+      return {pass:shared.size >= 2 && shared.has(M.shineTexture()) && sharedDisposals === 0 && privateDisposals === 1};
+    } finally {
+      for (const texture of shared) texture.removeEventListener('dispose',onShared);
+    }
+  })()`);
   check('Troop detail and rank forms preserve units, weapons and motion', `(() => {
     camera.position.set(0,20,20); troopPixelScale=1000;
     const far=spawn(B,-2,-60,4,0), near=spawn(B,2,-3,1e14,0);

@@ -72,7 +72,8 @@ export function boulder(seed = 1, color = 0x8a7f72, { detail = 1, rough = .28, f
   paint(g, color, (x, y, z, i) => {
     const s = (.62 + .38 * Math.min(1, (y + .1) / (1.1 * flat))) * (.85 + .15 * Math.min(1.2, depth[i]));
     if (hot && depth[i] < accentDepth) return tmp.copy(hot).lerp(base, Math.max(0, (depth[i] - accentDepth + .12) / .12));
-    return s;
+    const bedding = .5 + .5 * Math.cos((y + .17*x - .10*z) * 11 + seed*.9);
+    return s * (.86 + .22*bedding);
   });
   return g;
 }
@@ -87,14 +88,29 @@ export function rockCluster(color, seed = 1, opts = {}) {
 }
 
 export function saguaro() {
-  const green = 0x4e9a3c, ribs = { segments: 7, flutes: .09 };
-  const shade = (x, y) => .74 + .26 * Math.min(1, y / 2.4);
-  return combine([
-    paint(sweepGeometry([[0, 0, 0], [0, 1.2, 0], [.02, 2.4, 0], [0, 2.75, 0]], [.36, .34, .3, .05], { ...ribs, steps: 7 }), green, shade),
-    paint(sweepGeometry([[.25, 1.0, 0], [.62, 1.04, 0], [.74, 1.4, 0], [.72, 1.95, 0], [.7, 2.08, 0]], [.18, .2, .19, .17, .04], { ...ribs, segments: 6, steps: 6 }), green, shade),
-    paint(sweepGeometry([[-.25, 1.35, .04], [-.55, 1.38, .06], [-.62, 1.65, .06], [-.6, 1.92, .05]], [.16, .17, .15, .04], { ...ribs, segments: 6, steps: 5 }), green, shade),
-    paint(new THREE.SphereGeometry(.07, 6, 4), 0xff7aa8).translate(0, 2.78, 0),
-  ]);
+  const green = new THREE.Color(0x467c49), lit = new THREE.Color(0x8aba59);
+  const rib = (points,radii,steps) => {
+    const sides=16;
+    const stem=sweepGeometry(points,radii,{segments:sides,steps,flutes:.11});
+    return paint(stem,green,(x,y,z,i)=>{
+      const crease=.5+.5*Math.cos((i%(sides+1))*TAU/sides*5);
+      return tmp.copy(green).lerp(lit,.16+.52*crease).multiplyScalar(.74+.24*y/2.75);
+    });
+  };
+  const parts=[
+    rib([[0,0,0],[-.024,1.1,.02],[.035,2.40,0],[.012,2.68,0],[0,2.74,.005]], [.35,.33,.285,.19,.018],10),
+    rib([[.18,.97,0],[.57,1.05,.035],[.73,1.40,.02],[.70,1.96,0],[.68,2.055,0]],[.20,.205,.185,.151,.012],8),
+    rib([[-.17,1.31,.035],[-.51,1.42,.07],[-.615,1.66,.07],[-.585,1.91,.05],[-.58,1.98,.045]], [.18,.173,.157,.126,.01],7),
+  ];
+  for(const [x,y,z,s] of [[.07,2.64,.12,1],[-.57,1.92,.12,.7]]) {
+    const bloom=loftGeometry([[0,.022,.022],[.058,.054,.05],[.11,.127,.12],[.126,.113,.105],[.078,.038,.04]],
+      {segments:15,steps:5,warp(px,py,pz,u,v,a){
+        const petal=.5+.5*Math.cos(a*5);
+        return [px*(.8+.2*petal),py+.047*petal*Math.sin(v*Math.PI),pz*(.8+.2*petal)];
+      }});
+    parts.push(place(paint(bloom,0xff87a4,(px,py,pz)=>py>.105?tmp.set(0xffb6ac):tmp.set(0xce566f)),x,y,z,0,0,-.34,s));
+  }
+  return combine(parts);
 }
 
 export function deadTree(color = 0x5a4030, scale = 1) {
@@ -121,36 +137,49 @@ export function spookyTree() {
 
 // Layered pine with drooping tiers and optional snow on each shelf.
 export function pine(snow = false, dark = 0x2f6b4f, light = 0x3d8a60) {
-  const parts = [paint(new THREE.CylinderGeometry(.11, .16, .8, 6).translate(0, .4, 0), 0x6a4a2a)];
-  const tiers = [[.55, 1.15, 1.6], [1.4, .84, 1.35], [2.2, .5, 1.05]];
-  tiers.forEach(([y, r, h], i) => {
-    const tier = lathe([[.001, y + h], [r * .45, y + h * .55], [r * .92, y + h * .12], [r, y], [.001, y + .05]], 7);
-    parts.push(paint(tier, i % 2 ? light : dark, (x, yy) => .78 + .22 * (yy - y) / h));
-    if (snow) parts.push(paint(lathe([[r * .62, y + h * .46], [r * .42, y + h * .64], [.001, y + h + .03]], 7), 0xf4f9ff));
+  const trunk=paint(lathe([[.18,0],[.13,.35],[.10,1.25]],7),0x705132);
+  // A single canopy winds around the trunk. Each whorl turns between the
+  // boughs below it and a hanging tip breaks the lower outline.
+  const sections=[[.50,.43,.45],[.65,1.04,1.07],[.92,.95,.91],[1.30,.61,.63],
+    [1.37,.82,.86],[1.61,.72,.77],[1.99,.47,.49],[2.05,.62,.61],
+    [2.33,.51,.50],[2.65,.31,.32],[2.67,.35,.36],[2.98,.20,.19],[3.29,.012,.012]];
+  const canopy=loftGeometry(sections,{segments:16,steps:15,warp(x,y,z,u,v,a){
+    const cluster=.5+.5*Math.cos(5*a+v*9), scale=.77+.28*cluster;
+    return [x*scale+.07*v*v, y-.24*cluster*(1-v), z*scale];
+  }});
+  const shadow=new THREE.Color(dark),sun=new THREE.Color(light),frost=new THREE.Color(0xf4faff);
+  const normal=canopy.attributes.normal;
+  paint(canopy,dark,(x,y,z,i)=>{
+    const up=normal.getY(i), blend=Math.max(0,Math.min(1,.22+.62*up+.19*y/3));
+    tmp.copy(shadow).lerp(sun,blend).multiplyScalar(.82+.18*y/3);
+    if(snow)tmp.lerp(frost,Math.max(0,Math.min(1,(up-.07)*2.4)));
+    return tmp;
   });
-  return combine(parts);
+  return combine([trunk,canopy]);
 }
 
-function frond(angle, len = 2.2, droop = 1.1, width = .32, color = 0x3fb84a) {
-  const steps = 4, pos = [], c = [], base = new THREE.Color(color);
-  const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)), side = new THREE.Vector3(-dir.z, 0, dir.x);
-  const row = t => {
-    const along = dir.clone().multiplyScalar(t * len), y = .25 * Math.sin(t * Math.PI) - droop * t * t, w = width * Math.sin(Math.PI * Math.min(1, t * 1.1 + .08));
-    const center = along.clone().setY(y + .06);
-    return [along.clone().setY(y).addScaledVector(side, -w), center, along.clone().setY(y).addScaledVector(side, w)];
-  };
-  for (let i = 0; i < steps; i++) {
-    const a = row(i / steps), b = row((i + 1) / steps), s = .8 + .2 * i / steps;
-    for (const [p, q, r] of [[a[0], b[1], a[1]], [a[0], b[0], b[1]], [a[1], b[1], b[2]], [a[1], b[2], a[2]]]) {
-      pos.push(...p.toArray(), ...r.toArray(), ...q.toArray());
-      for (let k = 0; k < 3; k++) c.push(base.r * s, base.g * s, base.b * s);
+function frond(angle,len,droop,width,color) {
+  const pos=[],colors=[],idx=[],base=new THREE.Color(color);
+  const dir=new THREE.Vector3(Math.cos(angle),0,Math.sin(angle)), side=new THREE.Vector3(-dir.z,0,dir.x);
+  const steps=14;
+  for(let j=0;j<=steps;j++){
+    const t=j/steps, along=dir.clone().multiplyScalar(t*len);
+    const y=.53*Math.sin(Math.PI*t)-droop*t*t;
+    const spread=width*(.02+.98*Math.sin(Math.PI*t)**.7)*(j%2?.58:1.2);
+    for(let k=-1;k<=1;k++){
+      const p=along.clone().addScaledVector(side,k*spread);
+      if(k)p.addScaledVector(dir,.45*spread);
+      p.y=y+(k?-.30*spread:.055);
+      pos.push(p.x,p.y,p.z);
+      const shade=k===0?1.13:k===1?.91:.76;
+      colors.push(base.r*shade,base.g*shade,base.b*shade);
     }
+    if(j<steps)for(let k=0;k<2;k++){const n=j*3+k;idx.push(n,n+1,n+3,n+1,n+4,n+3);}
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3));
-  g.computeVertexNormals();
-  return g;
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geo.setIndex(idx);geo.computeVertexNormals();return geo;
 }
 
 export function palm({ height = 4.3, lean = .7, trunk = 0x9a6a3a, leaf = 0x3fb84a, leaf2 = 0x2f9a3a, fronds = 7 } = {}) {
@@ -163,11 +192,21 @@ export function palm({ height = 4.3, lean = .7, trunk = 0x9a6a3a, leaf = 0x3fb84
 }
 
 export function bush(color = 0x2f8a35, flower = 0xff4f9a) {
-  const parts = [];
-  [[0, .45, 0, .75], [.55, .35, .2, .55], [-.45, .35, -.3, .58]].forEach(([x, y, z, s], i) => {
-    parts.push(place(boulder(i + 2, color, { rough: .14, flat: .85 }), x, y - s * .35, z, 0, i, 0, s));
-  });
-  if (flower) for (let i = 0; i < 3; i++) parts.push(paint(new THREE.SphereGeometry(.13, 5, 3), flower).translate(Math.cos(i * 1.7) * .55, .78 + (i % 2) * .12, Math.sin(i * 1.7) * .45));
+  const canopy=loftGeometry([[.02,.50,.42],[.19,.91,.69],[.46,.88,.71],[.67,.59,.46],[.75,.02,.02]],
+    {segments:18,steps:7,warp(x,y,z,u,v,a){
+      const tuft=Math.sin(5*a+v*4)*Math.cos(2*a-v*3);
+      return [x*(1+.17*tuft),y+.15*tuft*Math.sin(Math.PI*v),z*(1+.12*tuft)];
+    }});
+  const parts=[paint(canopy,color,(x,y,z)=>.65+.37*y+.10*Math.sin(x*8+z*3))];
+  if(flower)for(let i=0;i<4;i++){
+    const a=.7+i*1.7,x=.48*Math.cos(a),z=.38*Math.sin(a);
+    const bloom=loftGeometry([[0,.016,.016],[.045,.064,.064],[.086,.116,.116],[.095,.078,.078]],
+      {segments:10,steps:3,warp(x,y,z,u,v,ang){
+        const petal=Math.cos(5*ang),r=1+.29*v*petal;
+        return [x*r,y+.025*v*petal,z*r];
+      }});
+    parts.push(paint(bloom,flower,(x,y,z)=>.65+3.3*y).translate(x,.69,z));
+  }
   return combine(parts);
 }
 
@@ -265,10 +304,10 @@ export function coral(color, seed = 0) {
     const a = b / 4 * TAU + seed, ca = Math.cos(a), sa = Math.sin(a), out = .45 + (b % 2) * .2;
     const end = [ca * (out + .35), 2.0 + (b % 2) * .4, sa * (out + .35)];
     parts.push(paint(sweepGeometry([[0, 1.1, 0], [ca * out, 1.5, sa * out], end], [.13, .1, .06], { segments: 4, steps: 5 }), color, sh));
-    parts.push(paint(new THREE.SphereGeometry(.08, 5, 3), tip).translate(...end));
+    parts.push(paint(lathe([[.055,-.07],[.084,-.033],[.081,.021],[.056,.053],[.029,.038],[.024,.005]],7),color,(x,y)=> y>.018 ? tmp.set(tip) : 1).translate(...end));
     const mid = [ca * out, 1.5, sa * out], twig = [mid[0] + sa * .3, 1.95, mid[2] - ca * .3];
     parts.push(paint(sweepGeometry([mid, [mid[0] + sa * .2, 1.7, mid[2] - ca * .2], twig], [.07, .05, .03], { segments: 4, steps: 3 }), color, sh));
-    parts.push(paint(new THREE.SphereGeometry(.06, 4, 3), tip).translate(...twig));
+    parts.push(paint(lathe([[.031,-.052],[.057,-.021],[.055,.027],[.038,.036],[.018,.009]],6),color,(x,y)=> y>.018 ? tmp.set(tip) : 1).translate(...twig));
   }
   return combine(parts);
 }
@@ -300,10 +339,22 @@ export function gravestone() {
 }
 
 export function mushroom(color = 0x9a7aff) {
-  return combine([
-    paint(sweepGeometry([[0, 0, 0], [.05, .3, 0], [0, .55, 0]], [.08, .06, .07], { segments: 6, steps: 4 }), 0xe8e0d0),
-    paint(lathe([[.001, .7], [.2, .69], [.32, .6], [.34, .5], [.2, .52], [.001, .5]], 12), color),
-  ]);
+  const cream = new THREE.Color(0xffe8c4), pigment = new THREE.Color(color);
+  const cap = loftGeometry([
+    [.47,.055,.065],[.488,.18,.19],[.456,.32,.29],[.51,.35,.32],
+    [.61,.255,.25],[.698,.115,.105],[.71,.012,.014],
+  ], { segments: 24, steps: 11, warp(x,y,z,u,v,a) {
+    const gill = v < .38 ? .028 * Math.cos(a*12) : 0;
+    return [x, y + gill + .018*Math.sin(a*3+.6)*(1-v), z+.042*v];
+  } });
+  paint(cap,color,(x,y,z,i)=>{
+    const v=Math.floor(i/25)/11, a=Math.atan2(x,z-.02);
+    if(v<.4)return tmp.copy(cream).multiplyScalar(.72+.22*Math.cos(a*12));
+    const freckles=Math.sin(a*6+.6)*Math.cos((y-.61)*28);
+    return tmp.copy(pigment).lerp(cream,Math.min(.86,Math.max(0,(freckles-.62)*2.7)));
+  });
+  return combine([paint(sweepGeometry([[0,0,0],[-.015,.13,.015],[.05,.34,0],[.02,.52,.02]],
+    [.095,.074,.052,.081],{segments:7,steps:5}),0xeee1c6,ground(0,.48,.72)),cap]);
 }
 
 // Hexagonal crystals growing from a shared rock base.
@@ -321,12 +372,18 @@ export function crystalCluster(color, seed = 1, base = 0x2a2440) {
 // Craggy peak with snow above a jagged line and a darker base.
 export function mountain(rockC = 0x4a5058, snowC = 0xe8eef8, seed = 1) {
   const g = loftGeometry([[0, 2.5, 2.3], [2.2, 1.8, 1.7], [4.6, .9, .85], [6.6, .25, .22], [7.0, .02, .02]], {
-    segments: 14, steps: 10, warp: (x, y, z, u, v, a) => { const f = 1 + .22 * noise(Math.cos(a) * 2, y * .5, Math.sin(a) * 2, seed); return [x * f, y, z * f]; },
+    segments: 18, steps: 12, warp: (x,y,z,u,v,a) => {
+      const ridge=Math.abs(Math.cos(a*3+seed*.82+v*.9));
+      const f=.78+.40*ridge+.18*noise(Math.cos(a)*2,y*.5,Math.sin(a)*2,seed);
+      return [x*f+.82*v*v*Math.sin(seed+.9), y*(.86+.14*ridge),z*f+.58*v*v*Math.cos(seed)];
+    },
   });
   const snow = new THREE.Color(snowC), stone = new THREE.Color(rockC);
   return paint(faceted(g), rockC, (x, y, z) => {
     const line = 4.4 + .6 * Math.sin(Math.atan2(z, x) * 5 + seed);
-    return y > line ? tmp.copy(snow) : tmp.copy(stone).multiplyScalar(.7 + .3 * y / 4.4);
+    const ridge=.5+.5*Math.cos(Math.atan2(z,x)*4+seed);
+    return tmp.copy(stone).multiplyScalar(.62+.32*ridge+.14*y/7)
+      .lerp(snow,Math.max(0,Math.min(1,(y-line+.52*ridge)/.6)));
   });
 }
 

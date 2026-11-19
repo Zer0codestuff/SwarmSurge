@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { sculptIceWall, sculptFence, sculptStatue, sculptSaw, sculptPortal, sculptPortalExit } from './obstacle-assets.js';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { assetBatch, assetGlow } from './asset-kit.js';
+import { loftGeometry } from './boss-shapes.js';
 import { fittingCollar } from './supply-assets.js';
 import { THEMES } from './levels.js';
 import { LATE_GLOW_ROAD, LATE_POSTS } from './biomes-late.js';
@@ -212,6 +213,7 @@ export function shineTexture() {
   gr.addColorStop(0.56, 'rgba(255,255,255,0)'); gr.addColorStop(0.64, 'rgba(255,255,255,0.5)'); gr.addColorStop(0.68, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = gr; ctx.fillRect(0, 0, 256, 64);
   shineTex = new THREE.CanvasTexture(c);
+  shineTex.userData.shared = true;
   shineTex.wrapS = THREE.RepeatWrapping;
   shineTex.repeat.set(0.5, 1);
   return shineTex;
@@ -230,7 +232,7 @@ function gateShade(geo, fn) {
 export function buildGate(w, hex, mega = false) {
   const g = new THREE.Group();
   const H = mega ? 2.5 : 2.0;
-  // Sculpted pylons, a rounded lintel and a ramped sill share one tinted mesh.
+  // The pressed side pillars turn into the swept shoulders of the overhead casting.
   const frameMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(hex).multiplyScalar(0.55), vertexColors: true });
   const capMat = new THREE.MeshBasicMaterial({ color: hex });
   const parts = [], trim = [], caps = [];
@@ -238,10 +240,21 @@ export function buildGate(w, hex, mega = false) {
     const post = gateLathe([[.27, 0], [.27, .12], [.2, .2], [.15, .34], [.14, H * .55], [.13, H - .3], [.19, H - .22], [.21, H - .04], [.13, H + .02], [.001, H + .03]]);
     parts.push(gateShade(post, (x, y) => (y < .22 || y > H - .24 ? 1.45 : .9 + .25 * y / H)).translate(sx * w / 2, 0, 0));
     for (const y of [.24, H - .27]) trim.push(new THREE.TorusGeometry(.155, .035, 5, 14).rotateX(Math.PI / 2).translate(sx * w / 2, y, 0));
-    caps.push(new THREE.SphereGeometry(mega ? .2 : .16, 12, 8).translate(sx * w / 2, H + .2, 0));
+    // The lens sits in a rolled socket with its luminous end exposed.
+    caps.push(gateLathe([[.12,-.10],[.153,-.055],[.148,.022],[.106,.083],[.045,.113],[.001,.12]], 14)
+      .translate(sx * w / 2, H + .05, 0));
     caps.push(new THREE.BoxGeometry(.05, H * .5, .06).translate(sx * w / 2, H * .5, .14));
   }
-  parts.push(gateShade(new THREE.CylinderGeometry(.1, .1, w, 10, 1).rotateZ(Math.PI / 2).translate(0, H - .02, 0), () => 1.25));
+  // One continuous bridge casting with haunches deepening as they enter
+  // each post. Rotating the loft makes its section axis run across the road.
+  const beam = loftGeometry([
+    [-.50*w,.095,.11],[-.475*w,.155,.135],[-.425*w,.115,.114],[-.34*w,.070,.09],
+    [0,.072,.087],[.34*w,.070,.09],[.425*w,.115,.114],[.475*w,.155,.135],[.50*w,.095,.11],
+  ], { segments: 8, steps: 20, warp(x,y,z) {
+    const end = Math.abs(2*y/w);
+    return [x + .17 * end**6, y, z];
+  } }).rotateZ(-Math.PI/2).translate(0,H+.025,0);
+  parts.push(gateShade(beam, (x, y) => y > H + .04 ? 1.46 : y < H - .09 ? .69 : 1.12));
   const sill = new THREE.CylinderGeometry(.16, .16, w + .2, 10, 1, false, Math.PI, Math.PI); sill.rotateZ(Math.PI / 2); sill.scale(1, .45, 1.6);
   parts.push(gateShade(sill.translate(0, .005, 0), () => 1.1));
   for (let i = 0; i < 3; i++) {

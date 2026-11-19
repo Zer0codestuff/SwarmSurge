@@ -1,6 +1,7 @@
+import { characterLoft } from './character-surfaces.js';
 import * as THREE from 'three';
 import { assetBatch, assetGlow, attackPose } from './asset-kit.js';
-import { loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry, crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth } from './boss-shapes.js';
+import { loftGeometry, headGeometry, sweepGeometry, patchGeometry, mantleGeometry, crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth } from './boss-shapes.js';
 
 const GOLD=0xd9a644, PALE=0xffdf91, INK=0x211b34, IVORY=0xffecc9;
 const patchOptions={segments:18,rings:4};
@@ -84,7 +85,7 @@ export function buildSculptedRoyal(type){
   const legs=[-1,1].map(s=>royalLeg(pose,s,emperor));
   const torso=node(pose,'royal-bust',0,emperor?3.45:2.65),skin=assetBatch(),armor=assetBatch();
   const h=emperor?3.6:2.95;
-  skin.add(loftGeometry([[0,1.02,.68],[.45,1.4,.95],[1.2,1.71,1.15],[h*.68,1.9,1.11],[h*.86,1.71,.95],[h,.62,.58]],{segments:36,steps:30}),emperor?0x4d365f:0xa83c4d);
+  characterLoft(skin, [[0,1.02,.68],[.45,1.4,.95],[1.2,1.71,1.15],[h*.68,1.9,1.11],[h*.86,1.71,.95],[h,.62,.58]], type, 0,0,0, {segments:36,steps:30});
   skin.add(loftGeometry([[h-.22,.59,.5],[h+.08,.49,.43],[h+.48,.46,.42],[h+.63,.37,.38]],{segments:24,steps:10}),emperor?0x4d365f:0xa83c4d);
   const breast=[[-1.49,1.15],[-.82,1.5],[0,1.3],[.82,1.5],[1.49,1.15],[1.24,-.55],[0,-1.16],[-1.24,-.55]];
   plate(armor,breast,emperor?0x755280:0xc2934c,0,h*.52,1.02,.38);
@@ -112,8 +113,9 @@ export function buildSculptedRoyal(type){
     plate(crown,[[-.1,0],[0,.18],[.1,0],[0,-.16]],emperor?0xd6a1e6:0x8b394d,x,emperor?1.39:1.27,z,.05,0,a);
   }
   crown.finish(head,'continuous-cast-crown',bossMetal);
-  const cape=node(torso,'folded-royal-cape',0,h*.91,-.85),fabric=assetBatch();
-  fabric.add(clothGeometry(emperor?3.65:2.85,emperor?5.7:4.6,{folds:8,flare:.28,depth:.17}),emperor?0x5a2a56:0x752947,0,0,0,0,Math.PI);
+  const cape=node(torso,'folded-royal-cape',0,h+.12,0),fabric=assetBatch();
+  fabric.add(mantleGeometry(emperor?2.48:2.15,emperor?5.8:4.7,{outer:emperor?0x652b68:0xb8334c,
+    lining:emperor?0x32223d:0x602943,braid:PALE,folds:emperor?9:6,split:.68}),0xffffff);
   fabric.finish(cape,'woven-folds-and-scalloped-hem',bossCloth);
   let halo,shield,scepter;
   if(emperor){

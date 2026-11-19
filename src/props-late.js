@@ -1,6 +1,8 @@
 // Models for the world 21-50 mechanics: pinball bumpers, hypno gates, mine carts on rails,
 // harvest banks, dinosaur eggs and paired fusion cores. Lathe and swept forms, toon materials,
 // no lights and no raster textures beyond the shared canvas labels.
+import { loftGeometry, sweepGeometry } from './boss-shapes.js';
+import { assetBatch } from './asset-kit.js';
 import * as THREE from 'three';
 import { lam, mesh, makeCanvasLabel, textPlane, buildGate } from './models.js';
 
@@ -97,12 +99,18 @@ export function buildRails(len) {
 export function buildCart() {
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
-  const tub = new THREE.LatheGeometry([V2(0.55, 0), V2(0.7, 0.1), V2(0.85, 0.6), V2(0.92, 0.72), V2(0.86, 0.76)], 4);
-  tub.rotateY(Math.PI / 4); tub.scale(1, 1, 1.3);
-  const iron = lam(0x58606e), rust = lam(0xb5653a), red = lam(0xd8263a), tan = lam(0xe8d6a0);
-  body.add(mesh(tub, rust, 0, 0.42, 0));
-  const lip = new THREE.TorusGeometry(0.9, 0.06, 6, 4).rotateX(Math.PI / 2).rotateY(Math.PI / 4); lip.scale(1, 1, 1.3);
-  body.add(mesh(lip, iron, 0, 1.17, 0, false));
+  const iron=lam(0x58606e),red=lam(0xd8263a),tan=lam(0xe8d6a0);
+  const hopper=assetBatch();
+  const tub=loftGeometry([[.40,.46,.69,0,0,.45],[.48,.51,.76,0,0,.43],
+    [.53,.55,.80,0,0,.43],[1.05,.71,.95,0,0,.38],[1.12,.74,.98,0,0,.38],
+    [1.17,.74,.98,0,0,.38],[1.17,.67,.89,0,0,.38],[.96,.58,.82,0,0,.40]],
+    {segments:22,steps:18});
+  hopper.add(tub,(x,y,z)=>y>1.075?0x52647a:y<.55?0x423c46:Math.abs(x)>.52&&Math.abs(z)<.09?0xdca15d:0xac603c);
+  for(const side of [-1,1]){
+    hopper.beam([side*.52,.54,-.72],[side*.70,1.08,-.80],.064,.07,0xdfad70);
+    hopper.beam([side*.52,.54,.72],[side*.70,1.08,.80],.064,.07,0xdfad70);
+  }
+  hopper.finish(body,'riveted-ore-hopper');
   const stick = new THREE.CylinderGeometry(0.11, 0.11, 0.7, 10);
   for (let k = 0; k < 5; k++) {
     const m = mesh(stick, red, -0.36 + k * 0.18, 1.2, (k % 2 ? 0.16 : -0.14), false);
@@ -111,7 +119,7 @@ export function buildCart() {
   body.add(mesh(new THREE.BoxGeometry(0.9, 0.14, 0.12), tan, 0, 1.25, 0, false));
   const fuse = mesh(new THREE.SphereGeometry(0.12, 8, 6), glow(0xffd23a), 0.1, 1.7, 0, false);
   body.add(fuse);
-  const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.12, 14).rotateZ(Math.PI / 2);
+  const wheelGeo = lathe([[.001,-.085],[.23,-.085],[.31,-.065],[.31,-.025],[.27,-.012],[.27,.055],[.21,.077],[.13,.046],[.083,.09],[.001,.09]],18).rotateZ(Math.PI/2);
   const wheels = [];
   for (const sx of [-0.62, 0.62]) for (const sz of [-0.55, 0.55]) {
     const wgrp = new THREE.Group(); wgrp.position.set(sx, 0.3, sz);
@@ -145,20 +153,41 @@ export function buildBank(w) {
 export function buildEgg(scale = 1, spots = 0x7ab84a) {
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
-  const nest = new THREE.TorusGeometry(0.95, 0.28, 8, 22).rotateX(Math.PI / 2); nest.scale(1, 0.6, 1);
-  g.add(mesh(nest, lam(0xb08a4a), 0, 0.14, 0, false));
-  const shellMat = new THREE.MeshLambertMaterial({ color: 0xf2ead2 });
-  const shell = lathe([[0, 0], [0.42, 0.06], [0.72, 0.4], [0.8, 0.85], [0.66, 1.4], [0.38, 1.78], [0, 1.9]], 24);
-  body.add(mesh(shell, shellMat, 0, 0.12, 0));
-  const spotGeo = new THREE.SphereGeometry(0.13, 8, 6), spotMat = lam(spots);
-  for (let k = 0; k < 9; k++) {
-    const a = k * 2.4, y = 0.35 + (k % 4) * 0.33, rr = 0.78 - Math.abs(y - 0.85) * 0.28;
-    const s = mesh(spotGeo, spotMat, Math.cos(a) * rr, y + 0.12, Math.sin(a) * rr, false);
-    s.scale.set(1, 1.2, 0.35); s.lookAt(0, y + 0.12, 0); body.add(s);
+  const woven=assetBatch();
+  for(let strand=0;strand<6;strand++){
+    const points=[];
+    for(let i=0;i<=36;i++){
+      const a=i*2*Math.PI/36 + strand*.15, cross=a*3 + strand*Math.PI*.67;
+      const r=.83+.16*Math.cos(cross)+.035*Math.cos(a*7);
+      points.push([r*Math.sin(a),.22+.12*Math.sin(cross)+strand*.015,r*.91*Math.cos(a)]);
+    }
+    woven.add(sweepGeometry(points,[.065,.065],{segments:5,steps:40}),strand%2?0xb68347:0xdcb56f);
   }
+  woven.finish(g,'woven-nesting-bowl');
+  const shellMat=new THREE.MeshLambertMaterial({color:0xf2ead2,vertexColors:true});
+  const shell=new THREE.SphereGeometry(1,40,28);
+  const sp=shell.attributes.position, colors=[],cream=new THREE.Color(0xffffff),
+    pigment=new THREE.Color(spots), painted=new THREE.Color();
+  const freckles=Array.from({length:19},(_,i)=>{
+    const a=i*2.39996,t=-.68+(i%7)*.223;
+    return [Math.cos(a)*Math.sqrt(1-t*t),t,Math.sin(a)*Math.sqrt(1-t*t),.11+(i%3)*.065];
+  });
+  for(let i=0;i<sp.count;i++){
+    const x=sp.getX(i),t=sp.getY(i),z=sp.getZ(i);
+    const w=.79*(1-.22*t);sp.setXYZ(i,x*w,.94+.94*t,z*w);
+    let mark=0;
+    for(const [cx,cy,cz,r] of freckles){
+      const d=Math.hypot(x-cx,(t-cy)*1.23,z-cz);
+      mark=Math.max(mark,Math.min(1,(r-d)*17));
+    }
+    painted.copy(cream).lerp(pigment,mark).multiplyScalar(.9+.1*t);
+    colors.push(painted.r,painted.g,painted.b);
+  }
+  shell.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));shell.computeVertexNormals();
+  body.add(mesh(shell,shellMat,0,.12,0));
   const crackMat = new THREE.LineBasicMaterial({ color: 0x3a2a1a, transparent: true, opacity: 0 });
   const pts = [];
-  for (let k = 0; k <= 8; k++) { const a = -0.9 + k * 0.22, y = 1.15 + (k % 2 ? 0.14 : -0.1); pts.push(new THREE.Vector3(Math.sin(a) * 0.74, y, Math.cos(a) * 0.74)); }
+  for (let k = 0; k <= 8; k++) { const a = -0.9 + k * 0.22, y = 1.15 + (k % 2 ? 0.14 : -0.1); const t=(y-1.06)/.94, radius=.79*(1-.22*t)*Math.sqrt(1-t*t)+.009; pts.push(new THREE.Vector3(Math.sin(a)*radius,y,Math.cos(a)*radius)); }
   body.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), crackMat));
   g.scale.setScalar(scale);
   const L = floatingLabel(g, 3, 3.1 / scale);
@@ -168,8 +197,17 @@ export function buildEgg(scale = 1, spots = 0x7ab84a) {
 // Fusion core pylon: a lathe tower with floating rings around a glowing charge column.
 export function buildFusionCore() {
   const g = new THREE.Group();
-  const metal = lam(0x404a62), trim = lam(0xc9d4ff);
-  g.add(mesh(lathe([[0.95, 0], [0.95, 0.18], [0.7, 0.32], [0.5, 0.5], [0.42, 2.6], [0.6, 2.8], [0.6, 2.95], [0, 3.0]], 16), metal));
+  const trim=lam(0xc9d4ff),socket=assetBatch();
+  socket.add(lathe([[.93,0],[.96,.10],[.89,.24],[.64,.36],[.49,.55],[.34,.64],[.04,.67]],20),
+    (x,y)=>y>.48?0x96aaa8:y<.14?0x344358:0x54637b);
+  for(let i=0;i<3;i++){
+    const a=(i+.5)*Math.PI*2/3;
+    const rib=loftGeometry([[.24,.16,.16,0,.65],[.55,.21,.18,0,.53],[1.31,.14,.12,0,.42],
+      [2.20,.12,.11,0,.47],[2.71,.20,.15,0,.54],[3.04,.11,.11,0,.43],[3.28,.035,.06,0,.29]],
+      {segments:10,steps:15});
+    socket.add(rib,(x,y)=>y>2.86?0xe8c49a:y>2.53?0x66839f:0x435773,0,0,0,0,a);
+  }
+  socket.finish(g,'forked-capacitor-housing');
   const columnMat = glow(0x48e8ff, 0.9);
   const column = mesh(new THREE.CylinderGeometry(0.22, 0.22, 1, 14), columnMat, 0, 0.55, 0.38, false);
   column.scale.y = 0.05; g.add(column);

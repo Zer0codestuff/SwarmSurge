@@ -1,6 +1,8 @@
+import { flightFeather } from './flight-feathers.js';
+import { characterLoft } from './character-surfaces.js';
 import * as THREE from 'three';
 import { assetBatch, assetGlow, attackPose } from './asset-kit.js';
-import { loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry, crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth, bossShell } from './boss-shapes.js';
+import { loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry, mantleGeometry, crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth, bossShell } from './boss-shapes.js';
 
 // Sculpted bosses for worlds 38-50: panda, shogun, trex, roc, clockwork and overlord.
 // Same contract as the other sculpted modules: return fitBoss(group, pose, radius, height, animate) or null.
@@ -49,11 +51,9 @@ function buildPanda() {
     b.finish(leg, 'panda-padded-leg-' + s, bossSkin);
     legs.push({ leg, s });
   }
-  const body = node(pose, 'panda-round-body', 0, 2.75, 0), fur = assetBatch(), mantle = assetBatch(), sash = assetBatch();
-  loft(fur, [[.05,1.02,1.0],[.55,1.5,1.38],[1.5,1.86,1.6],[2.7,1.78,1.58],[3.7,1.34,1.28],[4.25,.72,.64]], WHITE, 0, 0, 0, { segments: 36, steps: 28 });
+  const body = node(pose, 'panda-round-body', 0, 2.75, 0), fur = assetBatch(), sash = assetBatch();
+  characterLoft(fur, [[.05,1.02,1.0],[.55,1.5,1.38],[1.5,1.86,1.6],[2.7,2.05,1.63],[3.7,2.08,1.34],[4.25,1.16,.76]], 'panda', 0, 0, 0, { segments: 36, steps: 28 });
   fur.finish(body, 'panda-white-belly', bossSkin);
-  loft(mantle, [[1.3,1.56,1.46],[1.95,1.92,1.74],[2.85,1.94,1.76],[3.65,1.56,1.42],[4.2,1.0,.88],[4.5,.42,.34]], INK, 0, 0, 0, { segments: 34, steps: 24, warp(x, y, z, u, v) { return [x, y, z - .42 * v * v]; } });
-  mantle.finish(body, 'panda-black-shoulder-mantle', bossSkin);
   // jade sash around the waist with a knot and hanging tails
   const sashPts = []; for (let k = 0; k <= 22; k++) { const a = k / 22 * TAU; sashPts.push([Math.sin(a) * 1.82, 1.18, Math.cos(a) * 1.52]); }
   sweep(sash, sashPts, [.17, .17], JADE, 0, 0, 0, { segments: 8, steps: 22 });
@@ -81,10 +81,10 @@ function buildPanda() {
   bulb(furH, 2.7, 2.6, 2.45, WHITE, 0, .1, 0, { segments: 28, steps: 22 });
   for (const s of [-1, 1]) bulb(furH, 1.0, .95, .62, INK, s * 1.14, 1.32, -.3, { segments: 14, steps: 10 });
   furH.finish(head, 'panda-round-head-and-ears', bossSkin);
+  bulb(darkH, 1.06, .78, .9, WHITE, 0, -.52, 1.0, { segments: 16, steps: 12 });
+  bulb(darkH, .36, .28, .3, INK, 0, -.32, 1.62, { segments: 10, steps: 8 });
   for (const s of [-1, 1]) {
     panel(darkH, [[-.5,-.28],[.04,.34],[.52,.16],[.34,-.28],[0,-.4],[-.3,-.34]], INK, s * .62, .3, .96, .16, .07, 0, 0, -s * .38);
-    bulb(darkH, 1.06, .78, .9, WHITE, 0, -.52, 1.0, { segments: 16, steps: 12 });
-    bulb(darkH, .36, .28, .3, INK, 0, -.32, 1.62, { segments: 10, steps: 8 });
     sweep(darkH, [[s * .12, -.84, 1.5],[0, -.98, 1.66],[-s * .12, -.84, 1.5]], [.03, .045, .03], INK, 0, 0, 0, { segments: 6, steps: 8 });
     bulb(eyes, .17, .26, .12, AMBER, s * .58, .32, 1.16, { segments: 10, steps: 8 });
     bulb(eyes, .07, .07, .05, 0xffffff, s * .54, .38, 1.24, { segments: 6, steps: 5 });
@@ -117,7 +117,7 @@ function buildShogun() {
     legs.push({ leg, s });
   }
   const torso = node(pose, 'shogun-torso', 0, 3.3, 0), cuirass = assetBatch(), collar = assetBatch(), trims = assetBatch();
-  loft(cuirass, [[.05,.95,.8],[.5,1.42,1.12],[1.5,1.72,1.26],[2.6,1.62,1.2],[3.4,1.28,.98],[3.9,.82,.52]], RED, 0, 0, 0, { segments: 32, steps: 26 });
+  characterLoft(cuirass, [[.05,.95,.8],[.5,1.42,1.12],[1.5,1.72,1.26],[2.6,1.62,1.2],[3.4,1.28,.98],[3.9,.82,.52]], 'shogun', 0, 0, 0, { segments: 32, steps: 26 });
   cuirass.finish(torso, 'shogun-red-cuirass', bossShell);
   loft(collar, [[2.3,1.5,1.14],[3.0,1.66,1.24],[3.6,1.38,1.02],[3.95,.8,.5]], LACQUER);
   collar.finish(torso, 'shogun-black-collar-plate', bossMetal);
@@ -187,21 +187,35 @@ function buildTrex() {
   const OLIVE = 0x6b7a3a, DARK = 0x43501f, CREAM = 0xe8dbb0, AMBER = 0xffb347, TOOTH = 0xf3ecd4, CLAW = 0xd9cfae;
   const legs = [];
   for (const s of [-1, 1]) {
-    const leg = node(pose, 'trex-leg-' + s, s * 1.5, 5.0, -.3), b = assetBatch();
-    loft(b, [
-      [-4.8,.5,.62,0,.5],[-4.5,.56,.7,0,.45],[-4.05,.5,.6,0,-.5],[-2.6,.85,.95,0,-.2],
-      [-.9,1.05,1.15,0,.35],[.3,.92,1.02,0,.2],
-    ], OLIVE, 0, 0, 0, { segments: 26, steps: 26 });
-    bulb(b, 1.15, .6, 1.7, OLIVE, 0, -4.78, .55, { segments: 18, steps: 14 });
-    for (let k = 0; k < 3; k++) sweep(b, [[(k - 1) * .4, -4.85, 1.35],[(k - 1) * .46, -4.78, 2.15],[(k - 1) * .44, -4.7, 2.5]], [.2, .16, .015], CLAW, 0, 0, 0, { segments: 8, steps: 12 });
+    const leg = node(pose, 'trex-leg-' + s, s * 1.12, 5, -.15), b = assetBatch();
+    // Wrap the rounded haunch into the pelvis. The knee projects forward,
+    // the hock bends back, and the metatarsus widens again at the toes.
+    const haunch = loftGeometry([
+      [-4.89,.31,.48,0,.53],[-4.69,.43,.66,0,.40],[-4.40,.32,.38,0,.13],
+      [-3.79,.27,.34,s*.06,-.37],[-3.22,.39,.44,s*.12,-.80],
+      [-2.96,.40,.48,s*.14,-.77],[-2.38,.45,.61,s*.15,-.22],
+      [-1.81,.62,.71,s*.18,.43],[-1.46,.67,.73,s*.22,.58],
+      [-.88,.81,.86,s*.21,.38],[-.11,.97,.99,s*.13,-.08],
+      [.64,.91,.96,-s*.06,-.04],[1.25,.65,.70,-s*.28,.15],[1.56,.25,.31,-s*.45,.23],
+    ], {segments:22,steps:26});
+    const hideColor=new THREE.Color(OLIVE), shade=new THREE.Color(DARK), tint=new THREE.Color();
+    b.add(haunch,(x,y,z)=>{
+      const bars=.5+.5*Math.cos(y*7+s*x*2+z*1.5);
+      return tint.copy(hideColor).lerp(shade,Math.max(0,Math.min(.65,(bars-.49)*1.5))*(y< -2.6?.8:.5));
+    });
+    for (const k of [-1,0,1]) {
+      const length=k ? 1.64 : 2.02;
+      sweep(b,[[k*.13,-4.73,.54],[k*.28,-4.81,.98],[k*.51,-4.80,length],
+        [k*.56,-4.81,length+.23]],[.22,.19,.14,.09],OLIVE,0,0,0,{segments:9,steps:10});
+      sweep(b,[[k*.50,-4.79,length-.06],[k*.56,-4.76,length+.23],
+        [k*.61,-4.89,length+.51]],[.14,.09,.009],CLAW,0,0,0,{segments:7,steps:8});
+    }
     b.finish(leg, 'trex-digitigrade-leg-' + s, bossSkin);
     legs.push({ leg, s });
   }
-  const torso = node(pose, 'trex-torso', 0, 4.9, -.4), hide = assetBatch(), belly = assetBatch(), spines = assetBatch();
-  loft(hide, [[.05,.95,1.05],[.6,1.5,1.55],[1.7,1.85,1.7],[3.0,1.7,1.55],[3.9,1.3,1.15],[4.35,.85,.7]], OLIVE, 0, 0, 0, { segments: 34, steps: 28 });
+  const torso = node(pose, 'trex-torso', 0, 4.9, -.4), hide = assetBatch(), spines = assetBatch();
+  characterLoft(hide, [[.05,.95,1.05],[.6,1.5,1.55],[1.7,1.85,1.7],[3.0,1.7,1.55],[3.9,1.3,1.15],[4.35,.85,.7]], 'trex', 0, 0, 0, { segments: 34, steps: 28 });
   hide.finish(torso, 'trex-olive-hide', bossSkin);
-  loft(belly, [[.35,.85,.95,0,.5],[1.1,1.32,1.38,0,.7],[2.1,1.6,1.48,0,.85],[3.0,1.38,1.2,0,.8],[3.55,.95,.7,0,.7]], CREAM, 0, 0, .48, { segments: 28, steps: 22 });
-  belly.finish(torso, 'trex-cream-belly', bossSkin);
   for (let k = 0; k < 4; k++) panel(spines, [[-.5,.05],[0,.32],[.5,.05],[.28,-.22],[-.28,-.22]], DARK, 0, 1.1 + k * 1.0, [-1.7, -1.62, -1.38, -1.04][k], .12, .05, .1, Math.PI, 0);
   spines.finish(torso, 'trex-spine-stripes', bossSkin);
   const tail = node(torso, 'trex-tail', 0, .4, -.9), tb = assetBatch();
@@ -224,28 +238,48 @@ function buildTrex() {
   sweep(nb, [[0,-.4,.1],[0,.4,.55],[0,1.2,1.05],[0,2.0,1.4]], [1.05,.9,.76,.66], OLIVE, 0, 0, 0, { segments: 20, steps: 20 });
   nb.finish(neck, 'trex-powerful-neck', bossSkin);
   const head = node(neck, 'trex-skull', 0, 2.1, 1.5), skull = assetBatch(), glow = assetBatch();
-  skull.add(headGeometry(2.35, 2.7, 3.2, { snout: .45, brow: .22, cheeks: .16, jaw: .68 }), OLIVE);
-  for (const s of [-1, 1]) {
-    panel(skull, [[-.36,.02],[.08,.24],[.36,.0],[.12,-.2],[-.28,-.16]], DARK, s * .64, .44, .95, .12, .06, 0, 0, -s * .15);
-    bulb(glow, .26, .34, .14, AMBER, s * .62, .44, 1.22, { segments: 10, steps: 8 });
-    for (let k = 0; k < 4; k++) sweep(skull, [[s * (.42 + k * .16), -1.0, 1.45 - k * .34],[s * (.46 + k * .16), -1.3, 1.5 - k * .34],[s * (.44 + k * .16), -1.54, 1.54 - k * .34]], [.09, .07, .01], TOOTH, 0, 0, 0, { segments: 6, steps: 8 });
+  // The skull widens at the temporal arch and ends in a long, blunt
+  // premaxilla. Place the eyes on the outer cheek, above the tooth line.
+  const maxilla=loftGeometry([[-1.18,.42,.51,0,-.02],[-.65,.97,.88,0,.05],
+    [.02,1.12,1.02,0,.12],[.71,.91,.75,0,.10],[1.55,.73,.49,0,-.06],
+    [2.06,.59,.42,0,-.17],[2.23,.34,.32,0,-.19]],{segments:28,steps:23});
+  skull.add(maxilla.rotateX(Math.PI/2),OLIVE);
+  for (const s of [-1,1]) {
+    const angle=s*.77;
+    panel(skull,[[-.45,.09],[-.19,.31],[.31,.23],[.45,-.03],[.10,-.23],[-.32,-.17]],
+      DARK,s*.89,.22,.67,.12,.06,0,angle,-s*.13);
+    bulb(glow,.39,.30,.30,AMBER,s*.996,.235,.788,{segments:12,steps:9});
+    bulb(skull,.13,.23,.12,0x242b20,s*1.08,.24,.90,{segments:10,steps:8});
+    sweep(skull,[[s*.50,.70,.11],[s*.88,.55,.47],[s*.99,.42,.89],[s*.69,.32,1.36]],
+      [.18,.19,.14,.075],OLIVE,0,0,0,{segments:10,steps:15});
+    bulb(skull,.14,.11,.21,DARK,s*.54,.09,1.90,{segments:10,steps:7});
+    for (let k=0;k<7;k++) {
+      const z=.25+k*.27,x=s*(1.01-.065*k),y=-.62+k*.029;
+      sweep(skull,[[x,y,z],[x*.99,y-.18,z+.02],[x*.96,y-.34-(k%3)*.055,z-.09]],
+        [.115,.077,.012],TOOTH,0,0,0,{segments:7,steps:6});
+    }
   }
   skull.finish(head, 'trex-lofted-skull', bossSkin);
   glow.finish(head, 'trex-amber-eyes', assetGlow);
   const jaw = node(head, 'trex-jaw', 0, -.85, .4), jb = assetBatch();
-  sweep(jb, [[0,0,-.25],[0,-.02,.75],[0,.08,1.6],[0,.18,2.2]], [.5,.42,.28,.1], OLIVE, 0, 0, 0, { segments: 12, steps: 18, flatten: .8 });
-  for (const s of [-1, 1]) for (let k = 0; k < 3; k++) sweep(jb, [[s * (.3 + k * .14), .3, .7 + k * .42],[s * (.33 + k * .14), .55, .77 + k * .42],[s * (.31 + k * .14), .68, .81 + k * .42]], [.07, .05, .008], TOOTH, 0, 0, 0, { segments: 6, steps: 8 });
+  const mandible=loftGeometry([[-.78,.4,.26],[-.38,.78,.27],[.32,.85,.19],
+    [1.14,.65,.16],[1.62,.49,.16],[1.78,.22,.13]],{segments:20,steps:16});
+  jb.add(mandible.rotateX(Math.PI/2),CREAM,0,-.09,0);
+  for (const s of [-1,1]) for (let k=0;k<5;k++) {
+    const x=s*(.74-.062*k),z=.04+k*.32;
+    sweep(jb,[[x,.01,z],[x,.15,z],[x*.97,.23,z-.04]],[.085,.058,.008],TOOTH,0,0,0,{segments:6,steps:6});
+  }
   jb.finish(jaw, 'trex-hinged-jaw', bossSkin);
   return fitBoss(group, pose, 3.5, 11.6, (t, progress, state = {}) => {
     const a = attackPose(progress), walk = stride(t, state, 2.7); hitShake(pose, t, state);
-    torso.rotation.x = .62 + a * .1;
+    torso.rotation.x = .78 + a * .08;
     torso.position.y = 4.9 + Math.abs(walk) * .05 - a * .15;
     for (const l of legs) l.leg.rotation.x = l.s * walk * .1;
     for (const l of arms) l.arm.rotation.x = -.4 - a * .5;
     neck.rotation.x = a * .26;
     head.position.z = 1.5 + a * .9;
-    head.rotation.x = -a * .22;
-    jaw.rotation.x = a * .55;
+    head.rotation.x = -.48-a*.22;
+    jaw.rotation.x = .12+a*.46;
     tail.rotation.x = -a * .1; tail.rotation.y = Math.sin(t * .8) * .08;
   });
 }
@@ -257,22 +291,26 @@ function buildRoc() {
   const legs = [];
   for (const s of [-1, 1]) {
     const leg = node(pose, 'roc-leg-' + s, s * 1.0, 3.45, 0), b = assetBatch(), down = assetBatch();
-    loft(b, [[-3.35,.34,.4],[-2.9,.42,.48],[-2.0,.36,.42],[-1.0,.4,.46],[-.2,.48,.54],[.2,.42,.48]], 0xc9a05a, 0, 0, 0, { segments: 18, steps: 20 });
+    const shank=loftGeometry([[-3.36,.32,.34,0,.18],[-3.16,.38,.4,0,.14],
+      [-2.91,.28,.30,0,.035],[-2.29,.21,.24,0,-.17],[-1.71,.25,.28,0,-.39],
+      [-1.48,.31,.34,0,-.33],[-.92,.32,.37,0,-.12],[-.20,.39,.44,-s*.11,.16]],
+      {segments:14,steps:22});
+    b.add(shank,(x,y,z)=>z>-.07 && Math.cos(y*19+.8*Math.abs(x))>.36 ? 0xb98141 : 0xdcb15e);
     for (let k = 0; k < 3; k++) {
       sweep(b, [[(k - 1) * .34, -3.3, .3],[(k - 1) * .44, -3.32, .95],[(k - 1) * .42, -3.28, 1.3]], [.17, .15, .03], 0xc9a05a, 0, 0, 0, { segments: 8, steps: 12 });
       sweep(b, [[(k - 1) * .42, -3.28, 1.3],[(k - 1) * .44, -3.24, 1.5],[(k - 1) * .4, -3.2, 1.58]], [.09, .06, .01], TALON, 0, 0, 0, { segments: 6, steps: 8 });
     }
     sweep(b, [[0, -3.3, -.2],[0, -3.32, -.6],[0, -3.28, -.78]], [.16, .14, .03], 0xc9a05a, 0, 0, 0, { segments: 8, steps: 10 });
-    bulb(down, 1.15, 1.3, 1.1, CREAM, 0, -.55, .1, { segments: 16, steps: 12 });
+    characterLoft(down,[[-1.42,.12,.16,0,-.32],[-1.14,.32,.41,0,-.21],
+      [-.64,.49,.58,-s*.06,-.02],[-.15,.63,.68,-s*.13,.19],[.35,.67,.69,-s*.28,.30],
+      [.85,.51,.56,-s*.37,.29],[1.12,.22,.25,-s*.42,.28]],'roc',0,0,0,{segments:18,steps:16});
     b.finish(leg, 'roc-scaled-bird-leg-' + s, bossSkin);
     down.finish(leg, 'roc-downy-thigh-' + s, bossCloth);
     legs.push({ leg, s });
   }
-  const body = node(pose, 'roc-body', 0, 3.35, .1), coat = assetBatch(), breast = assetBatch();
-  loft(coat, [[.1,.95,1.0,0,.15],[.9,1.35,1.35,0,.55],[2.0,1.62,1.5,0,.85],[3.1,1.52,1.35,0,1.0],[3.9,1.2,1.0,0,1.05],[4.35,.85,.65,0,1.0]], CHEST, 0, 0, 0, { segments: 32, steps: 26 });
+  const body = node(pose, 'roc-body', 0, 3.35, .1), coat = assetBatch();
+  characterLoft(coat, [[.1,.95,1.0,0,.15],[.9,1.35,1.35,0,.55],[2.0,1.62,1.5,0,.85],[3.1,1.52,1.35,0,1.0],[3.9,1.2,1.0,0,1.05],[4.35,.85,.65,0,1.0]], 'roc', 0, 0, 0, { segments: 32, steps: 26 });
   coat.finish(body, 'roc-chestnut-plumage', bossSkin);
-  loft(breast, [[.5,.8,.85,0,.35],[1.3,1.2,1.1,0,.6],[2.3,1.45,1.28,0,.75],[3.1,1.25,1.02,0,.75],[3.6,.85,.6,0,.7]], CREAM, 0, 0, .55, { segments: 26, steps: 20 });
-  breast.finish(body, 'roc-cream-breast', bossSkin);
   const tail = node(body, 'roc-tail-plumes', 0, .75, -1.0), tb = assetBatch(), tg = assetBatch();
   for (let k = 0; k < 5; k++) {
     const spread = (k - 2) * .24;
@@ -283,15 +321,24 @@ function buildRoc() {
   const wings = [];
   for (const s of [-1, 1]) {
     const wing = node(body, 'roc-wing-' + s, s * 1.35, 3.3, .9), prim = assetBatch(), cov = assetBatch(), trim = assetBatch();
-    for (let k = 0; k < 7; k++) {
-      const rise = .5 - k * .18, zk = .12 - k * .17;
-      sweep(prim, [[s * .3, 0, 0],[s * 2.0, rise * .5, zk * .6],[s * 4.2, rise, zk + .1]], [.3, .23, .025], DARKW, 0, 0, 0, { segments: 8, steps: 16, flatten: .45 });
+    // The elbow and extended wrist carry overlapping primaries. Their tips
+    // separate in elevation as well as in depth when seen down the road.
+    for (let k=0;k<8;k++) {
+      const f=k/7, reach=4.6-1.65*f;
+      const path=[[s*(.15+.66*f),.08-.58*f,-.1*f],
+        [s*(1.45+.4*f),.58-.72*f,-.17-.55*f],
+        [s*(reach*.78),.85-1.65*f,-.32-.75*f],
+        [s*reach,1.24-2.98*f,-.55-1.18*f]];
+      prim.add(flightFeather(path,.47,[0,s,.28*s],DARKW,k<3?SKY:GOLD,CREAM),0xffffff);
     }
-    for (let k = 0; k < 5; k++) {
-      const rise = .3 + k * .06, zk = -.05 - k * .12;
-      sweep(cov, [[s * .25, .1, .05],[s * 1.35, rise * .6, zk],[s * 2.6, rise, zk * .8]], [.34, .27, .05], CHEST, 0, 0, 0, { segments: 8, steps: 14, flatten: .5 });
+    for (let k=0;k<6;k++) {
+      const f=k/5;
+      cov.add(flightFeather([[s*.04,.08,.18],[s*.74,.47-f*.39,.21],
+        [s*(2.72-f*.82),.78-f*1.75,-f*.65]],.42,[0,s,.2*s],
+        CHEST,k%2?0xe1a367:CREAM,GOLD),0xffffff);
     }
-    for (let k = 0; k < 3; k++) sweep(trim, [[s * .2, .15, .1],[s * .9, .3, .05],[s * 1.6, .42, 0]], [.3, .24, .05], k === 1 ? SKY : CREAM, 0, 0, 0, { segments: 8, steps: 12, flatten: .5 });
+    sweep(trim,[[0,0,.22],[s*.68,.50,.24],[s*1.58,.71,.04],[s*2.45,.72,-.12]],
+      [.42,.39,.25,.09],CHEST,0,0,0,{segments:12,steps:16,flatten:.73});
     prim.finish(wing, 'roc-primary-feathers-' + s, bossSkin);
     cov.finish(wing, 'roc-peak-coverts-' + s, bossSkin);
     trim.finish(wing, 'roc-shoulder-covert-row-' + s, bossSkin);
@@ -318,7 +365,7 @@ function buildRoc() {
     body.position.y = 3.35 + Math.abs(walk) * .05 - a * .2;
     body.rotation.x = a * .12;
     for (const l of legs) l.leg.rotation.x = l.s * walk * .09;
-    for (const l of wings) { l.wing.rotation.y = l.s * (.85 - a * .7 + Math.sin(t * .9) * .05); l.wing.rotation.z = l.s * (.28 + a * .38); }
+    for (const l of wings) { l.wing.rotation.y = l.s * (.44 - a * .47 + Math.sin(t * .9) * .05); l.wing.rotation.z = l.s * (.28 + a * .38); }
     neck.rotation.x = a * .2;
     head.rotation.x = a * .5; head.rotation.y = Math.sin(t * .6) * .06;
     tail.rotation.y = Math.sin(t * .7) * .1; tail.rotation.x = a * .1;
@@ -340,7 +387,7 @@ function buildClockwork() {
     legs.push({ leg, s });
   }
   const torso = node(pose, 'clockwork-torso', 0, 2.95, 0), shell = assetBatch(), bands = assetBatch();
-  loft(shell, [[.05,1.15,1.05],[.7,1.6,1.5],[1.8,1.85,1.7],[3.0,1.8,1.65],[3.9,1.45,1.35],[4.5,1.02,.88],[4.75,.66,.52]], BRASS, 0, 0, 0, { segments: 36, steps: 30 });
+  characterLoft(shell, [[.05,1.15,1.05],[.7,1.6,1.5],[1.8,1.85,1.7],[3.0,1.8,1.65],[3.9,1.45,1.35],[4.5,1.02,.88],[4.75,.66,.52]], 'clockwork', 0, 0, 0, { segments: 36, steps: 30 });
   shell.finish(torso, 'clockwork-brass-barrel', bossMetal);
   for (const [y, r] of [[.7, 1.52], [1.9, 1.78], [3.3, 1.6]]) {
     const pts = []; for (let k = 0; k <= 22; k++) { const a = k / 22 * TAU; pts.push([Math.sin(a) * r, 0, Math.cos(a) * r]); }
@@ -415,7 +462,7 @@ function buildOverlord() {
   const { group, pose } = rig('sculpted-singularity-overlord');
   const VIOLET = 0x3a2450, DEEP = 0x1c1130, GOLD = 0xd9a644, STAR = 0xfff6d8, MAGENTA = 0xff6bd8;
   const robeNode = node(pose, 'overlord-robe'), rb = assetBatch();
-  loft(rb, [[.15,1.6,1.5],[.8,2.1,1.95],[2.4,2.4,2.2],[4.4,2.1,1.9],[5.6,1.7,1.5],[6.6,1.4,1.2],[6.9,.8,.6]], VIOLET, 0, 0, 0, { segments: 40, steps: 30, warp(x, y, z, u, v, a) { const f = 1 + .05 * Math.cos(a * 9) * (1 - v * .5); return [x * f, y + .06 * Math.sin(a * 7) ** 2 * (1 - v) ** 7, z * f]; } });
+  characterLoft(rb, [[.15,1.6,1.5],[.8,2.1,1.95],[2.4,2.4,2.2],[4.4,2.1,1.9],[5.6,1.7,1.5],[6.6,1.4,1.2],[6.9,.8,.6]], 'overlord', 0, 0, 0, { segments: 40, steps: 30, warp(x, y, z, u, v, a) { const f = 1 + .05 * Math.cos(a * 9) * (1 - v * .5); return [x * f, y + .06 * Math.sin(a * 7) ** 2 * (1 - v) ** 7, z * f]; } });
   rb.finish(robeNode, 'overlord-folded-void-robe', bossCloth);
   const torso = node(pose, 'overlord-torso', 0, 6.55, .1), tb = assetBatch(), trims = assetBatch();
   loft(tb, [[.05,1.1,1.0],[.5,1.55,1.4],[1.4,1.8,1.6],[2.4,1.7,1.5],[3.0,1.35,1.15],[3.3,.9,.7]], DEEP, 0, 0, 0, { segments: 32, steps: 26 });
@@ -479,8 +526,8 @@ function buildOverlord() {
   }
   shards.finish(halo, 'overlord-orbiting-shards', bossMetal);
   shardGlow.finish(halo, 'overlord-shard-fires', assetGlow);
-  const cape = node(torso, 'overlord-cape', 0, 3.2, -1.0), cb = assetBatch();
-  cb.add(clothGeometry(3.2, 5.4, { folds: 7, flare: .3, depth: .16, segments: 22, steps: 20 }), 0x2c1a44, 0, 0, 0, 0, Math.PI);
+  const cape = node(torso, 'overlord-cape', 0, 3.45, 0), cb = assetBatch();
+  cb.add(mantleGeometry(2.26,5.7,{outer:0x613d7d,lining:0x2b2043,braid:GOLD,split:1,ragged:.23}),0xffffff);
   cb.finish(cape, 'overlord-folded-cape', bossCloth);
   return fitBoss(group, pose, 4.0, 13, (t, progress, state = {}) => {
     const a = attackPose(progress); hitShake(pose, t, state);

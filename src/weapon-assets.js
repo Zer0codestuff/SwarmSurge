@@ -18,13 +18,29 @@ function tube(k, r0, r1, z0, z1, y, color, x = X, sides) {
 }
 function band(k, r, tube, y, z, color, x = X) { k.ring(r, tube, [x, y, z], color, [0, 0, 0]); }
 
-function grip(k, magazine = true) {
-  k.limb([[X, 0.45, 0.16], [X, 0.39, 0.18], [X, 0.33, 0.17]], [0.036, 0.034, 0.032], G.dark);
-  if (magazine) body(k, [[0.27, 0.035, 0.05, 0, -0.06], [0.33, 0.038, 0.055, 0, -0.08], [0.36, 0.03, 0.04, 0, -0.09]], G.edge, [X, 0.44, 0], { segments: 6, steps: 2 });
+// Side profile of the rear casting. Its narrow wrist meets the firing hand,
+// then widens into the breech. Both flanks carry the same inset enamel.
+function grip(k, pattern, accent, magazine=false) {
+  const profiles={
+    carbine:[[-.09,.056],[-.03,.068],[.105,.026],[.19,.03],[.25,-.01],
+      [.22,-.044],[.18,-.048],[.15,-.133],[.101,-.138],[.112,-.041],[-.058,-.011],[-.095,-.009]],
+    cradle:[[-.074,.017],[-.044,.065],[.044,.05],[.098,-.004],[.25,.031],
+      [.28,-.012],[.21,-.045],[.15,-.061],[.14,-.123],[.088,-.132],[.059,-.044],[-.063,-.036]],
+    coil:[[-.075,-.042],[-.055,.041],[.017,.085],[.082,.07],[.125,.026],[.21,.035],[.245,.009],
+      [.227,-.027],[.159,-.036],[.123,-.121],[.078,-.103],[.070,-.041],[.012,-.010]],
+  };
+  const outline=profiles[pattern],orientation=[0,-Math.PI/2,0];
+  k.plate(outline,.076,.012,G.body,[X,.48,0],orientation);
+  for(const side of [-1,1]){
+    k.plate([[-.042,.010],[.006,.039],[.059,.028],[.09,.009],[.047,.006],[.009,.015],[-.024,-.006]],
+      .009,.005,accent,[X+side*.045,.48,.01],orientation);
+  }
+  if(magazine)body(k,[[.25,.032,.04,0,-.045],[.31,.04,.058,0,-.062],[.36,.030,.04,0,-.098]],
+    G.edge,[X,.44,0],{segments:6,steps:3});
 }
 
 function blaster(k) {
-  grip(k);
+  grip(k,'carbine',G.ivory,true);
   body(k, [[0.12, 0.05, 0.05], [0.16, 0.068, 0.068, 0, 0.005], [0.34, 0.066, 0.064], [0.41, 0.05, 0.045]], G.dark);
   body(k, [[0.15, 0.04, 0.02, 0, 0.065], [0.22, 0.05, 0.026, 0, 0.068], [0.38, 0.045, 0.022, 0, 0.062]], G.ivory);
   tube(k, 0.042, 0.036, 0.4, 0.6, 0.49, G.body);
@@ -35,7 +51,7 @@ function blaster(k) {
 }
 
 function rocketLauncher(k) {
-  grip(k, false);
+  grip(k,'cradle',G.amber);
   body(k, [[0.14, 0.05, 0.05], [0.2, 0.06, 0.06], [0.32, 0.055, 0.055]], G.dark, [X, 0.45, 0]);
   body(k, [[-0.02, 0.09, 0.09], [0.02, 0.112, 0.112], [0.1, 0.1, 0.1], [0.5, 0.1, 0.1], [0.58, 0.112, 0.112], [0.62, 0.105, 0.105]], G.body, [X, 0.58, 0]);
   for (const z of [0.06, 0.3, 0.56]) band(k, 0.108, 0.016, 0.58, z, G.ivory);
@@ -46,7 +62,7 @@ function rocketLauncher(k) {
 }
 
 function arcRifle(k) {
-  grip(k);
+  grip(k,'coil',G.cyan,true);
   body(k, [[0.12, 0.055, 0.06], [0.18, 0.075, 0.075], [0.34, 0.07, 0.07], [0.42, 0.05, 0.05]], G.dark);
   body(k, [[0.2, 0.08, 0.03, 0, 0.05], [0.3, 0.085, 0.035, 0, 0.05], [0.38, 0.06, 0.025, 0, 0.045]], G.cyan, [X, 0.48, 0], { segments: 8, steps: 2 });
   tube(k, 0.05, 0.035, 0.4, 0.56, 0.49, G.body);
@@ -61,7 +77,7 @@ function arcRifle(k) {
 }
 
 function scattergun(k) {
-  grip(k);
+  grip(k,'carbine',G.amber,true);
   body(k, [[0.12, 0.08, 0.06], [0.18, 0.09, 0.07], [0.32, 0.085, 0.065], [0.36, 0.07, 0.05]], G.body);
   for (const s of [-1, 1]) {
     tube(k, 0.042, 0.042, 0.3, 0.66, 0.5, G.dark, X + s * 0.05);
@@ -74,7 +90,7 @@ function scattergun(k) {
 }
 
 function railgun(k) {
-  grip(k);
+  grip(k,'carbine',G.cyan,true);
   body(k, [[0.02, 0.05, 0.05], [0.08, 0.07, 0.07], [0.34, 0.07, 0.07], [0.4, 0.055, 0.055]], G.dark);
   body(k, [[0.03, 0.055, 0.035, 0, 0.0], [0.13, 0.06, 0.04]], G.ivory, [X, 0.48, 0], { segments: 8, steps: 2 });
   for (const s of [-1, 1]) {
@@ -88,7 +104,7 @@ function railgun(k) {
 }
 
 function flamethrower(k) {
-  grip(k, false);
+  grip(k,'cradle',G.amber);
   body(k, [[0.13, 0.055, 0.055], [0.18, 0.07, 0.068], [0.34, 0.065, 0.065], [0.4, 0.05, 0.05]], G.body);
   tube(k, 0.05, 0.045, 0.38, 0.54, 0.49, G.dark);
   body(k, [[0.53, 0.05, 0.05], [0.6, 0.065, 0.065], [0.68, 0.1, 0.1], [0.72, 0.11, 0.11], [0.73, 0.08, 0.08]], G.ivory);
@@ -105,7 +121,7 @@ function flamethrower(k) {
 }
 
 function frostProjector(k) {
-  grip(k, false);
+  grip(k,'coil',G.cyan);
   body(k, [[0.13, 0.055, 0.058], [0.18, 0.07, 0.07], [0.34, 0.068, 0.068], [0.4, 0.05, 0.05]], G.body);
   body(k, [[0.36, 0.06, 0.06], [0.48, 0.085, 0.085], [0.58, 0.1, 0.1], [0.64, 0.09, 0.09], [0.65, 0.06, 0.06]], G.ivory);
   band(k, 0.098, 0.018, 0.48, 0.6, G.blue);
@@ -120,7 +136,7 @@ function frostProjector(k) {
 }
 
 function plasmaCaster(k) {
-  grip(k, false);
+  grip(k,'coil',G.blue);
   body(k, [[0.12, 0.06, 0.055], [0.17, 0.075, 0.07], [0.3, 0.07, 0.065], [0.34, 0.05, 0.05]], G.dark, [X, 0.46, 0]);
   k.blob(0.14, [1, 0.92, 1.05], [X, 0.5, 0.42], G.blue);
   k.blob(0.1, [1, 1, 1.1], [X, 0.505, 0.47], G.glow);
@@ -137,7 +153,7 @@ function plasmaCaster(k) {
 
 // Shouldered mortar: a short fat tube raised half a radian, with a bipod and a shell in the muzzle.
 function mortar(k) {
-  grip(k, false);
+  grip(k,'cradle',G.ivory);
   body(k, [[0.1, 0.06, 0.06], [0.16, 0.08, 0.078], [0.3, 0.075, 0.072], [0.36, 0.055, 0.055]], G.dark);
   const tilt = 0.5, ax = [0, Math.sin(tilt), Math.cos(tilt)], c = [X, 0.6, 0.44];
   const at = d => [X, c[1] + ax[1] * d, c[2] + ax[2] * d];
@@ -157,7 +173,7 @@ function mortar(k) {
 
 // Shock lance: a long shaft, three coil rings and a forked head around a bright tip.
 function shockLance(k) {
-  grip(k, false);
+  grip(k,'coil',G.ivory);
   tube(k, 0.022, 0.022, -0.12, 0.74, 0.49, G.dark, X, 6);
   body(k, [[0.1, 0.045, 0.05], [0.17, 0.062, 0.062], [0.29, 0.056, 0.056], [0.34, 0.035, 0.035]], G.body);
   body(k, [[0.14, 0.03, 0.018, 0, 0.06], [0.3, 0.028, 0.016, 0, 0.055]], G.ivory, [X, 0.48, 0], { segments: 6, steps: 2 });

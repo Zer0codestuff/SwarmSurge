@@ -1,3 +1,4 @@
+import { inkMaterial } from './character-ink.js';
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 
@@ -53,7 +54,7 @@ export function assetBatch() {
         colors[i * 3 + 2] = c.b * (tint ? tint.getZ(i) : 1);
       }
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      for (const key of Object.keys(geo.attributes)) if (!['position', 'normal', 'color'].includes(key)) geo.deleteAttribute(key);
+      for (const key of Object.keys(geo.attributes)) if (!['position', 'normal', 'color', 'inkUV'].includes(key)) geo.deleteAttribute(key);
       parts.push(geo);
       return api;
     },
@@ -81,6 +82,7 @@ export function assetBatch() {
     },
     finish(parent, name = '', material = assetSurface) {
       if (!parts.length) throw new Error('Cannot finish an empty asset batch');
+      material = inkMaterial(material,parts);
       const geometry = mergeGeometries(parts, false);
       parts.forEach(part => part.dispose()); parts.length = 0;
       if (!material.isMeshBasicMaterial) shadeUndersides(geometry);

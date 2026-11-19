@@ -1,7 +1,8 @@
+import { characterLoft } from './character-surfaces.js';
 import * as THREE from 'three';
 import { assetBatch, assetGlow, attackPose } from './asset-kit.js';
 import {
-  loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry,
+  loftGeometry, headGeometry, sweepGeometry, patchGeometry, clothGeometry, mantleGeometry,
   crownGeometry, fitBoss, bossSkin, bossMetal, bossCloth, bossShell,
 } from './boss-shapes.js';
 
@@ -46,8 +47,18 @@ function leg(parent,s,{x=1,y=2.8,color=C.steel,foot=C.ink,width=.7,bone=false}={
   if(bone) {
     for(const sign of [-1,1]) path(b,[[sign*.15,0,0],[sign*.2,-y*.32,.1],[sign*.17,-y*.72,-.02],[sign*.12,-y+.42,.08]],[.22,.17,.15,.21],color);
     pebble(b,.7,.62,.7,color,0,-y*.48,.12);
-  } else loft(b,[[-y+.2,.3,.38,0,.1],[-y*.72,width*.58,width*.65,0,.05],[-y*.48,width*.72,width*.75,0,.18],[-y*.32,width*.8,width*.7,0,-.03],[-.15,width*.85,width*.8,0,-.12],[.08,width*.42,width*.43]],color);
-  loft(b,[[-y+.06,.22,.4,0,.2],[-y+.16,width,.92,0,.35],[-y+.48,width*.94,.87,0,.25],[-y+.68,width*.53,.51,0,.02]],foot,{segments:20,steps:12});
+    loft(b,[[-y+.06,.22,.4,0,.2],[-y+.16,width,.92,0,.35],[-y+.48,width*.94,.87,0,.25],[-y+.68,width*.53,.51,0,.02]],foot,{segments:20,steps:12});
+  } else {
+    // The ankle and instep rise directly out of the toe box. The upper
+    // thigh disappears into the hip socket even at the walk extremes.
+    const upper=[[-y+.04,width*.57,.61,0,.30],[-y+.17,width*.94,1.0,0,.37],
+      [-y+.38,width*.94,.91,0,.29],[-y+.59,width*.59,.52,0,.02],
+      [-y*.69,width*.70,width*.78,s*.075,-.07],[-y*.50,width*.82,width*.75,s*.06,.13],
+      [-y*.37,width*.68,width*.71,s*.05,.08],[-y*.20,width*.95,width*.88,0,-.05],
+      [.02,width*1.03,width*.96,-s*.10,-.07],[.57,width*.82,width*.85,-s*.23,-.04],
+      [.76,width*.40,width*.43,-s*.28,0]];
+    loft(b,upper,(x,h)=>h < -y+.54+.12*Math.cos(x*4) ? foot : color,{segments:20,steps:24});
+  }
   b.finish(g,bone?'tibia-and-sculpted-foot':'calf-and-contoured-boot',bone?bossSkin:bossShell);
   return { g,s,y };
 }
@@ -56,8 +67,19 @@ function arm(parent,s,{x=2,y=5.7,length=2.8,width=.75,color=C.steel,hand=color,b
   if(bone) {
     path(b,[[0,0,0],[s*.08,-length*.35,.02],[s*.03,-length*.65,.07],[0,-length*.84,.18]],[width*.4,width*.3,width*.22,width*.28],color);
     for(const sign of [-1,1]) path(b,[[sign*.14,-length*.49,.08],[sign*.17,-length*.68,.1],[sign*.12,-length*.9,.15]],[.14,.105,.14],color,{steps:10});
-  } else loft(b,[[-length*.87,width*.4,width*.43,0,.22],[-length*.72,width*(bulky?1.05:.78),width*.8,0,.16],[-length*.46,width*.62,width*.64,0,.04],[-length*.25,width*.78,width*.72,s*.06,-.03],[0,width*.98,width*.9,s*.09,0],[.22,width*.5,width*.5]],color);
-  loft(b,[[-length-.43,width*.4,width*.37,0,.34],[-length-.27,width*.91,width*.72,0,.3],[-length+.12,width*.94,width*.8,0,.24],[-length+.3,width*.56,width*.49,0,.19]],hand,{segments:20,steps:14});
+    loft(b,[[-length-.43,width*.4,width*.37,0,.34],[-length-.27,width*.91,width*.72,0,.3],
+      [-length+.12,width*.94,width*.8,0,.24],[-length+.3,width*.56,width*.49,0,.19]],hand,{segments:20,steps:14});
+  } else {
+    const L=length,W=width;
+    loft(b,[[-L-.36,W*.45,W*.36,s*.08,.28],[-L-.19,W*.79,W*.65,s*.11,.37],
+      [-L+.10,W*.86,W*.71,s*.13,.34],[-L+.34,W*.52,W*.54,s*.15,.20],
+      [-L*.72,W*(bulky?1.04:.80),W*.85,s*.16,.13],[-L*.49,W*.63,W*.65,s*.15,-.12],
+      [-L*.30,W*.85,W*.83,s*.05,-.04],[-L*.12,W*.91,W*.94,0,.02],
+      [.06,W*1.02,W*.96,-s*.14,0],[.34,W*.81,W*.75,-s*.34,-.05],[.49,W*.42,W*.44,-s*.50,-.06]],
+      (x,h)=>h < -L+.23 ? hand : color,{segments:20,steps:24});
+    path(b,[[-s*W*.45,-L+.06,.49],[-s*W*.75,-L-.09,.69],[-s*W*.60,-L-.25,.79]],
+      [W*.24,W*.21,W*.14],hand,{segments:7,steps:8});
+  }
   for(let k=0;k<3;k++) path(b,[[-width*.55+k*width*.55,-length-.05,width*.73+.25],[-width*.56+k*width*.55,-length-.31,width*.77+.2],[-width*.56+k*width*.55,-length-.4,width*.48+.2]],[width*.18,width*.17,width*.13],hand,{segments:6,steps:6});
   b.finish(g,bone?'sculpted-arm-bones':'continuous-muscle-and-knuckles',bone?bossSkin:bossShell);
   return { g,s,length };
@@ -68,7 +90,7 @@ function skeleton() {
   const bone=C.bone, armor=0x3e6588, accent=C.cyan;
   const legs=[-1,1].map(s=>leg(pose,s,{x:.85,y:3.5,color:bone,foot:bone,width:.56,bone:true}));
   const torso=node(pose,'open-rib-cage',0,3.45), b=assetBatch();
-  loft(b,[[-.2,.82,.52],[.15,1.2,.7],[.42,1.08,.56],[.66,.5,.38]],bone);
+  characterLoft(b, [[-.2,.82,.52],[.15,1.2,.7],[.42,1.08,.56],[.66,.5,.38]], 'skeleton');
   path(b,[[0,.4,-.46],[0,1.5,-.67],[0,2.8,-.48],[0,3.7,-.2]],[.27,.2,.25,.36],bone,{steps:20});
   for(let k=0;k<5;k++)for(const s of [-1,1]) {
     const y=.8+k*.55,w=1.18+Math.sin(k*.62)*.22;
@@ -92,8 +114,8 @@ function skeleton() {
   regalia.finish(head,'forged-bone-regalia',bossMetal);
   const seal=node(torso,'sternum-seal',0,1.9,.91), sealBatch=assetBatch();
   shell(sealBatch,[[-.29,0],[0,.5],[.29,0],[0,-.5]],accent,0,0,0,.08,.08);sealBatch.finish(seal,'sternum-soul',assetGlow);
-  const cloak=node(torso,'torn-shroud',0,3.28,-.73);
-  assetBatch().add(clothGeometry(2.3,4.6,{folds:5,flare:.25,depth:.16,segments:18,steps:16}),armor).finish(cloak,'folded-shroud',bossCloth);
+  const cloak=node(torso,'torn-shroud',0,3.75,0);
+  assetBatch().add(mantleGeometry(1.95,4.5,{outer:armor,lining:0x29384d,braid:0x9aafad,ragged:.25,split:.98}),0xffffff).finish(cloak,'folded-shroud',bossCloth);
   return fitBoss(group,pose,2.7,10.5,(t,p,state={})=>{
     const a=attackPose(p),walk=walking(t,state,2.8);hitPose(pose,t,state);
     legs.forEach(l=>{l.g.rotation.x=l.s*walk*.18;l.g.position.y=l.y+Math.max(0,l.s*walk)*.07;});
@@ -115,8 +137,7 @@ function voidTitan() {
   }
   greaves.finish(pose,'forged-greaves-and-knee-guards',bossMetal);
   const torso=node(pose,'hunched-void-torso',0,3.05), b=assetBatch();
-  loft(b,[[0,1.3,1.0,0,.0,.8],[.55,1.55,1.12,0,.05,.75],[1.5,1.9,1.3,0,.18,.7],[2.7,2.55,1.55,0,.32,.62],[3.6,2.6,1.5,0,.28,.62],[4.25,1.9,1.2,0,.2,.7],[4.55,.9,.8,0,.24,.8]],obsidian,
-    {segments:32,steps:26,warp(x,y,z,u,v,a){const back=Math.max(0,-Math.cos(a))**3;return[x,y+back*.25*Math.exp(-(((y-3.4)/.7)**2)),z-back*.35*Math.exp(-(((y-3.2)/.9)**2))];}});
+  characterLoft(b, [[0,1.3,1.0,0,.0,.8],[.55,1.55,1.12,0,.05,.75],[1.5,1.9,1.3,0,.18,.7],[2.7,2.55,1.55,0,.32,.62],[3.6,2.6,1.5,0,.28,.62],[4.25,1.9,1.2,0,.2,.7],[4.55,.9,.8,0,.24,.8]], 'titan', 0, 0, 0, {segments:32,steps:26,warp(x,y,z,u,v,a){const back=Math.max(0,-Math.cos(a))**3;return[x,y+back*.25*Math.exp(-(((y-3.4)/.7)**2)),z-back*.35*Math.exp(-(((y-3.2)/.9)**2))];}});
   shell(b,[[-1.55,.95],[-.6,1.25],[0,1.05],[.6,1.25],[1.55,.95],[1.3,-.7],[0,-1.35],[-1.3,-.7]],plate,0,2.85,1.6,.16,.42,-.1);
   for(const s of [-1,1]) shell(b,[[-.62,.42],[.62,.42],[.7,-.2],[0,-.62],[-.7,-.2]],plate,s*.92,.85,1.12,.12,.24,-.2,s*.18);
   shell(b,[[-.75,.4],[.75,.4],[.82,-.25],[0,-.75],[-.82,-.25]],plate,0,.62,1.18,.13,.28,-.25);
@@ -173,7 +194,7 @@ function golem() {
   const ice=0x83bfd8,pale=0xcbe8ef,dark=0x36627d;
   const legs=[-1,1].map(s=>leg(pose,s,{x:1.08,y:2.65,width:.8,color:ice,foot:dark}));
   const body=node(pose,'ice-torso',0,3.1), b=assetBatch();
-  loft(b,[[0,1.12,.9],[.5,1.5,1.12],[1.4,1.9,1.37],[2.8,2.13,1.25],[3.55,1.67,1],[3.9,1.02,.75]],ice,{segments:28,steps:26,warp(x,y,z,u,v,a){const r=1+.045*Math.sin(a*5+v*10)+.022*Math.cos(a*11-v*7);return[x*r,y,z*r];}});
+  characterLoft(b, [[0,1.12,.9],[.5,1.5,1.12],[1.4,1.9,1.37],[2.8,2.13,1.25],[3.55,1.67,1],[3.9,1.02,.75]], 'golem', 0, 0, 0, {segments:28,steps:26,warp(x,y,z,u,v,a){const r=1+.045*Math.sin(a*5+v*10)+.022*Math.cos(a*11-v*7);return[x*r,y,z*r];}});
   for(const s of [-1,1]) {
     shell(b,[[-.95,.05],[-.72,.67],[.24,.92],[1.08,.27],[.66,-.48],[-.37,-.64]],pale,s*1.5,2.75,.28,.28,.43,0,-s*.36,-s*.12);
     path(b,[[s*1.32,3.32,-.4],[s*1.59,4.17,-.63],[s*1.27,4.9,-.48]],[.37,.27,.015],pale,{segments:7,steps:10});
@@ -202,8 +223,7 @@ function brute() {
   const skin=0x668b4f,muzzle=0xa1b779,dark=0x304d38,wood=0x826a46;
   const legs=[-1,1].map(s=>leg(pose,s,{x:1,y:2.35,color:skin,foot:dark,width:.8}));
   const torso=node(pose,'gorilla-anatomy',0,2.9), b=assetBatch();
-  loft(b,[[0,1.12,.94,0,.08],[.62,1.42,1.14,0,.03],[1.55,1.68,1.33,0,-.09],[2.6,2.12,1.45,0,-.28],[3.45,1.92,1.32,0,-.38],[3.88,.95,.9,0,-.29]],skin,{segments:32,steps:28,warp(x,y,z,u,v,a){const front=Math.max(0,Math.cos(a))**4;return[x,y,z+front*(.17*Math.exp(-(((y-2.7)/.55)**2))*Math.cos(x*1.9)-.08*Math.exp(-(((y-1.5)/.32)**2)))];}});
-  shell(b,[[-1.15,.65],[-.45,1],[0,.85],[.45,1],[1.15,.65],[.93,-.8],[0,-1.05],[-.93,-.8]],muzzle,0,1.98,1.13,.08,.29);
+  characterLoft(b, [[0,1.12,.94,0,.08],[.62,1.42,1.14,0,.03],[1.55,1.68,1.33,0,-.09],[2.6,2.12,1.45,0,-.28],[3.45,1.92,1.32,0,-.38],[3.88,.95,.9,0,-.29]], 'brute', 0, 0, 0, {segments:32,steps:28,warp(x,y,z,u,v,a){const front=Math.max(0,Math.cos(a))**4;return[x,y,z+front*(.17*Math.exp(-(((y-2.7)/.55)**2))*Math.cos(x*1.9)-.08*Math.exp(-(((y-1.5)/.32)**2)))];}});
   b.finish(torso,'sculpted-pectorals-and-hunched-back',bossSkin);
   const arms=[-1,1].map(s=>arm(pose,s,{x:2.05,y:5.85,length:3.55,width:1.03,color:skin,hand:dark,bulky:true}));
   const bracelets=assetBatch();
@@ -232,8 +252,7 @@ function jelly() {
   const {group,pose}=rig('rippled-candy-sovereign');
   const pink=0xe987bf,dark=0x9e4589,cream=0xffe6d7;
   const body=node(pose,'liquid-mantle',0,1.15), b=assetBatch();
-  loft(b,[[0,1.8,1.5],[.4,2.45,1.96],[1.12,2.57,2.06],[2.45,2.32,1.91],[3.85,1.83,1.55],[5.08,1.2,1.04],[5.7,.28,.28],[5.79,.02,.02]],pink,{segments:40,steps:32,warp(x,y,z,u,v,a){const scallop=1+.035*Math.cos(a*7)*(1-v);return[x*scallop,y+.15*Math.cos(a*7)*(1-v)**5,z*scallop];}});
-  shell(b,[[-1.13,.7],[-.77,1.12],[.05,1.14],[.9,.66],[1.12,-.15],[.48,-.92],[-.48,-1.02],[-1.08,-.35]],cream,0,1.97,1.93,.08,.27);
+  characterLoft(b, [[0,1.8,1.5],[.4,2.45,1.96],[1.12,2.57,2.06],[2.45,2.32,1.91],[3.85,1.83,1.55],[5.08,1.2,1.04],[5.7,.28,.28],[5.79,.02,.02]], 'jelly', 0, 0, 0, {segments:40,steps:32,warp(x,y,z,u,v,a){const scallop=1+.035*Math.cos(a*7)*(1-v);return[x*scallop,y+.15*Math.cos(a*7)*(1-v)**5,z*scallop];}});
   b.finish(body,'continuous-scalloped-jelly',bossShell);
   const frill=node(pose,'liquid-frill',0,.22), f=assetBatch();
   loft(f,[[0,1.87,1.51],[.22,2.45,1.96],[.52,2.51,2.03],[.9,1.93,1.59]],dark,{segments:42,steps:12,warp(x,y,z,u,v,a){const wave=1+.1*Math.cos(a*7);return[x*wave,y+.13*Math.cos(a*7),z*wave];}});
@@ -256,7 +275,7 @@ function robot() {
   const steel=0x7d97be,dark=0x34476a,trim=0xabbcd2,neon=0xeea3ff;
   const legs=[-1,1].map(s=>leg(pose,s,{x:1.04,y:2.9,width:.75,color:dark,foot:trim}));
   const torso=node(pose,'cast-reactor-housing',0,3.3), b=assetBatch();
-  loft(b,[[0,1.13,.87],[.5,1.48,1.06],[1.4,1.76,1.2],[2.5,1.9,1.03],[3.1,1.46,.9],[3.35,.74,.61]],steel,{segments:32,steps:24});
+  characterLoft(b, [[0,1.13,.87],[.5,1.48,1.06],[1.4,1.76,1.2],[2.5,1.9,1.03],[3.1,1.46,.9],[3.35,.74,.61]], 'robot', 0, 0, 0, {segments:32,steps:24});
   for(const s of [-1,1])shell(b,[[-.55,.71],[.4,.8],[.69,.34],[.42,-.77],[-.6,-.55]],dark,s*1.07,1.3,1.08,.14,.22,0,-s*.3,-s*.13);
   b.ring(.91,.16,0,1.56,1.19,C.ink,'z').ring(.72,.09,0,1.56,1.28,trim,'z');b.finish(torso,'forged-reactor-shell',bossMetal);
   const core=node(torso,'neon-reactor',0,1.56,1.4), glow=assetBatch();
@@ -286,7 +305,7 @@ function moon() {
   const suit=0xd1e1e5,trim=0x5c7f9c,dark=0x29425d,blue=0x598bb1;
   const legs=[-1,1].map(s=>leg(pose,s,{x:1,y:2.7,color:suit,foot:trim,width:.75}));
   const torso=node(pose,'pressure-suit',0,3.0),b=assetBatch();
-  loft(b,[[0,1.07,.93],[.4,1.46,1.11],[1.5,1.69,1.32],[2.5,1.68,1.12],[3.2,1.27,.86],[3.45,.86,.68]],suit,{segments:30,steps:24});
+  characterLoft(b, [[0,1.07,.93],[.4,1.46,1.11],[1.5,1.69,1.32],[2.5,1.68,1.12],[3.2,1.27,.86],[3.45,.86,.68]], 'moon', 0, 0, 0, {segments:30,steps:24});
   shell(b,[[-.82,.59],[-.45,.8],[.58,.72],[.9,.32],[.66,-.62],[-.64,-.64]],trim,0,1.48,1.24,.12,.18);
   for(const s of [-1,1]) {
     path(b,[[s*.8,.64,-.85],[s*1.07,1.66,-1.03],[s*.86,2.61,-.85]],[.38,.44,.3],dark,{segments:12,steps:16});
@@ -315,27 +334,74 @@ function moon() {
   });
 }
 
+// Each wing is a single tensioned sail. Its panels sag between the radial
+// fingers, with a scallop cut into the free edge of each membrane.
 function dragonWing(parent,s) {
-  const g=node(parent,`curved-wing-${s}`,s*1.2,5.65,-.61),b=assetBatch(),membrane=assetBatch();
-  const outline=[[0,0],[s*.74,1.68],[s*3.27,2.54],[s*2.82,1.02],[s*3.15,.18],[s*2.02,.41],[s*1.47,-.76],[s*.62,-.16]];
-  shell(membrane,outline,0x95434a,0,0,0,.065,.18);
-  membrane.finish(g,'swept-bat-membrane',bossCloth);
-  path(b,[[0,0,.04],[s*.77,1.57,.12],[s*2.08,2.24,.06],[s*3.26,2.52,0]],[.23,.19,.11,.025],0xd8a36e,{segments:8,steps:20});
-  for(const end of [[2.83,1.03],[3.12,.2],[1.48,-.72]])path(b,[[s*.76,1.56,.12],[s*1.36,.84,.19],[s*end[0],end[1],.04]],[.13,.085,.018],0xd8a36e,{segments:7,steps:14});
-  b.finish(g,'curved-wing-fingers',bossShell);return{g,s};
+  const g=node(parent,`curved-wing-${s}`,s*1.25,5.72,-.65), b=assetBatch();
+  const wrist=new THREE.Vector3(s*1.34,1.98,-.12);
+  const tips=[[.06,-.78,.03],[1.32,-1.15,-.70],[2.67,-.86,-.80],[3.83,.05,-.64],[4.36,1.27,-.44],[4.61,2.47,-.29]];
+  const p=[],c=[],index=[];
+  const ink=new THREE.Color(0x792e46), fire=new THREE.Color(0xfb945c),shade=new THREE.Color();
+  for(let panel=0;panel<tips.length-1;panel++){
+    const point=i=>new THREE.Vector3(s*tips[i][0],tips[i][1],tips[i][2]);
+    const start=point(panel),end=point(panel+1),base=p.length/3;
+    const U=6,V=7;
+    for(let j=0;j<=V;j++)for(let k=0;k<=U;k++){
+      const t=.015+.985*j/V,u=k/U,arch=Math.sin(Math.PI*u);
+      const edge=start.clone().lerp(end,u);
+      edge.lerp(wrist,.22*arch);
+      const v=wrist.clone().lerp(edge,t);
+      v.z+=.39*arch*Math.sin(t*Math.PI)+.08*Math.sin(t*Math.PI)*Math.cos(4*Math.PI*u);
+      p.push(v.x,v.y,v.z);
+      shade.copy(ink).lerp(fire,.18+.60*arch*Math.sin(Math.PI*t)+.14*t);
+      c.push(shade.r,shade.g,shade.b);
+      if(k<U&&j<V){const n=base+j*(U+1)+k,down=n+U+1;
+        if(s>0)index.push(n,down,n+1,n+1,down,down+1);
+        else index.push(n,n+1,down,n+1,down+1,down);}
+    }
+    if(panel>0)path(b,[wrist.toArray(),wrist.clone().lerp(start,.45).add(new THREE.Vector3(0,0,.12)).toArray(),start.toArray()],
+      [.085,.061,.016],0xe2ad77,{segments:6,steps:9});
+  }
+  const sail=new THREE.BufferGeometry();
+  sail.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
+  sail.setAttribute('color',new THREE.Float32BufferAttribute(c,3));sail.setIndex(index);sail.computeVertexNormals();
+  const back=sail.clone(), rev=back.index.array;
+  for(let i=0;i<rev.length;i+=3)[rev[i+1],rev[i+2]]=[rev[i+2],rev[i+1]];
+  back.translate(0,0,-.025);back.computeVertexNormals();
+  b.add(sail,0xffffff);b.add(back,0xbe8c98);
+  path(b,[[0,-.1,0],[s*.66,.54,-.11],wrist.toArray(),[s*2.95,2.48,-.29],[s*4.61,2.47,-.29]],
+    [.38,.25,.24,.12,.014],0xb06c4f,{segments:10,steps:22});
+  path(b,[wrist.toArray(),[s*1.39,2.38,0],[s*1.55,2.59,.09]],
+    [.14,.085,.009],0xf1cb91,{segments:8,steps:8});
+  b.finish(g,'wing-spar-and-scalloped-sail',bossShell);return{g,s};
 }
+
+function drakeLeg(parent,s) {
+  const y=2.55,g=node(parent,'drake-haunch-'+s,s*1.07,y,-.18),b=assetBatch();
+  loft(b,[[-2.47,.31,.43,0,.24],[-2.32,.38,.55,s*.06,.22],[-2.02,.22,.29,s*.12,-.08],
+    [-1.56,.24,.24,s*.17,-.56],[-1.19,.32,.40,s*.18,-.26],[-.64,.54,.63,s*.19,.25],
+    [-.27,.66,.72,s*.11,.32],[.25,.78,.84,-s*.05,.02],[.77,.62,.64,-s*.16,-.14],[1.12,.23,.34,-s*.28,-.13]],
+    0x945140,{segments:19,steps:23});
+  for(let k=-1;k<=1;k++){
+    const toe=k*.30;
+    path(b,[[toe*.57,-2.28,.22],[toe,-2.39,.63],[toe*1.48,-2.40,.93]],
+      [.18,.16,.085],0x975a44,{segments:7,steps:8});
+    path(b,[[toe*1.40,-2.39,.89],[toe*1.55,-2.38,1.10],[toe*1.62,-2.48,1.27]],
+      [.11,.065,.006],0xf1cb91,{segments:6,steps:6});
+  }
+  b.finish(g,'digitigrade-haunch-and-talons',bossSkin);return{g,s,y};
+}
+
 function dragon() {
   const {group,pose}=rig('ember-drake');
   const skin=0x9f4c45,belly=0xe2ad78,horn=0xf0c581,dark=0x57303a;
-  const legs=[-1,1].map(s=>leg(pose,s,{x:1.05,y:2.45,width:.77,color:skin,foot:dark}));
+  const legs=[-1,1].map(s=>drakeLeg(pose,s));
   const torso=node(pose,'drake-body',0,2.7),b=assetBatch();
-  loft(b,[[0,.98,.83,0,-.1],[.5,1.43,1.13,0,-.17],[1.55,1.77,1.42,0,-.34],[2.65,1.78,1.34,0,-.5],[3.6,1.19,.91,0,-.39],[4.2,.72,.66,0,-.16]],skin,{segments:32,steps:26});
-  shell(b,[[-.87,1.22],[-.49,1.65],[.32,1.58],[.91,.97],[.82,-1.3],[0,-1.7],[-.82,-1.2]],belly,0,1.7,1.04,.08,.28);
-  for(let k=0;k<5;k++)path(b,[[-.74,1+k*.47,1.18],[0,.91+k*.47,1.36],[.74,1+k*.47,1.18]],[.045,.05,.045],dark,{segments:6,steps:11});
+  characterLoft(b, [[0,.98,.83,0,-.1],[.5,1.43,1.13,0,-.17],[1.55,1.77,1.42,0,-.34],[2.65,1.78,1.34,0,-.5],[3.6,1.19,.91,0,-.39],[4.2,.72,.66,0,-.16]], 'dragon', 0, 0, 0, {segments:32,steps:26});
   b.finish(torso,'continuous-scaled-drake-torso',bossSkin);
   const arms=[-1,1].map(s=>arm(pose,s,{x:1.7,y:5.45,length:1.95,width:.53,color:skin,hand:skin}));
   for(const {g}of arms){const claws=assetBatch();for(let k=0;k<3;k++)path(claws,[[-.39+k*.39,-2.07,.69],[-.39+k*.39,-2.35,.78],[-.39+k*.39,-2.53,.58]],[.105,.075,.008],horn,{segments:6,steps:8});claws.finish(g,'swept-claws',bossShell);}
-  const neck=node(pose,'serpentine-neck',0,5.58,-.07),n=assetBatch();
+  const neck=node(pose,'serpentine-neck',0,5.64,.28),n=assetBatch();
   path(n,[[0,-.48,-.18],[0,.6,-.22],[0,1.58,.15],[0,2.24,.65]],[.84,.74,.7,.76],skin,{segments:24,steps:26,flatten:.88});
   // Overlapping ventral scutes follow the bend of the neck into the lower jaw.
   for (const [y,z,w] of [[.32,.48,.5],[.82,.52,.48],[1.3,.68,.44],[1.76,.88,.4]]) {
@@ -364,7 +430,7 @@ function dragon() {
   const crest=assetBatch();for(let k=0;k<4;k++)path(crest,[[0,5.82-k*.59,-1.08],[0,6.55-k*.59,-1.59],[0,6.72-k*.59,-1.82]],[.22,.13,.009],horn,{segments:7,steps:8});crest.finish(pose,'swept-dorsal-spines',bossShell);
   return fitBoss(group,pose,2.9,10.4,(t,p,state={})=>{const a=attackPose(p),walk=walking(t,state,2.7);hitPose(pose,t,state);
     legs.forEach(l=>{l.g.rotation.x=l.s*walk*.14;l.g.position.y=l.y+Math.max(0,l.s*walk)*.06;});arms.forEach(({g,s})=>{g.rotation.x=-.17-a*.7-s*walk*.06;});
-    neck.rotation.x=-a*.19;head.rotation.y=Math.sin(t*.47)*.07;jaw.rotation.x=a*.48;
+    torso.rotation.x=.12;neck.rotation.x=.28-a*.34;head.rotation.x=-.25+a*.18;head.rotation.y=Math.sin(t*.47)*.07;jaw.rotation.x=a*.48;
     wings.forEach(({g,s})=>{g.rotation.z=s*(.1+Math.sin(t*1.5)*.1+a*.2);g.rotation.y=-s*.12;});tail.rotation.y=Math.sin(t*1.3)*.24;
   });
 }
@@ -392,7 +458,7 @@ function djinn() {
   vortex.finish(funnel,'lofted-vortex',bossCloth);bands.finish(funnel,'helical-cloud-bands',bossCloth);
   // Torso: broad chest tapering into the funnel, with a sash and gem at the waist.
   const torso=node(pose,'djinn-torso',0,3.75),body=assetBatch(),trim=assetBatch(),gems=assetBatch();
-  loft(body,[[-.1,.92,.78],[.45,1.08,.86,0,.02],[1.2,1.38,1,0,.06],[2,1.86,1.18,0,.1],[2.62,1.98,1.1,0,.02],[3.05,1.12,.84,0,-.04],[3.4,.62,.58,0,-.02]],skin,{segments:32,steps:26});
+  characterLoft(body, [[-.1,.92,.78],[.45,1.08,.86,0,.02],[1.2,1.38,1,0,.06],[2,1.86,1.18,0,.1],[2.62,1.98,1.1,0,.02],[3.05,1.12,.84,0,-.04],[3.4,.62,.58,0,-.02]], 'storm', 0, 0, 0, {segments:32,steps:26});
   shell(body,[[-1.32,.52],[-.7,.86],[0,.72],[.7,.86],[1.32,.52],[1.05,-.3],[.3,-.5],[0,-.36],[-.3,-.5],[-1.05,-.3]],pale,0,2.12,1.02,.1,.3);
   for(let k=0;k<3;k++)path(body,[[-.62+k*.05,1.32-k*.38,.98-k*.04],[0,1.25-k*.38,1.1-k*.05],[.62-k*.05,1.32-k*.38,.98-k*.04]],[.04,.055,.04],dark,{segments:6,steps:11});
   body.finish(torso,'continuous-djinn-torso',bossSkin);
