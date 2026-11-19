@@ -187,13 +187,29 @@ function buildTrex() {
   const OLIVE = 0x6b7a3a, DARK = 0x43501f, CREAM = 0xe8dbb0, AMBER = 0xffb347, TOOTH = 0xf3ecd4, CLAW = 0xd9cfae;
   const legs = [];
   for (const s of [-1, 1]) {
-    const leg = node(pose, 'trex-leg-' + s, s * 1.5, 5.0, -.3), b = assetBatch();
-    loft(b, [
-      [-4.8,.5,.62,0,.5],[-4.5,.56,.7,0,.45],[-4.05,.5,.6,0,-.5],[-2.6,.85,.95,0,-.2],
-      [-.9,1.05,1.15,0,.35],[.3,.92,1.02,0,.2],
-    ], OLIVE, 0, 0, 0, { segments: 26, steps: 26 });
-    bulb(b, 1.15, .6, 1.7, OLIVE, 0, -4.78, .55, { segments: 18, steps: 14 });
-    for (let k = 0; k < 3; k++) sweep(b, [[(k - 1) * .4, -4.85, 1.35],[(k - 1) * .46, -4.78, 2.15],[(k - 1) * .44, -4.7, 2.5]], [.2, .16, .015], CLAW, 0, 0, 0, { segments: 8, steps: 12 });
+    const leg = node(pose, 'trex-leg-' + s, s * 1.12, 5, -.15), b = assetBatch();
+    // Wrap the rounded haunch into the pelvis. The knee projects forward,
+    // the hock bends back, and the metatarsus widens again at the toes.
+    const haunch = loftGeometry([
+      [-4.89,.31,.48,0,.53],[-4.69,.43,.66,0,.40],[-4.40,.32,.38,0,.13],
+      [-3.79,.27,.34,s*.06,-.37],[-3.22,.39,.44,s*.12,-.80],
+      [-2.96,.40,.48,s*.14,-.77],[-2.38,.45,.61,s*.15,-.22],
+      [-1.81,.62,.71,s*.18,.43],[-1.46,.67,.73,s*.22,.58],
+      [-.88,.81,.86,s*.21,.38],[-.11,.97,.99,s*.13,-.08],
+      [.64,.91,.96,-s*.06,-.04],[1.25,.65,.70,-s*.28,.15],[1.56,.25,.31,-s*.45,.23],
+    ], {segments:22,steps:26});
+    const hideColor=new THREE.Color(OLIVE), shade=new THREE.Color(DARK), tint=new THREE.Color();
+    b.add(haunch,(x,y,z)=>{
+      const bars=.5+.5*Math.cos(y*7+s*x*2+z*1.5);
+      return tint.copy(hideColor).lerp(shade,Math.max(0,Math.min(.65,(bars-.49)*1.5))*(y< -2.6?.8:.5));
+    });
+    for (const k of [-1,0,1]) {
+      const length=k ? 1.64 : 2.02;
+      sweep(b,[[k*.13,-4.73,.54],[k*.28,-4.81,.98],[k*.51,-4.80,length],
+        [k*.56,-4.81,length+.23]],[.22,.19,.14,.09],OLIVE,0,0,0,{segments:9,steps:10});
+      sweep(b,[[k*.50,-4.79,length-.06],[k*.56,-4.76,length+.23],
+        [k*.61,-4.89,length+.51]],[.14,.09,.009],CLAW,0,0,0,{segments:7,steps:8});
+    }
     b.finish(leg, 'trex-digitigrade-leg-' + s, bossSkin);
     legs.push({ leg, s });
   }
@@ -275,13 +291,19 @@ function buildRoc() {
   const legs = [];
   for (const s of [-1, 1]) {
     const leg = node(pose, 'roc-leg-' + s, s * 1.0, 3.45, 0), b = assetBatch(), down = assetBatch();
-    loft(b, [[-3.35,.34,.4],[-2.9,.42,.48],[-2.0,.36,.42],[-1.0,.4,.46],[-.2,.48,.54],[.2,.42,.48]], 0xc9a05a, 0, 0, 0, { segments: 18, steps: 20 });
+    const shank=loftGeometry([[-3.36,.32,.34,0,.18],[-3.16,.38,.4,0,.14],
+      [-2.91,.28,.30,0,.035],[-2.29,.21,.24,0,-.17],[-1.71,.25,.28,0,-.39],
+      [-1.48,.31,.34,0,-.33],[-.92,.32,.37,0,-.12],[-.20,.39,.44,-s*.11,.16]],
+      {segments:14,steps:22});
+    b.add(shank,(x,y,z)=>z>-.07 && Math.cos(y*19+.8*Math.abs(x))>.36 ? 0xb98141 : 0xdcb15e);
     for (let k = 0; k < 3; k++) {
       sweep(b, [[(k - 1) * .34, -3.3, .3],[(k - 1) * .44, -3.32, .95],[(k - 1) * .42, -3.28, 1.3]], [.17, .15, .03], 0xc9a05a, 0, 0, 0, { segments: 8, steps: 12 });
       sweep(b, [[(k - 1) * .42, -3.28, 1.3],[(k - 1) * .44, -3.24, 1.5],[(k - 1) * .4, -3.2, 1.58]], [.09, .06, .01], TALON, 0, 0, 0, { segments: 6, steps: 8 });
     }
     sweep(b, [[0, -3.3, -.2],[0, -3.32, -.6],[0, -3.28, -.78]], [.16, .14, .03], 0xc9a05a, 0, 0, 0, { segments: 8, steps: 10 });
-    bulb(down, 1.15, 1.3, 1.1, CREAM, 0, -.55, .1, { segments: 16, steps: 12 });
+    characterLoft(down,[[-1.42,.12,.16,0,-.32],[-1.14,.32,.41,0,-.21],
+      [-.64,.49,.58,-s*.06,-.02],[-.15,.63,.68,-s*.13,.19],[.35,.67,.69,-s*.28,.30],
+      [.85,.51,.56,-s*.37,.29],[1.12,.22,.25,-s*.42,.28]],'roc',0,0,0,{segments:18,steps:16});
     b.finish(leg, 'roc-scaled-bird-leg-' + s, bossSkin);
     down.finish(leg, 'roc-downy-thigh-' + s, bossCloth);
     legs.push({ leg, s });

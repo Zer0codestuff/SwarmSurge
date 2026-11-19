@@ -323,41 +323,75 @@ export function troopFormGeometry(form, detail = 'high') {
 // raider body; drone nozzles stay where the engine places their glow.
 const GEAR = { iron: 0x59606e, steel: 0x9aa3b1, ink: 0x1d2028, brass: 0xc79a3c, gold: 0xffcc40, bone: 0xf3e7cf, shell: 0x6a3446, fuse: 0xffaa22, spark: 0xfff07a, ice: 0xbdf3ff };
 
+// Color bands follow the surface through its shoulder and turned rim. The
+// same design is sampled at fewer rings for enemies across the battlefield.
+function gearShell(k, sections, palette, zone, pos = [0,0,0], rot = [0,0,0], warp) {
+  const segments = k.low ? 10 : 20, steps = k.low ? 6 : 12;
+  const geometry = loftGeometry(sections,{segments, steps, warp});
+  const { color } = geometry.attributes;
+  const pigments = palette.map(hex => new THREE.Color(hex));
+  for (let j=0; j<=steps; j++) for (let i=0; i<=segments; i++) {
+    const index = j*(segments+1)+i, shade = color.getX(index);
+    const c = pigments[zone(j/steps, i*TAU/segments)];
+    color.setXYZ(index, c.r*shade, c.g*shade, c.b*shade);
+  }
+  for (const [index,v] of [[color.count-2,0],[color.count-1,1]]) {
+    const c = pigments[zone(v,0)];
+    color.setXYZ(index,c.r,c.g,c.b);
+  }
+  k.b.add(geometry,0xffffff,pos,rot);
+}
+
 function bomb(k) {
-  k.blob(0.2, [1, 1, 1], [0, 1.18, 0], GEAR.ink);
-  k.blob(1, [0.07, 0.03, 0.07], [0, 1.37, 0], GEAR.iron);
-  k.blob(1, [0.06, 0.05, 0.02], [-0.07, 1.25, 0.16], 0x555a66);
-  k.limb([[0, 1.38, 0], [0.04, 1.47, 0.01], [0.1, 1.51, 0.02]], [0.018, 0.016, 0.014], GEAR.fuse);
-  k.gem(0.045, [0.11, 1.53, 0.02], GEAR.spark, 1.2);
+  gearShell(k,[[.97,.09,.10],[1.008,.156,.15],[1.09,.205,.20],[1.22,.215,.21],
+    [1.30,.177,.17],[1.35,.096,.09],[1.37,.081,.078],[1.401,.068,.066]],
+    [GEAR.ink,0x494b60,0xff964c,GEAR.iron],(v,a)=>{
+      if(v>.82)return 3;
+      if(v>.31 && v<.57 && Math.cos(3*a+4*v)>.15)return 2;
+      return Math.cos(a*3)>.40?1:0;
+    });
+  k.limb([[0,1.39,0],[.017,1.45,.016],[.105,1.51,.02]],[.020,.017,.014],GEAR.fuse);
+  k.gem(.049,[.11,1.53,.02],GEAR.spark,1.2);
 }
 
 function shield(k) {
-  const disc = Array.from({ length: 12 }, (_, i) => [Math.sin(i / 12 * TAU) * 0.42, Math.cos(i / 12 * TAU) * 0.42]);
-  k.plate(disc, 0.06, 0.09, GEAR.steel, [0, 0.48, 0.36]);
-  k.ring(0.42, 0.045, [0, 0.48, 0.37], GEAR.brass, [0, 0, 0]);
-  k.ring(0.24, 0.016, [0, 0.48, 0.45], GEAR.iron, [0, 0, 0]);
-  k.blob(0.1, [1, 1, 0.7], [0, 0.48, 0.47], GEAR.gold);
-  for (let i = 0; i < 6; i++) {
-    const a = i / 6 * TAU;
-    k.blob(0.025, [1, 1, 1], [Math.sin(a) * 0.33, 0.48 + Math.cos(a) * 0.33, 0.43], GEAR.brass);
-  }
+  // A shallow dished buckler, rolled at the circumference, with a pressed
+  // six-lobed sunburst rising out of the same metal as its central boss.
+  gearShell(k,[[-.044,.035,.035],[-.038,.32,.32],[-.02,.425,.425],
+    [.010,.432,.432],[.038,.409,.409],[.032,.366,.366],[.070,.274,.274],
+    [.089,.17,.17],[.120,.112,.112],[.150,.074,.074],[.158,.012,.012]],
+    [GEAR.iron,GEAR.steel,GEAR.brass,GEAR.gold],(v,a)=>{
+      if(v<.24)return 0;
+      if(v<.46 || v>.8)return 2;
+      return Math.cos(6*a)>.4?3:1;
+    },[0,.48,.37],[Math.PI/2,0,0],(x,y,z,u,v,a)=>
+      [x,y+.028*Math.cos(a*6)*Math.sin(Math.PI*Math.max(0,(v-.45)/.55)),z]);
 }
 
 function helmet(k) {
-  k.loft([[0.74, 0.3, 0.3], [0.8, 0.315, 0.315], [0.92, 0.29, 0.29], [1.04, 0.2, 0.2], [1.1, 0.04, 0.04]], GEAR.iron);
-  k.ring(0.305, 0.03, [0, 0.76, 0], GEAR.steel);
-  k.loft([[-0.04, 0.27, 0.06], [0.04, 0.27, 0.06]], GEAR.ink, [0, 0.84, 0.25], [0, 0, 0], 0, { segments: 10, steps: 1 });
-  k.b.add(new THREE.ConeGeometry(0.07, 0.24, 7), GEAR.steel, [0, 1.2, 0]);
-  for (const s of [-1, 1]) k.blob(0.03, [1, 1, 1], [s * 0.26, 0.86, 0.13], GEAR.brass);
+  gearShell(k,[[.714,.220,.236],[.743,.31,.293],[.777,.323,.316],[.812,.30,.305],
+    [.85,.303,.303],[.92,.282,.29],[.99,.242,.252],[1.05,.166,.164],
+    [1.087,.072,.075],[1.123,.041,.049],[1.205,.007,.015]],
+    [GEAR.iron,GEAR.ink,GEAR.steel,GEAR.brass],(v,a)=>{
+      if(v<.22 || v>.86)return 2;
+      if(v<.48 && Math.cos(a)>.27)return 1;
+      return Math.abs(Math.sin(a))<.18?3:0;
+    },undefined,undefined,(x,y,z,u,v,a)=>{
+      const nose=Math.max(0,Math.cos(a))**6;
+      return [x, y-.055*nose*(1-v),z+.066*nose*(1-v)];
+    });
 }
 
 function droneGear(k) {
-  // Twin rounded fuel cells, nozzles at the glow anchors and swept wings.
   for (const s of [-1, 1]) {
-    const x = s * 0.184;
-    k.loft([[0.34, 0.06, 0.06], [0.4, 0.075, 0.075], [0.62, 0.075, 0.075], [0.7, 0.05, 0.05], [0.72, 0.01, 0.01]], GEAR.steel, [x, 0, -0.269]);
-    k.loft([[0.27, 0.06, 0.06], [0.31, 0.05, 0.05], [0.36, 0.062, 0.062]], GEAR.ink, [x, 0, -0.269]);
-    k.ring(0.075, 0.012, [x, 0.5, -0.269], GEAR.brass);
+    const x = s * .184;
+    gearShell(k,[[.265,.065,.065],[.28,.077,.075],[.329,.049,.051],[.38,.079,.078],
+      [.51,.092,.089],[.62,.077,.074],[.686,.071,.064],[.722,.025,.031]],
+      [GEAR.ink,GEAR.steel,GEAR.brass,0xa8e6ea],(v,a)=>{
+        if(v<.27)return v<.12?2:0;
+        if(v>.66 && Math.cos(3*a)>.37)return 3;
+        return v<.45?2:1;
+      },[x,0,-.269]);
     const wing = [[0, 0.05], [0.24, 0.0], [0.34, -0.06], [0.2, -0.07], [0, -0.06]].map(([u, v]) => [s * u, v]);
     k.plate(wing, 0.025, 0.01, GEAR.bone, [s * 0.24, 0.6, -0.25], [-Math.PI / 2, 0, s * 0.18]);
   }
@@ -367,10 +401,17 @@ function droneGear(k) {
 
 function crabGear(k) {
   // Domed carapace with a central ridge and two sculpted pincers.
-  k.loft([[0.5, 0.36, 0.3, 0, -0.04], [0.56, 0.37, 0.31, 0, -0.04], [0.66, 0.31, 0.26, 0, -0.05], [0.74, 0.17, 0.15, 0, -0.06], [0.77, 0.02, 0.02, 0, -0.06]], GEAR.shell);
-  k.limb([[0, 0.78, 0.18], [0, 0.785, -0.06], [0, 0.72, -0.3]], [0.03, 0.035, 0.025], 0xd96f5c);
+  gearShell(k,[[.486,.285,.239],[.506,.374,.310],[.549,.389,.324],
+    [.60,.357,.303],[.678,.291,.256],[.740,.165,.166],[.776,.036,.045]],
+    [GEAR.shell,0xce685a,0xf3b293],(v,a)=>{
+      if(v<.25)return 1;
+      const ridge=Math.cos(4*a+v*4);
+      return ridge>.77?2:ridge>.32?1:0;
+    },[0,0,-.049],undefined,(x,y,z,u,v,a)=>{
+      const rib=Math.cos(4*a+v*4)*.018*Math.sin(Math.PI*v);
+      return [x*(1+2*rib),y+rib,z*(1+2*rib)];
+    });
   for (const s of [-1, 1]) {
-    k.blob(1, [0.05, 0.03, 0.05], [s * 0.18, 0.72, 0.1], 0xd96f5c);
     k.limb([[s * 0.3, 0.45, 0.12], [s * 0.38, 0.44, 0.24]], [0.06, 0.07], GEAR.shell);
     const x = s * 0.39;
     k.loft([[-0.09, 0.09, 0.085], [0.0, 0.11, 0.1], [0.06, 0.085, 0.08], [0.1, 0.03, 0.03]], GEAR.bone, [x, 0.45, 0.31], [Math.PI / 2, 0, 0]);
