@@ -361,7 +361,7 @@ export class Ambient {
 export function buildSky() {
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTop: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() } },
-    vertexShader: `varying vec3 vDir; void main() { vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.9999; }`,
+    vertexShader: `varying vec3 vDir; void main() { vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }`,
     fragmentShader: `uniform vec3 uTop; uniform vec3 uHorizon; varying vec3 vDir;
       void main() {
         float t = pow(smoothstep(0.0, 0.6, normalize(vDir).y), 0.7);
@@ -372,7 +372,8 @@ export function buildSky() {
   });
   const m = new THREE.Mesh(new THREE.SphereGeometry(320, 32, 16), mat);
   m.frustumCulled = false;
-  m.renderOrder = -10;
+  // Draw after opaque terrain so depth testing skips the covered sky pixels.
+  m.renderOrder = 100;
   return m;
 }
 
