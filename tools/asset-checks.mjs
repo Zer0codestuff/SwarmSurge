@@ -53,6 +53,7 @@ try {
       });
       geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose());
     };
+    const inkAtlases = new Set();
     const bosses = contracts.map(([type,radius,height]) => {
       const m = L.buildBoss2(type) ?? M.buildBoss(type);
       const state = { moving: false, health: 1, hit: 0, stunned: false };
@@ -63,11 +64,21 @@ try {
       m.animate(2,.45,{...state,moving:true,health:.3,hit:.4}); const repeated = pose(m.group);
       m.animate(7,.9,{...state,stunned:true}); const stunned = pose(m.group);
       const stats = inspect(m.group);
+      let paintedPieces = 0, validPaint = true;
+      m.group.traverse(mesh => {
+        if (!mesh.isMesh || !mesh.material.map) return;
+        const { uv, position } = mesh.geometry.attributes;
+        validPaint &&= !!uv && uv.count === position.count && uv.array.every(v => v >= 0 && v <= 1)
+          && mesh.material.userData.shared && mesh.material.map.userData.shared;
+        paintedPieces++;
+        inkAtlases.add(mesh.material.map);
+      });
       const rootStable = m.group.position.length()===0 && m.group.rotation.x===0 && m.group.rotation.y===0 && m.group.rotation.z===0 && m.group.scale.equals(new THREE.Vector3(1,1,1));
-      const pass = metadata && rootStable && stats.finite && stats.lights===0 && stats.meshes<=50 && stats.triangles<=40000 && neutral.every(Number.isFinite) && stunned.every(Number.isFinite) && !different(attack,repeated) && different(neutral,attack) && bounds.min.y>-.3 && bounds.max.y>height*.75 && bounds.max.y<height*1.15;
+      const pass = paintedPieces > 0 && validPaint && metadata && rootStable && stats.finite && stats.lights===0 && stats.meshes<=50 && stats.triangles<=40000 && neutral.every(Number.isFinite) && stunned.every(Number.isFinite) && !different(attack,repeated) && different(neutral,attack) && bounds.min.y>-.3 && bounds.max.y>height*.75 && bounds.max.y<height*1.15;
       dispose(m.group);
-      return { type, pass, ...stats, bottom: bounds.min.y, top: bounds.max.y, height, metadata, rootStable, deterministic: !different(attack,repeated) };
+      return { type, pass, paintedPieces, ...stats, bottom: bounds.min.y, top: bounds.max.y, height, metadata, rootStable, deterministic: !different(attack,repeated) };
     });
+    const sharedInk = inkAtlases.size === 1;
     const forts = Object.keys(THEMES).map(theme => {
       const m = M.buildTower(theme); m.animate?.(2,{health:.5,hit:.4});
       const bounds = new THREE.Box3().setFromObject(m.group), size = bounds.getSize(new THREE.Vector3()), stats = inspect(m.group);
@@ -120,11 +131,18 @@ try {
     });
     const ball=P.buildSwarmBall(2), drop=sculptSupplyDrop(), belt=P.buildBelt(5.6,6,-3);
     const tri=g=>(g.index?.count ?? g.attributes.position.count)/3;
-    const {AEGIS_FORM,troopFormGeometry} = await import('/src/troop-forms.js');
+    const {AEGIS_FORM,troopFormGeometry,enemyGearGeometry} = await import('/src/troop-forms.js');
     const guardDetails = ['high','low'].map(lod => {
       const g=troopFormGeometry(AEGIS_FORM,lod), triangles=tri(g);
       const finite=Object.values(g.attributes).every(a=>a.array.every(Number.isFinite));
       g.dispose(); return {triangles,finite};
+    });
+    const gearPass = [2,3,5,7,8].every(kind => {
+      const high = enemyGearGeometry(kind), low = enemyGearGeometry(kind,'low');
+      const ok = [high,low].every(g => g.attributes.color.count===g.attributes.position.count
+        && Object.values(g.attributes).every(a=>a.array.every(Number.isFinite)))
+        && tri(low)<tri(high) && tri(low)<700;
+      high.dispose(); low.dispose(); return ok;
     });
     const {createImpactShield}=await import('/src/impact-shield.js');
     const armor=createImpactShield(), panes=inspect(armor);
@@ -137,11 +155,13 @@ try {
     const ballTriangles=tri(ball.inst.geometry)*ball.count + tri(ball.spin.children[0].geometry);
     const supplyPass=displayPass && bayPass && ballTriangles<55000 && inspect(ball.group).finite && inspect(drop.group).finite && inspect(belt.group).finite && !!drop.group.getObjectByName('recovery-chute') && belt.tex.repeat.x>1;
     [ball.group,drop.group,belt.group].forEach(dispose);
-    return {guardDetails,guardPass,projectiles,supplyPass,ballTriangles,armories:upgradeTypes.size,bosses,forts,props,propPass,lateProps,latePass,rosterPass,roadsides,roadPass,worlds:LEVELS.length};
+    return {gearPass,sharedInk,guardDetails,guardPass,projectiles,supplyPass,ballTriangles,armories:upgradeTypes.size,bosses,forts,props,propPass,lateProps,latePass,rosterPass,roadsides,roadPass,worlds:LEVELS.length};
   });
   console.log(`${report.guardPass?'PASS':'FAIL'} Aegis Guard detail levels (${report.guardDetails.map(d=>d.triangles).join('/')} triangles), shield panes and shared road markings`);
   console.log(`${report.projectiles.every(p=>p.pass)?'PASS':'FAIL'} nine cached boss and meteor projectile designs`);
   console.log(`${report.supplyPass?'PASS':'FAIL'} ${report.armories} armory rewards, supply parachute, conveyor and ${report.ballTriangles}-triangle swarm ball`);
+  console.log(`${report.gearPass?'PASS':'FAIL'} five instanced raider kits at both detail levels`);
+  console.log(`${report.sharedInk?'PASS':'FAIL'} one shared paint atlas across all 32 boss rigs`);
   for (const boss of report.bosses) console.log(`${boss.pass?'PASS':'FAIL'} ${boss.type}: ${boss.meshes} meshes, ${boss.triangles} triangles, top ${boss.top.toFixed(2)}/${boss.height}`);
   console.log(`${report.forts.every(f=>f.pass)?'PASS':'FAIL'} all ${report.forts.length} biome fort bounds`);
   console.log(`${report.propPass?'PASS':'FAIL'} defense and obstacle contracts`);
@@ -150,5 +170,5 @@ try {
   console.log(`${report.rosterPass?'PASS':'FAIL'} every boss and theme in the ${report.worlds} worlds has a contract`);
   fs.mkdirSync(new URL('./out/',import.meta.url),{recursive:true});
   fs.writeFileSync(new URL('./out/asset-checks.json',import.meta.url),JSON.stringify({...report,errors},null,2));
-  if (errors.length || !report.guardPass || !report.projectiles.every(p=>p.pass) || !report.supplyPass || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass || !report.roadPass) { console.error(errors.join('\n')); process.exitCode=1; }
+  if (errors.length || !report.gearPass || !report.sharedInk || !report.guardPass || !report.projectiles.every(p=>p.pass) || !report.supplyPass || report.bosses.some(b=>!b.pass) || report.forts.some(f=>!f.pass) || !report.propPass || !report.latePass || !report.rosterPass || !report.roadPass) { console.error(errors.join('\n')); process.exitCode=1; }
 } finally { await browser.close(); }

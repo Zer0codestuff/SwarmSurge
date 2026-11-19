@@ -213,6 +213,7 @@ export function shineTexture() {
   gr.addColorStop(0.56, 'rgba(255,255,255,0)'); gr.addColorStop(0.64, 'rgba(255,255,255,0.5)'); gr.addColorStop(0.68, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = gr; ctx.fillRect(0, 0, 256, 64);
   shineTex = new THREE.CanvasTexture(c);
+  shineTex.userData.shared = true;
   shineTex.wrapS = THREE.RepeatWrapping;
   shineTex.repeat.set(0.5, 1);
   return shineTex;
