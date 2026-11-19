@@ -121,7 +121,25 @@ try {
       writeBlue(new THREE.Frustum().setFromProjectionMatrix(projection));
       return B.n === 2 && G.rank === RANKS.length-1 && batches.reduce((count,mesh) => count + mesh.count,0) === 1;
     })()`);
-    return { scenery, troops };
+    const crowded = window.__game.dbg(`(() => {
+      const lightShadows = troopMeshes.every(mesh => {
+        const proxy = mesh.userData.shadowProxy;
+        return !mesh.castShadow && proxy?.instanceMatrix === mesh.instanceMatrix
+          && proxy.geometry.attributes.unitMotion === mesh.geometry.attributes.unitMotion
+          && proxy.geometry.index.count / 3 <= 160;
+      });
+      const pool = new FX.Debris(new THREE.Scene(),8);
+      pool.burst(0,1,0,[[1,0,0],[0,1,0],[0,0,1]],3);
+      pool.life[1] = .01;
+      pool.update(.02);
+      const liveOnly = pool.mesh.count === 2 && pool.mesh.instanceColor.getZ(1) === 1
+        && pool.mesh.instanceMatrix.updateRanges[0]?.count === 32;
+      pool.clear();
+      const clean = pool.mesh.count === 0 && !pool.mesh.visible;
+      pool.mesh.dispose(); pool.mesh.geometry.dispose(); pool.mesh.material.dispose();
+      return lightShadows && liveOnly && clean;
+    })()`);
+    return { scenery, troops, crowded };
   });
   if (process.env.VERBOSE) console.log(JSON.stringify({ result, rotated, culling }));
   const checks = [
@@ -133,6 +151,7 @@ try {
     ['The composite does not resolve or retain multisampled depth', result.noDepthResolve],
     ['Static chunks keep the same instances and skip batches outside the frustum', culling.scenery],
     ['Troop culling skips draw instances while keeping simulation and army rank', culling.troops],
+    ['Touch shadow proxies share motion and debris draws only live pieces', culling.crowded],
     ['Settled results stop redrawing the battlefield', result.idleResults],
     ['Landscape rotation preserves pixel density and renders a visible frame', rotated.width === 1477 && rotated.height === 682 && rotated.ratio === 1.75 && rotated.visible && rotated.error === 0],
   ];
