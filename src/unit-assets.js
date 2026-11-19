@@ -1,6 +1,6 @@
 import { shadeUndersides } from './asset-kit.js';
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from '../vendor/addons/BufferGeometryUtils.js';
 
 const STRIDE_HIP = 0.33;
 
@@ -62,15 +62,13 @@ export function troopBuilder(animated = false, lowDetail = false) {
   function add(geometry, color, position = [0, 0, 0], rotation = [0, 0, 0], leg = 0) {
     geometry.rotateX(rotation[0]).rotateY(rotation[1]).rotateZ(rotation[2]);
     geometry.translate(...position);
-    let g = geometry;
-    if (g.index) { g = geometry.toNonIndexed(); geometry.dispose(); }
     // Sculpted surfaces carry a soft baked shade; keep it under the part color.
-    const shade = g.attributes.color;
-    for (const name of Object.keys(g.attributes)) {
-      if (name !== 'position' && name !== 'normal' && name !== 'color') g.deleteAttribute(name);
+    const shade = geometry.attributes.color;
+    for (const name of Object.keys(geometry.attributes)) {
+      if (name !== 'position' && name !== 'normal' && name !== 'color') geometry.deleteAttribute(name);
     }
     const tint = new THREE.Color(color);
-    const p = g.attributes.position;
+    const p = geometry.attributes.position;
     const colors = new Float32Array(p.count * 3);
     const stride = animated ? new Float32Array(p.count * 3) : null;
     for (let i = 0; i < p.count; i++) {
@@ -83,9 +81,15 @@ export function troopBuilder(animated = false, lowDetail = false) {
         stride.set([leg, STRIDE_HIP / Math.max(radius, 0.0001), 1], i * 3);
       }
     }
-    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    if (animated) g.setAttribute('unitStride', new THREE.BufferAttribute(stride, 3));
-    parts.push(g);
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    if (animated) geometry.setAttribute('unitStride', new THREE.BufferAttribute(stride, 3));
+    // Keep the sculpt's original indices. Weld triangle soup only when all
+    // attributes agree, so hard normals and painted armor seams stay crisp.
+    if (geometry.index) parts.push(geometry);
+    else {
+      parts.push(mergeVertices(geometry, 1e-7));
+      geometry.dispose();
+    }
   }
   return {
     add,
@@ -185,9 +189,8 @@ float unitStrideAngle() {
   #endif
   return sin(phase) * unitStride.x * 0.43 * uTroopStride * movement;
 }
-vec2 unitStrideRotate(vec2 value, float angle) {
-  float s = sin(angle), c = cos(angle);
-  return vec2(c * value.x - s * value.y, s * value.x + c * value.y);
+vec2 unitStrideRotate(vec2 value, vec2 rotation) {
+  return vec2(rotation.x * value.x - rotation.y * value.y, rotation.y * value.x + rotation.x * value.y);
 }
 `;
 
@@ -200,18 +203,23 @@ function patchMotionMaterial(material, stride) {
     shader.uniforms.uTroopStride = stride;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${STRIDE_SHADER}`)
+      .replace('void main() {', `void main() {
+        vec2 strideRotation = vec2(1.0, 0.0);
+        if (unitStride.x != 0.0) {
+          float angle = unitStrideAngle();
+          strideRotation = vec2(cos(angle), sin(angle));
+        }`)
       .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
-        objectNormal.yz = unitStrideRotate(objectNormal.yz, unitStrideAngle());`)
+        objectNormal.yz = unitStrideRotate(objectNormal.yz, strideRotation);`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         if (unitStride.x != 0.0) {
-          float stepAngle = unitStrideAngle();
           float hipHeight = length(position) * unitStride.y;
-          transformed.yz = unitStrideRotate(transformed.yz - vec2(hipHeight, 0.0), stepAngle) + vec2(hipHeight, 0.0);
-          transformed.y += abs(sin(stepAngle)) * hipHeight * 0.22;
+          transformed.yz = unitStrideRotate(transformed.yz - vec2(hipHeight, 0.0), strideRotation) + vec2(hipHeight, 0.0);
+          transformed.y += abs(strideRotation.y) * hipHeight * 0.22;
         }`);
   };
   material.customProgramCacheKey = function() {
-    return `${previousKey.call(this)}|surge-infantry-stride-v2`;
+    return `${previousKey.call(this)}|surge-infantry-stride-v3`;
   };
   material.needsUpdate = true;
 }
