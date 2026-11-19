@@ -36,7 +36,7 @@ const UP = `
 const COMPOSITE = `
   varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tBloom;
   uniform float uBloom; uniform float uVignette; uniform float uPunch; uniform vec3 uFlash;
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  float dither(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
   void main() {
     vec2 d = vUv - 0.5;
     vec3 c;
@@ -46,15 +46,15 @@ const COMPOSITE = `
       c = vec3(texture2D(tScene, vUv + o).r, texture2D(tScene, vUv).g, texture2D(tScene, vUv - o).b);
     } else c = texture2D(tScene, vUv).rgb;
     // Screen blending keeps bright scenes from clipping to white.
-    c = 1.0 - (1.0 - c) * (1.0 - min(vec3(1.0), texture2D(tBloom, vUv).rgb * uBloom));
+    if (uBloom > 0.0) c += (1.0 - c) * min(vec3(1.0), texture2D(tBloom, vUv).rgb * uBloom);
     float edge = smoothstep(0.32, 0.86, length(d * vec2(1.0, 0.92)));
     c *= 1.0 - uVignette * edge;
     c += uFlash * edge;
-    c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+    c += (dither(gl_FragCoord.xy) - 0.5) / 255.0;
     gl_FragColor = vec4(c, 1.0);
   }`;
 
-export function createPostFX(renderer) {
+export function createPostFX(renderer, { compactBloom = false } = {}) {
   const scene = new THREE.Scene(), camera = new THREE.Camera();
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
@@ -76,17 +76,19 @@ export function createPostFX(renderer) {
   // mapping and sRGB encoding it uses for the canvas (render targets normally skip both).
   const sceneTarget = new THREE.WebGLRenderTarget(4, 4, {
     samples: Math.min(4, renderer.capabilities.maxSamples), depthBuffer: true, colorSpace: THREE.SRGBColorSpace,
+    // The composite only samples color. Discard MSAA depth after the scene pass.
+    resolveDepthBuffer: false, storeMultisampledDepthBuffer: false,
     minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
   });
   sceneTarget.isXRRenderTarget = true;
   // Store the encoded bytes as they are; an sRGB attachment would encode them a second time.
   sceneTarget.texture.internalFormat = 'RGBA8';
-  const LEVELS = 5;
+  const LEVELS = compactBloom ? 4 : 5;
   const mips = Array.from({ length: LEVELS }, () => new THREE.WebGLRenderTarget(2, 2, {
     depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
   }));
   const size = new THREE.Vector2();
-  let levels = LEVELS;
+  let levels = 0;
   const state = { glow: true, strength: 0.5, punch: 0 };
   function draw(material, target) {
     quad.material = material;
@@ -95,11 +97,14 @@ export function createPostFX(renderer) {
   }
   function setSize() {
     renderer.getDrawingBufferSize(size);
-    const w = Math.max(4, size.x), h = Math.max(4, size.y);
+    const w = Math.max(1, size.x), h = Math.max(1, size.y);
     if (sceneTarget.width === w && sceneTarget.height === h) return;
     sceneTarget.setSize(w, h);
     levels = 0;
-    for (let i = 0, mw = w, mh = h; i < LEVELS; i++) {
+    // Skip the largest blur surface on touch screens. The scene stays at
+    // drawing-buffer size and the smallest mip covers the same halo radius.
+    const shift = compactBloom ? 1 : 0;
+    for (let i = 0, mw = w >> shift, mh = h >> shift; i < LEVELS; i++) {
       mw = Math.max(2, mw >> 1); mh = Math.max(2, mh >> 1);
       mips[i].setSize(mw, mh);
       if (Math.min(mw, mh) >= 8) levels = i + 1;
@@ -111,10 +116,13 @@ export function createPostFX(renderer) {
     renderer.setRenderTarget(sceneTarget);
     renderer.render(world, view);
     const bloom = state.glow && state.strength > 0.01 && levels > 1;
+    // Every post pass overwrites its viewport, except the upsample which blends
+    // over an existing mip. The canvas also needs no separate clear.
+    renderer.autoClear = false;
     if (bloom) {
-      renderer.autoClear = false;
       prefilter.uniforms.tMap.value = sceneTarget.texture;
-      prefilter.uniforms.uTexel.value.set(0.5 / sceneTarget.width, 0.5 / sceneTarget.height);
+      const footprint = compactBloom ? 1 : 0.5;
+      prefilter.uniforms.uTexel.value.set(footprint / sceneTarget.width, footprint / sceneTarget.height);
       draw(prefilter, mips[0]);
       for (let i = 1; i < levels; i++) {
         down.uniforms.tMap.value = mips[i - 1].texture;
@@ -128,13 +136,13 @@ export function createPostFX(renderer) {
         up.uniforms.uTexel.value.set(0.5 / mips[i].width, 0.5 / mips[i].height);
         draw(up, mips[i - 1]);
       }
-      renderer.autoClear = clear;
     }
     composite.uniforms.tScene.value = sceneTarget.texture;
     composite.uniforms.tBloom.value = mips[0].texture;
     composite.uniforms.uBloom.value = bloom ? state.strength : 0;
     composite.uniforms.uPunch.value = state.punch;
     draw(composite, null);
+    renderer.autoClear = clear;
   }
   return {
     render, setSize, state,

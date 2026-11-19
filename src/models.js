@@ -532,7 +532,10 @@ export function buildWorld(theme, len) {
   if (luminance > .38) groundColor.multiplyScalar((.38 + .28 * (luminance - .38)) / luminance);
   // Extend past the roadside so the last boss sees a fully fogged horizon.
   const ground = mesh(new THREE.PlaneGeometry(800, total + 320), lam(groundColor.getHex()), 0, -0.04, zc, false);
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; g.add(ground);
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+  // Shade the road first so the covered ground pixels fail depth testing.
+  ground.renderOrder = 1;
+  g.add(ground);
   const road = mesh(new THREE.PlaneGeometry(15, total), lam(T.road), 0, 0, zc, false);
   road.rotation.x = -Math.PI / 2; road.receiveShadow = true; g.add(road);
   // A printed road surface gives the arena scale without another asset request.

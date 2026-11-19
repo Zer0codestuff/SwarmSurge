@@ -12,6 +12,7 @@ import { attackMarker } from './attack-markers.js';
 import { bossProjectile } from './boss-projectiles.js';
 import { buildBoss2 } from './bosses.js';
 import * as W from './worlds.js';
+import { chunkScenery } from './scenery-batches.js';
 import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPECS, CHASSIS_IDS, AIRCRAFT_SPECS, ABILITY_SPECS, chassisReward, sweptCircle } from './arsenal.js';
 import { biomeArt, campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
@@ -25,6 +26,7 @@ import { createTitleScreen } from './title-scene.js';
 import { LATE_LIGHTS } from './biomes-late.js';
 import * as PL from './props-late.js';
 import { createPostFX } from './postfx.js';
+import { useCompactShadowFilter } from './shadow-filter.js';
 import { prefs } from './settings.js';
 
 // ---------------------------------------------------------------- constants
@@ -89,21 +91,20 @@ const fmtHp = (n) => (n < 100000 ? String(Math.max(0, Math.ceil(n))) : fmt(n));
 const canvas = document.getElementById('c');
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-// The scene is drawn into a multisampled target (see postfx.js), so the canvas itself needs no MSAA.
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-// Reduce mobile resolution only when frame timing shows sustained load.
-const maxPixelRatio = Math.min(devicePixelRatio, isTouch ? 1.75 : 2);
-const minPixelRatio = Math.min(1, maxPixelRatio);
-renderer.setPixelRatio(maxPixelRatio);
+// Only the multisampled scene target needs depth. The canvas is a fullscreen composite.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, depth: false, powerPreference: 'high-performance' });
+// The touch rendering scale is fixed at its full quality cap.
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.75 : 2));
 // Reading a link log forces the driver to finish every new program synchronously, which
 // shows up as a hitch the first time an effect appears. `?shaderdebug=1` restores the check.
 renderer.debug.checkShaderErrors = params.has('shaderdebug');
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+if (isTouch) useCompactShadowFilter();
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 renderer.info.autoReset = false; // one frame spans several passes
-const post = createPostFX(renderer);
+const post = createPostFX(renderer, { compactBloom: isTouch });
 prefs.watch('glow', (on) => { post.state.glow = on; });
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 400);
@@ -113,6 +114,20 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 42, bottom: -42, near: 1, far: 140 });
 sun.shadow.bias = -0.0008;
+sun.shadow.autoUpdate = !isTouch;
+const SHADOW_REFRESH_MS = 1000 / 30;
+let shadowFrame = -Infinity, shadowStage, shadowPhase;
+
+function drawBattlefield(now, forceShadow = false) {
+  if (isTouch && (forceShadow || G.stage !== shadowStage || G.phase !== shadowPhase
+      || now - shadowFrame >= SHADOW_REFRESH_MS - 0.75)) {
+    sun.shadow.needsUpdate = true;
+    shadowFrame = now;
+    shadowStage = G.stage;
+    shadowPhase = G.phase;
+  }
+  post.render(scene, camera);
+}
 scene.add(hemi, sun, sun.target);
 const sky = FX.buildSky();
 scene.add(sky);
@@ -135,7 +150,9 @@ function resize() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   updateGlowScale();
-  if (sceneReady && G.paused && G.phase !== 'menu') { renderWorld(0); renderer.info.reset(); post.render(scene, camera); }
+  if (sceneReady && G.phase !== 'menu' && (G.paused || settledResult())) {
+    renderWorld(0); renderer.info.reset(); drawBattlefield(performance.now(), true);
+  }
 }
 addEventListener('resize', resize);
 resize();
@@ -323,7 +340,11 @@ function buildGrid(g, P) {
 }
 // coarse grid: used for "where is the nearest group of enemies" steering
 const CC = 4, CCOLS = 5, CROWS = 21;
-function makeCoarse() { return { cnt: new Float32Array(CCOLS * CROWS), sx: new Float32Array(CCOLS * CROWS), sz: new Float32Array(CCOLS * CROWS) }; }
+function makeCoarse() {
+  const cells = CCOLS * CROWS;
+  return { cnt: new Float32Array(cells), sx: new Float32Array(cells), sz: new Float32Array(cells),
+    x: new Float64Array(cells), z: new Float64Array(cells) };
+}
 const cB = makeCoarse(), cR = makeCoarse();
 const ccX = (x) => clamp(((x + 10) / CC) | 0, 0, CCOLS - 1);
 const ccZ = (z) => clamp(((G.z0 - z + 8) / CC) | 0, 0, CROWS - 1);
@@ -334,6 +355,11 @@ function buildCoarse(C, P) {
     const c = ccZ(P.z[i]) * CCOLS + ccX(P.x[i]);
     C.cnt[c]++; C.sx[c] += P.x[i]; C.sz[c] += P.z[i];
   }
+  // Resolve occupied cell centroids once, instead of dividing for every
+  // troop that searches the same cell. Preserve the original sum precision.
+  for (let c = 0; c < C.cnt.length; c++) if (C.cnt[c]) {
+    C.x[c] = C.sx[c] / C.cnt[c]; C.z[c] = C.sz[c] / C.cnt[c];
+  }
 }
 let TX = 0, TZ = 0;
 function seek(C, x, z, maxD, dir) {
@@ -343,9 +369,9 @@ function seek(C, x, z, maxD, dir) {
     if (gz < 0 || gz >= CROWS) continue;
     for (let gx = cx - 1; gx <= cx + 1; gx++) {
       if (gx < 0 || gx >= CCOLS) continue;
-      const c = gz * CCOLS + gx, n = C.cnt[c];
-      if (!n) continue;
-      const mx = C.sx[c] / n, mz = C.sz[c] / n;
+      const c = gz * CCOLS + gx;
+      if (!C.cnt[c]) continue;
+      const mx = C.x[c], mz = C.z[c];
       if (dir < 0 ? mz > z + 1 : mz < z - 1) continue;
       const d2 = (mx - x) ** 2 + (mz - z) ** 2;
       if (d2 < best) { best = d2; TX = mx; TZ = mz; found = true; }
@@ -916,9 +942,10 @@ function startLevel(idx, stageIdx = 0, hardcore = false) {
   const world = M.buildWorld(def.theme, def.stages.length * STAGE_GAP);
   W.decorate(def.theme, world, def.stages.length * STAGE_GAP);
   G.root.add(world);
+  if (isTouch) chunkScenery(world);
   // Ground, road and scenery never move: compose their matrices once instead of every frame.
   world.updateMatrixWorld(true);
-  world.traverse((o) => { o.matrixAutoUpdate = false; });
+  world.traverse((o) => { o.matrixAutoUpdate = o.matrixWorldAutoUpdate = false; });
   G.stages = def.stages.map((sd, i) => buildStage(sd, i, G.root, def.theme));
   for (let i = 0; i < stageIdx; i++) if (G.stages[i].tower) { G.stages[i].tower.alive = false; G.stages[i].tower.model.group.visible = false; }
   B.n = R.n = 0;
@@ -1788,11 +1815,12 @@ function indexGateBands(S) {
   for (const band of gateBands) band.length = 0;
   for (const g of S.gates) gateBands[ccZ(g.z)].push(g);
 }
-function moveBlue(S, dt) {
+function moveBlue(S, dt, indexed = false) {
+  if (!indexed && B.n) indexGateBands(S);
   const boss = S.boss && S.boss.alive ? S.boss : null;
   const tower = S.tower && S.tower.alive ? S.tower : null;
   const late = S.bumpers.length + S.carts.length + S.eggs.length + S.fusions.length > 0;
-  if (B.n) indexGateBands(S);
+
   const k = Math.min(1, dt * 5), halt = G.phase === 'clear' || G.phase === 'won';
   for (let i = 0; i < B.n; i++) {
     if (B.hp[i] <= 0) continue;
@@ -1906,7 +1934,8 @@ function moveBlue(S, dt) {
   }
 }
 
-function moveRed(S, dt) {
+function moveRed(S, dt, indexed = false) {
+  if (!indexed && R.n) indexGateBands(S);
   const k = Math.min(1, dt * 4);
   for (let i = 0; i < R.n; i++) {
     if (R.hp[i] <= 0) continue;
@@ -1958,7 +1987,8 @@ function moveRed(S, dt) {
     z += R.vz[i] * dt + clamp(pzs, -0.06, 0.06);
     if (!T.fly) for (const bt of S.belts) if (z > bt.zTop && z < bt.zBot && Math.abs(x - bt.x) < bt.w / 2) x += bt.v * dt;
     x = clamp(x, -XLIM, XLIM);
-    for (const g of S.gates) {
+    const band = ccZ(z), crossed = ccZ(R.pz[i]) === band ? gateBands[band] : S.gates;
+    for (const g of crossed) {
       if (!g.alive || !g.on || !(R.pz[i] < g.z && z >= g.z) || Math.abs(x - g.x) > g.w / 2) continue;
       if (g.def.t === 'hypno') { if (g.active) { hypnotize(g, i, x, z); break; } continue; }
       if (!REDGATES.has(g.def.t)) continue;
@@ -3242,8 +3272,9 @@ function step(dt) {
   updateEffects(dt);
   buildCoarse(cB, B); buildCoarse(cR, R);
   buildGrid(gB, B); buildGrid(gR, R);
-  moveBlue(S, dt);
-  moveRed(S, dt);
+  if (B.n || R.n) indexGateBands(S);
+  moveBlue(S, dt, true);
+  moveRed(S, dt, true);
   buildGrid(gR, R);
   combat();
   if (G.phase === 'play') { updateArsenal(S, dt); updateAbility(S, dt); }
@@ -3370,6 +3401,20 @@ function lose(msg) {
 
 // ---------------------------------------------------------------- rendering
 let troopPixelScale = 1;
+const troopFrustum = new THREE.Frustum(), troopViewProjection = new THREE.Matrix4();
+const troopBounds = new THREE.Box3();
+
+function troopInView(frustum, pool, index) {
+  const scale = pool.sc[index], x = pool.x[index], z = pool.z[index];
+  const extent = 2 * scale, flight = pool.adur[index];
+  const top = 3 * scale + (flight > 0 ? 2.5 + 4 * flight : 0);
+  // Include the longest projection of the unit's shadow on the ground.
+  // The battle sun is always offset by +12 on x and +30 on z,
+  // at a height of 34. Keep an extra unit for the shadow filter.
+  troopBounds.min.set(x - extent - top * (12 / 34) - 1, -1, z - extent - top * (30 / 34) - 1);
+  troopBounds.max.set(x + extent + 1, top, z + extent + 1);
+  return frustum.intersectsBox(troopBounds);
+}
 function troopInstance(P, i, near, far) {
   const dx = P.x[i] - camera.position.x, dz = P.z[i] - camera.position.z;
   const distanceSq = Math.max(1, dx*dx + camera.position.y*camera.position.y + dz*dz);
@@ -3412,7 +3457,7 @@ function copyTroopPose(mesh, source, index) {
   const at = mesh.count++ * 16, from = index * 16, target = mesh.instanceMatrix.array;
   for (let k = 0; k < 16; k++) target[at+k] = source[from+k];
 }
-function writeBlue() {
+function writeBlue(frustum) {
   for (const form of blueForms) form.near.count = form.far.count = 0;
   for (let k = 1; k < weaponMeshes.length; k++) weaponMeshes[k].count = weaponFarMeshes[k].count = 0;
   const rb = ((G.t * 5) | 0) % 32;
@@ -3420,6 +3465,7 @@ function writeBlue() {
   for (let i = 0; i < B.n; i++) {
     const hp = B.hp[i], s = B.sc[i], tier = rankOf(hp);
     topRank = Math.max(topRank, tier);
+    if (frustum && !troopInView(frustum, B, i)) continue;
     const special = specialForm(B.kind[i]);
     const col = specialTint(special) ?? (tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : (B.kind[i] & GIANT) && tier < 2 ? GIANT_RGB : TIER_RGB[tier]);
     const form = special == null ? FORM_BY_RANK[tier] : blueForms[special];
@@ -3473,13 +3519,14 @@ function addUnitGlow(matrix, index, x, y, z, color, size, alpha) {
     color, size, alpha,
   );
 }
-function writeRed() {
+function writeRed(frustum) {
   redMesh.count = redFarMesh.count = 0;
   for (const mesh of overlayMeshes) mesh.count = 0;
   let labels = 0, specialGlow = 0;
   for (let i = 0; i < R.n; i++) {
     const kind = R.kind[i], col = R.chill[i] > 0 ? TIER_RGB[1] : R.burn[i] > 0 ? TIER_RGB[6] : RED_RGB[kind];
     if (R.st[i]) { R.vx[i] = 0; R.vz[i] = 0.01; }
+    if (frustum && !troopInView(frustum, R, i)) continue;
     const body = troopInstance(R, i, redMesh, redFarMesh), index = body.count - 1;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
     const f = Math.max(0, R.flash[i]) * 0.75;
@@ -3797,9 +3844,15 @@ function renderWorld(dt) {
   }
 
   troopPixelScale = innerHeight * 1.2 / (2 * Math.tan(camera.fov * Math.PI / 360));
+  let frustum;
+  if (isTouch && B.n + R.n > 80) {
+    camera.updateMatrixWorld();
+    troopViewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum = troopFrustum.setFromProjectionMatrix(troopViewProjection);
+  }
   halos.begin();
-  writeBlue();
-  writeRed();
+  writeBlue(frustum);
+  writeRed(frustum);
   halos.end();
   updateParticles(dt);
   updatePopups(dt);
@@ -4157,35 +4210,6 @@ if (!TURBO) for (const type of ['pointerdown', 'keydown']) addEventListener(type
 
 // ---------------------------------------------------------------- main loop
 let last = performance.now(), acc = 0, fpsAcc = 0, fpsN = 0;
-let qualityTime = 0, qualityFrames = 0, qualityThirtyFrames = 0, qualityGoodWindows = 0;
-function resetQualitySample() { qualityTime = qualityFrames = qualityThirtyFrames = 0; }
-function updateMobileQuality(dt) {
-  // Ignore suspension and long interruptions rather than treating them as GPU load.
-  if (dt <= 0 || dt > 0.25) { resetQualitySample(); qualityGoodWindows = 0; return; }
-  qualityTime += dt; qualityFrames++;
-  if (dt >= 0.027 && dt <= 0.040) qualityThirtyFrames++;
-  if (qualityTime < 3) return;
-  const fps = qualityFrames / qualityTime;
-  const current = renderer.getPixelRatio();
-  let next = current;
-  // A steady 30 Hz display is indistinguishable from a steady 30 fps workload.
-  // Preserve sharpness in that case; only react to less regular slow frames.
-  const steadyThirty = fps >= 27 && fps <= 33 && qualityThirtyFrames / qualityFrames >= 0.8;
-  // Glow is the first thing to go under load and the last to return.
-  if (fps < 45 && !steadyThirty) {
-    if (post.state.glow) post.state.glow = false;
-    else next = Math.max(minPixelRatio, current - 0.25);
-    qualityGoodWindows = 0;
-  } else if (fps > 56 || steadyThirty) {
-    if (++qualityGoodWindows >= 4) {
-      if (current < maxPixelRatio) next = Math.min(maxPixelRatio, current + 0.25);
-      else post.state.glow = prefs.get('glow');
-      qualityGoodWindows = 0;
-    }
-  } else qualityGoodWindows = 0;
-  resetQualitySample();
-  if (next !== current) { renderer.setPixelRatio(next); updateGlowScale(); }
-}
 // The simulation runs at 60 Hz, so drawing faster on 90 to 144 Hz screens mostly repeats
 // the same state. Skipping callbacks under 9 ms renders 120 Hz screens at 60 fps.
 const MIN_FRAME_MS = 9;
@@ -4204,6 +4228,12 @@ function updateMusic() {
   music.setIntensity(heat);
   music.tick();
 }
+// The results UI can stay open indefinitely. Let the last fireworks and
+// debris settle, then leave the completed frame on the canvas.
+function settledResult() {
+  return G.shown && (G.phase === 'won' && G.phaseT >= (reducedMotion ? 4 : 10)
+    || G.phase === 'lost' && G.phaseT >= 4);
+}
 function frame(now) {
   requestAnimationFrame(frame);
   if (!TURBO && now - last < MIN_FRAME_MS) return;
@@ -4216,11 +4246,10 @@ function frame(now) {
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { G.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
   // The map is opaque, so rendering the battlefield behind it only spends GPU time.
-  if (G.phase === 'menu' || G.paused) {
-    acc = 0; resetQualitySample(); qualityGoodWindows = 0;
+  if (G.phase === 'menu' || G.paused || settledResult()) {
+    acc = 0; shadowFrame = -Infinity;
     return;
   }
-  if (isTouch && !TURBO) updateMobileQuality(elapsed);
   if (TURBO) {
     // headless balance testing: burn ~30ms of CPU per frame on simulation, render nothing
     const t0 = performance.now();
@@ -4249,7 +4278,7 @@ function frame(now) {
       renderWorld(dt * SPEED * slow);
     }
   }
-  post.render(scene, camera);
+  drawBattlefield(now);
 }
 
 // Build the battlefield only when a run starts. Opening the map must not consume onboarding.
