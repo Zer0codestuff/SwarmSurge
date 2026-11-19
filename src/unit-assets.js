@@ -129,6 +129,25 @@ export function troopBuilder(animated = false, lowDetail = false) {
   };
 }
 
+// At the touch shadow map's texel density, the head, shoulders and gaps
+// between limbs are the features that survive filtering.
+export function troopShadowGeometry(body, winged = false) {
+  const builder = troopBuilder(true, true);
+  const add = (width, height, depth, x, y, z, stride = 0) => {
+    const shape = new THREE.SphereGeometry(1, 5, 3).scale(width, height, depth);
+    builder.add(shape, 0xffffff, [x, y, z], undefined, stride);
+  };
+  const height = body.boundingBox.max.y / 1.2;
+  add(.20, .19, .17, 0, height * .77, 0);
+  add(.23, .22, .16, 0, .52, 0);
+  for (const side of [-1, 1]) {
+    add(.08, .16, .11, side * .25, .47, .09);
+    add(.085, .20, .11, side * .113, .19, .036, side);
+    if (winged) add(.23, .13, .06, side * .27, .75, -.15);
+  }
+  return builder.finish().scale(1.2, 1.2, 1.2);
+}
+
 function spectralWisp(points, radius) {
   const path = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
   const steps = 8, sides = 4;

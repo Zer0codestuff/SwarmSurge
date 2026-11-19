@@ -17,7 +17,7 @@ import { RANKS, rankOf, WEAPONS, WEAPON_SPECS, WEAPON_IDS, CHASSIS, CHASSIS_SPEC
 import { biomeArt, campaignProgress, renderCampaignMap } from './map.js';
 import { createTutorials } from './tutorials.js';
 import { BOSS_CARDS } from './boss-cards.js';
-import { installTroopMotion, updateTroopMotion, ghostKitGeometry } from './unit-assets.js';
+import { installTroopMotion, updateTroopMotion, ghostKitGeometry, troopShadowGeometry } from './unit-assets.js';
 import { TREAD_PITCH } from './conveyor-assets.js';
 import { createSupplyDrop, callSupplyDrop, stepSupplyDrop, supplyMessage, poseSupplyDrop } from './supply-drop.js';
 import { newReactor, chargePower, triggerReactor, tickReactor, VENT_TIME, BURST_TIME } from './reactor.js';
@@ -192,28 +192,32 @@ for (const mesh of troopMeshes) {
   mesh.customDepthMaterial = mesh.material.userData.troopMotion.depthMaterial;
   mesh.customDistanceMaterial = mesh.material.userData.troopMotion.distanceMaterial;
 }
-// Near troops cast their shadow with the far geometry: a third of the triangles and the
-// same silhouette. The proxy shares the near instances and lives on a layer that only
-// the shadow camera renders.
+// Proxies borrow the visible batches' transforms and stride buffers.
 const SHADOW_ONLY_LAYER = 1;
 sun.shadow.camera.layers.enable(SHADOW_ONLY_LAYER);
-function addShadowProxy(near, far) {
+function addShadowProxy(mesh, silhouette) {
   const geometry = new THREE.BufferGeometry();
-  for (const [name, attribute] of Object.entries(far.geometry.attributes)) geometry.setAttribute(name, attribute);
-  geometry.setAttribute('unitMotion', near.geometry.attributes.unitMotion);
-  geometry.setIndex(far.geometry.index);
-  const proxy = new THREE.InstancedMesh(geometry, near.material, 0);
-  proxy.instanceMatrix = near.instanceMatrix;
-  proxy.customDepthMaterial = near.customDepthMaterial;
-  proxy.customDistanceMaterial = near.customDistanceMaterial;
+  geometry.setAttribute('position', silhouette.attributes.position);
+  geometry.setAttribute('unitStride', silhouette.attributes.unitStride);
+  geometry.setAttribute('unitMotion', mesh.geometry.attributes.unitMotion);
+  geometry.setIndex(silhouette.index);
+  const proxy = new THREE.InstancedMesh(geometry, mesh.material, 0);
+  proxy.instanceMatrix = mesh.instanceMatrix;
+  proxy.customDepthMaterial = mesh.customDepthMaterial;
+  proxy.customDistanceMaterial = mesh.customDistanceMaterial;
   proxy.castShadow = true; proxy.frustumCulled = false; proxy.visible = false;
   proxy.layers.set(SHADOW_ONLY_LAYER);
-  near.castShadow = false;
-  near.userData.shadowProxy = proxy;
+  mesh.castShadow = false;
+  mesh.userData.shadowProxy = proxy;
   scene.add(proxy);
 }
-for (const form of blueForms) addShadowProxy(form.near, form.far);
-addShadowProxy(redMesh, redFarMesh);
+function troopShadows(near, far, winged = false) {
+  const silhouette = isTouch ? troopShadowGeometry(far.geometry, winged) : far.geometry;
+  addShadowProxy(near, silhouette);
+  if (isTouch) addShadowProxy(far, silhouette);
+}
+blueForms.forEach(({ near, far }, form) => troopShadows(near, far, form === SUNWING_FORM || TROOP_FORMS[form] === 'Ascended'));
+troopShadows(redMesh, redFarMesh);
 // Enemy kits follow their body's detail level; spikes and ghost kits are already light.
 const gearMesh = (geometry) => instanced(geometry.scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false);
 const overlays = {}, overlaysFar = {};
@@ -3437,9 +3441,9 @@ function finishTroopMeshes(near, far) {
     uploadUsed(mesh.instanceMatrix, mesh.count);
     uploadUsed(mesh.instanceColor, mesh.count);
     uploadUsed(mesh.geometry.attributes.unitMotion, mesh.count);
+    const proxy = mesh.userData.shadowProxy;
+    if (proxy) { proxy.count = mesh.count; proxy.visible = mesh.visible; }
   }
-  const proxy = near.userData.shadowProxy;
-  proxy.count = near.count; proxy.visible = near.visible;
 }
 function specialForm(kind) {
   if (kind & AEGIS) return AEGIS_FORM;

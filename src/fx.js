@@ -383,11 +383,13 @@ export class Debris {
     this.N = N; this.head = 0;
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), N);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3).fill(1), 3);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3).setUsage(THREE.DynamicDrawUsage);
+    this.mesh.count = 0; this.mesh.visible = false;
     this.mesh.castShadow = true;
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
     this.p = new Float32Array(N * 3); this.v = new Float32Array(N * 3); this.r = new Float32Array(N * 3); this.w = new Float32Array(N * 3);
+    this.colors = new Float32Array(N * 3);
     this.s = new Float32Array(N); this.life = new Float32Array(N);
     this.q = new THREE.Quaternion(); this.e = new THREE.Euler(); this.m4 = new THREE.Matrix4(); this.v3 = new THREE.Vector3(); this.sc = new THREE.Vector3();
   }
@@ -401,35 +403,35 @@ export class Debris {
       this.s[i] = size * (0.5 + Math.random());
       this.life[i] = 2.2 + Math.random();
       const c = colors[k % colors.length];
-      this.mesh.instanceColor.setXYZ(i, c[0], c[1], c[2]);
+      this.colors.set(c, i * 3);
     }
-    this.mesh.instanceColor.needsUpdate = true;
   }
   update(dt) {
-    let any = false;
+    let count = 0;
     if (!this.mesh.visible && !this.life.some(life => life > 0)) return;
     for (let i = 0; i < this.N; i++) {
-      let s = 0;
-      if (this.life[i] > 0) {
-        any = true;
-        this.life[i] -= dt;
-        this.v[i * 3 + 1] -= 22 * dt;
-        for (let j = 0; j < 3; j++) { this.p[i * 3 + j] += this.v[i * 3 + j] * dt; this.r[i * 3 + j] += this.w[i * 3 + j] * dt; }
-        if (this.p[i * 3 + 1] < this.s[i] * 0.5) {
-          this.p[i * 3 + 1] = this.s[i] * 0.5; this.v[i * 3 + 1] *= -0.35;
-          this.v[i * 3] *= 0.6; this.v[i * 3 + 2] *= 0.6; for (let j = 0; j < 3; j++) this.w[i * 3 + j] *= 0.6;
-        }
-        s = this.s[i] * Math.min(1, this.life[i] * 1.5);
+      if (this.life[i] <= dt) { this.life[i] = 0; continue; }
+      this.life[i] -= dt;
+      this.v[i * 3 + 1] -= 22 * dt;
+      for (let j = 0; j < 3; j++) { this.p[i * 3 + j] += this.v[i * 3 + j] * dt; this.r[i * 3 + j] += this.w[i * 3 + j] * dt; }
+      if (this.p[i * 3 + 1] < this.s[i] * 0.5) {
+        this.p[i * 3 + 1] = this.s[i] * 0.5; this.v[i * 3 + 1] *= -0.35;
+        this.v[i * 3] *= 0.6; this.v[i * 3 + 2] *= 0.6;
+        for (let j = 0; j < 3; j++) this.w[i * 3 + j] *= 0.6;
       }
+      const s = this.s[i] * Math.min(1, this.life[i] * 1.5);
       this.e.set(this.r[i * 3], this.r[i * 3 + 1], this.r[i * 3 + 2]);
       this.q.setFromEuler(this.e);
       this.m4.compose(this.v3.set(this.p[i * 3], this.p[i * 3 + 1], this.p[i * 3 + 2]), this.q, this.sc.set(s, s, s));
-      this.mesh.setMatrixAt(i, this.m4);
+      this.mesh.setMatrixAt(count, this.m4);
+      const offset = i * 3;
+      this.mesh.instanceColor.setXYZ(count++, this.colors[offset], this.colors[offset + 1], this.colors[offset + 2]);
     }
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.mesh.visible = any;
+    uploadUsed(this.mesh.instanceMatrix, count);
+    uploadUsed(this.mesh.instanceColor, count);
+    this.mesh.count = count; this.mesh.visible = count > 0;
   }
-  clear() { this.life.fill(0); }
+  clear() { this.life.fill(0); this.mesh.count = 0; this.mesh.visible = false; }
 }
 
 // Break a model into spatial chunks. Asset meshes are batched by material, so moving
