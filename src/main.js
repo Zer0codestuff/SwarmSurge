@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LEVELS, THEMES } from './levels.js';
 import * as M from './models.js';
+import { params, TURBO, canvas, isTouch, reducedMotion, RENDER_SCALE_KEY, renderer, post, gpuTimer, sound, renderScale, createScaleGovernor, applyRenderScale, setScaleHook } from './runtime.js';
 import { Sound } from './sound.js';
 import { Music } from './music.js';
 import { CRUSH_SECONDS, MEDALS, SWIFT_SECONDS, clock, loadRecords, medalTotal, medalsOf, recordRun, saveRecords } from './records.js';
@@ -25,15 +26,11 @@ import { AEGIS_FORM, SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, en
 import { createTitleScreen } from './title-scene.js';
 import { LATE_LIGHTS } from './biomes-late.js';
 import * as PL from './props-late.js';
-import { createPostFX } from './postfx.js';
-import { createRenderScale, createGpuTimer } from './render-scale.js';
-import { useCompactShadowFilter } from './shadow-filter.js';
+
 import { prefs } from './settings.js';
 
 // ---------------------------------------------------------------- constants
-const params = new URLSearchParams(location.search);
 const SPEED = Math.min(50, Math.max(1, Number(params.get('speed')) || 1)); // test helper: fast-forward
-const TURBO = params.has('turbo'); // test helper: no rendering, simulate as fast as possible
 const STEP = 1 / 60;
 const STAGE_GAP = 80, TOWER_D = 58, SPAWN_D = 55, XLIM = 6.45, BASE_LIVES = 10;
 const MAX_BLUE = 1000, MAX_RED = 900, MAX_PART = 1800;
@@ -89,39 +86,7 @@ function fmt(n) {
 const fmtHp = (n) => (n < 100000 ? String(Math.max(0, Math.ceil(n))) : fmt(n));
 
 // ---------------------------------------------------------------- renderer / scene
-const canvas = document.getElementById('c');
-const isTouch = matchMedia('(pointer: coarse)').matches;
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-// Only the multisampled scene target needs depth. The canvas is a fullscreen composite.
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, depth: false, powerPreference: 'high-performance' });
-// The drawing buffer starts at the previous fixed quality (1.75x on touch, 2x on desktop) and
-// climbs toward the screen's native density, up to 3x, while frames keep their budget.
-const RENDER_SCALE_KEY = 'swarm-render-scale';
-let renderScale, pendingRatio = 0;
-function createScaleGovernor() {
-  let initial = 0;
-  try {
-    const stored = JSON.parse(localStorage.getItem(RENDER_SCALE_KEY));
-    if (stored?.dpr === devicePixelRatio) initial = +stored.ratio || 0;
-  } catch {}
-  const native = Math.min(devicePixelRatio, 3);
-  renderScale = createRenderScale({ floor: Math.min(native, isTouch ? 1.75 : 2), ceiling: native, initial });
-  renderScale.dpr = devicePixelRatio;
-}
-createScaleGovernor();
-renderer.setPixelRatio(renderScale.ratio);
-// Reading a link log forces the driver to finish every new program synchronously, which
-// shows up as a hitch the first time an effect appears. `?shaderdebug=1` restores the check.
-renderer.debug.checkShaderErrors = params.has('shaderdebug');
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
-useCompactShadowFilter();
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
-renderer.info.autoReset = false; // one frame spans several passes
-const post = createPostFX(renderer, { compactBloom: isTouch });
-const gpuTimer = renderScale.adaptive && !TURBO ? createGpuTimer(renderer.getContext()) : null;
-prefs.watch('glow', (on) => { post.state.glow = on; });
+let pendingRatio = 0;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 400);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8a9a, 1.7);
@@ -164,15 +129,7 @@ let labelBoundsDirty = true, labelTop = 110, labelBottom = innerHeight - 75;
 function updateGlowScale() {
   FX.setGlowScale((innerHeight * renderer.getPixelRatio()) / (2 * Math.tan((camera.fov * Math.PI) / 360)));
 }
-function applyRenderScale(ratio) {
-  // From 2.5x the pixels are fine enough that two samples smooth edges as four did at 1.75x,
-  // which halves the multisampled memory. Below native density the composite sharpens what
-  // the browser will stretch to the screen.
-  post.state.samples = ratio >= (isTouch ? 2 : 2.5) ? 2 : 4;
-  post.state.sharpen = Math.min(0.6, Math.max(0, 1 - ratio / devicePixelRatio) * 1.4);
-  renderer.setPixelRatio(ratio);
-  updateGlowScale();
-}
+setScaleHook(updateGlowScale);
 function resize() {
   labelBoundsDirty = true;
   if (renderScale.dpr !== devicePixelRatio) { createScaleGovernor(); pendingRatio = 0; applyRenderScale(renderScale.ratio); }
@@ -205,31 +162,11 @@ function instanced(geo, mat, n, shadow = true) {
 const unitMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 // Allied bodies change form with rank: bot, trooper, paladin, ascended.
 const blueMat = new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x0c3060, gradientMap: M.toonGradient() });
-// Each body has three detail levels: the full sculpt up close, the same parts at coarser
-// tessellation through the crowd, and the light body far away (`troopInstance`).
-const blueForms = TROOP_FORMS.map((_, form) => ({
-  near: instanced(troopFormGeometry(form).scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
-  mid: instanced(troopFormGeometry(form, 'mid').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
-  far: instanced(troopFormGeometry(form, 'low').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
-}));
 // Allied kind bits are inherited by gate copies and combined on pool overflow.
 const GIANT = 1, SUNWING = 2, AEGIS = 4;
 const AEGIS_RGB = rgb(0xd7fff0);
 const SWEEP_RADIUS = 1.9, COUNTER_WINDOW = .36, COUNTER_POWER = 6, COUNTER_VOLLEYS = 12;
 const SUNWING_RGB = rgb(0xffe4a2);
-const FORM_BY_RANK = RANKS.map((_, rank) => blueForms[troopForm(rank)]);
-const redMesh = instanced(M.redUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x400808, gradientMap: M.toonGradient() }), MAX_RED);
-const redMidMesh = instanced(M.redUnitGeo('mid').scale(1.2, 1.2, 1.2), redMesh.material, MAX_RED);
-const redFarMesh = instanced(M.redUnitGeo('low').scale(1.2, 1.2, 1.2), redMesh.material, MAX_RED);
-const redForm = { near: redMesh, mid: redMidMesh, far: redFarMesh };
-const troopMeshes = [...blueForms, redForm].flatMap(form => [form.near, form.mid, form.far]);
-for (const mesh of troopMeshes) {
-  mesh.geometry.setAttribute('unitMotion', new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count * 2), 2).setUsage(THREE.DynamicDrawUsage));
-  installTroopMotion(mesh.material);
-  mesh.customDepthMaterial = mesh.material.userData.troopMotion.depthMaterial;
-  mesh.customDistanceMaterial = mesh.material.userData.troopMotion.distanceMaterial;
-}
-// Proxies borrow the visible batches' transforms and stride buffers.
 const SHADOW_ONLY_LAYER = 1;
 sun.shadow.camera.layers.enable(SHADOW_ONLY_LAYER);
 function addShadowProxy(mesh, silhouette) {
@@ -254,22 +191,7 @@ function troopShadows({ near, mid, far }, winged = false) {
   addShadowProxy(mid, silhouette);
   addShadowProxy(far, silhouette);
 }
-blueForms.forEach((form, index) => troopShadows(form, index === SUNWING_FORM || TROOP_FORMS[index] === 'Ascended'));
-troopShadows(redForm);
-// Enemy kits follow their body's detail level; spikes and ghost kits are already light.
 const gearMesh = (geometry) => instanced(geometry.scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false);
-const overlays = {}, overlaysMid = {}, overlaysFar = {};
-for (const kind of [2, 3, 5, 7, 8]) {
-  overlays[kind] = gearMesh(enemyGearGeometry(kind));
-  overlaysMid[kind] = gearMesh(enemyGearGeometry(kind, 'mid'));
-  overlaysFar[kind] = gearMesh(enemyGearGeometry(kind, 'low'));
-}
-overlays[6] = overlaysMid[6] = overlaysFar[6] = gearMesh(M.spikesGeo());
-overlays[9] = overlaysMid[9] = gearMesh(ghostKitGeometry());
-overlaysFar[9] = gearMesh(ghostKitGeometry('low'));
-// Indexed by the unit's detail level: far, mid, near.
-const overlaysByDetail = [overlaysFar, overlaysMid, overlays];
-const overlayMeshes = [...new Set(overlaysByDetail.flatMap(set => Object.values(set)))];
 const partMesh = instanced(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), MAX_PART, false);
 // Defeated units are flung away as tumbling bodies instead of vanishing on the spot. Each pool
 // reuses a far body and its material; rows hold x y z, velocity, tumble axis, spin, angle, age, scale.
@@ -285,7 +207,14 @@ function makeToss(far) {
   geometry.setAttribute('unitMotion', new THREE.InstancedBufferAttribute(motion, 2));
   return { mesh: instanced(geometry, far.material, TOSS_MAX, false), n: 0, data: new Float32Array(TOSS_MAX * TOSS_ROW), color: new Float32Array(TOSS_MAX * 3) };
 }
-const redToss = makeToss(redFarMesh), blueToss = blueForms.map(form => makeToss(form.far));
+// Heavy battle geometries (troops, raiders, gear overlays, fleet cannons, 30 weapon LODs)
+// are constructed lazily on first battle or debug inspection so startup paints the title scene instantly.
+let battleAssetsReady = false;
+let blueForms, FORM_BY_RANK, redMesh, redMidMesh, redFarMesh, redForm, troopMeshes;
+let overlays, overlaysMid, overlaysFar, overlaysByDetail, overlayMeshes;
+let redToss, blueToss;
+let cannon, cannonShield, twinCannon, squadCannons, fleet, muzzleJets;
+let weaponMeshes, weaponMidMeshes, weaponFarMeshes, weaponsByDetail;
 function toss(pool, x, y, z, scale, col, dir) {
   if (TURBO || pool.n >= TOSS_MAX) return;
   const d = pool.data, o = pool.n * TOSS_ROW, a = rand(0, 6.283);
@@ -636,7 +565,6 @@ function setHud(key, el, val, prop = 'textContent') {
 }
 
 // ---------------------------------------------------------------- game state
-const sound = new Sound();
 const music = new Music(sound);
 music.enabled = prefs.get('music');
 prefs.watch('music', (on) => { music.enabled = on; });
@@ -648,14 +576,6 @@ const G = {
   squad: 0, rad: 0, zones: [], nextMile: 1000, armyAvg: 0,
   chassis: 0, weapon: 0, weaponMask: 0, equipCursor: 0, aircraft: 0, airT: 2, airPass: 0, airTier: 0, airHit: false, shield: 0, guardFlash: 0, armorPopupT: 0, reactionFxT: 0, overdrive: 0, rank: 0,
 };
-const cannon = M.buildCannon();
-const cannonShield = createImpactShield();
-cannon.group.add(cannonShield);
-const twinCannon = M.buildCannon(0xff4fd8);
-const squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.group.scale.setScalar(0.85); c.group.visible = false; scene.add(c.group); return c; });
-const fleet = [cannon, twinCannon, ...squadCannons];
-const muzzleJets = cannonJets(fleet, 6);
-scene.add(muzzleJets.mesh);
 const airWings = new Map();
 function supportAircraft(tier) {
   if (!airWings.has(tier)) {
@@ -664,13 +584,57 @@ function supportAircraft(tier) {
   }
   return airWings.get(tier);
 }
-scene.add(cannon.group, twinCannon.group);
 const weaponSet = (detail) => [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1, detail), unitMat, MAX_BLUE, false))];
-const weaponMeshes = weaponSet('high'), weaponMidMeshes = weaponSet('mid'), weaponFarMeshes = weaponSet('low');
-// Indexed by the troop's detail level: far, mid, near.
-const weaponsByDetail = [weaponFarMeshes, weaponMidMeshes, weaponMeshes];
 const defenseMuzzle = new THREE.Vector3();
-cannon.group.visible = twinCannon.group.visible = false;
+function ensureBattleAssets() {
+  if (battleAssetsReady) return;
+  battleAssetsReady = true;
+  // Each body has three detail levels: the full sculpt up close, the same parts at coarser
+  // tessellation through the crowd, and the light body far away (`troopInstance`).
+  blueForms = TROOP_FORMS.map((_, form) => ({
+    near: instanced(troopFormGeometry(form).scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
+    mid: instanced(troopFormGeometry(form, 'mid').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
+    far: instanced(troopFormGeometry(form, 'low').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
+  }));
+  FORM_BY_RANK = RANKS.map((_, rank) => blueForms[troopForm(rank)]);
+  redMesh = instanced(M.redUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x400808, gradientMap: M.toonGradient() }), MAX_RED);
+  redMidMesh = instanced(M.redUnitGeo('mid').scale(1.2, 1.2, 1.2), redMesh.material, MAX_RED);
+  redFarMesh = instanced(M.redUnitGeo('low').scale(1.2, 1.2, 1.2), redMesh.material, MAX_RED);
+  redForm = { near: redMesh, mid: redMidMesh, far: redFarMesh };
+  troopMeshes = [...blueForms, redForm].flatMap(form => [form.near, form.mid, form.far]);
+  for (const mesh of troopMeshes) {
+    mesh.geometry.setAttribute('unitMotion', new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count * 2), 2).setUsage(THREE.DynamicDrawUsage));
+    installTroopMotion(mesh.material);
+    mesh.customDepthMaterial = mesh.material.userData.troopMotion.depthMaterial;
+    mesh.customDistanceMaterial = mesh.material.userData.troopMotion.distanceMaterial;
+  }
+  blueForms.forEach((form, index) => troopShadows(form, index === SUNWING_FORM || TROOP_FORMS[index] === 'Ascended'));
+  troopShadows(redForm);
+  overlays = {}; overlaysMid = {}; overlaysFar = {};
+  for (const kind of [2, 3, 5, 7, 8]) {
+    overlays[kind] = gearMesh(enemyGearGeometry(kind));
+    overlaysMid[kind] = gearMesh(enemyGearGeometry(kind, 'mid'));
+    overlaysFar[kind] = gearMesh(enemyGearGeometry(kind, 'low'));
+  }
+  overlays[6] = overlaysMid[6] = overlaysFar[6] = gearMesh(M.spikesGeo());
+  overlays[9] = overlaysMid[9] = gearMesh(ghostKitGeometry());
+  overlaysFar[9] = gearMesh(ghostKitGeometry('low'));
+  overlaysByDetail = [overlaysFar, overlaysMid, overlays];
+  overlayMeshes = [...new Set(overlaysByDetail.flatMap(set => Object.values(set)))];
+  redToss = makeToss(redFarMesh);
+  blueToss = blueForms.map(form => makeToss(form.far));
+  cannon = M.buildCannon();
+  cannonShield = createImpactShield();
+  cannon.group.add(cannonShield);
+  twinCannon = M.buildCannon(0xff4fd8);
+  squadCannons = SQUAD_OFF.map(() => { const c = M.buildCannon(0x22b8ff); c.group.scale.setScalar(0.85); c.group.visible = false; scene.add(c.group); return c; });
+  fleet = [cannon, twinCannon, ...squadCannons];
+  muzzleJets = cannonJets(fleet, 6);
+  scene.add(muzzleJets.mesh, cannon.group, twinCannon.group);
+  cannon.group.visible = twinCannon.group.visible = false;
+  weaponMeshes = weaponSet('high'); weaponMidMeshes = weaponSet('mid'); weaponFarMeshes = weaponSet('low');
+  weaponsByDetail = [weaponFarMeshes, weaponMidMeshes, weaponMeshes];
+}
 const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
 const buzz = (p) => { if (!TURBO && isTouch && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
 
@@ -997,6 +961,7 @@ function applyTheme(theme) {
 }
 
 function startLevel(idx, stageIdx = 0, hardcore = false) {
+  ensureBattleAssets();
   titleScreen?.hide();
   if ($('pause').open) $('pause').close();
   document.body.classList.remove('game-paused');
@@ -4405,18 +4370,39 @@ function frame(now) {
 }
 
 // Build the battlefield only when a run starts. Opening the map must not consume onboarding.
-showMenu();
-titleScreen = createTitleScreen(sound, (titleScene, titleCamera) => {
-  post.setLook(0.62); post.state.punch = 0; post.flash.setRGB(0, 0, 0);
-  post.render(titleScene, titleCamera);
-});
-$('welcome-play').onclick = () => { titleScreen.hide(); $('menu').classList.remove('hidden'); $('mapresume').focus({ preventScroll: true }); };
-$('maphome').onclick = () => titleScreen.show();
-titleScreen.show();
-const startParam = params.get('level');
-if (startParam) startLevel(clamp((+startParam || 1) - 1, 0, LEVELS.length - 1), clamp((+params.get('stage') || 1) - 1, 0, 2));
-requestAnimationFrame(frame);
-sceneReady = true;
+let engineBooted = false;
+export function bootEngine(boot = null) {
+  if (engineBooted) return;
+  engineBooted = true;
+  boot?.stopBootLoop?.();
+  titleScreen = boot?.titleScreen ?? createTitleScreen(sound, (titleScene, titleCamera) => {
+    post.setLook(0.62); post.state.punch = 0; post.flash.setRGB(0, 0, 0);
+    post.render(titleScene, titleCamera);
+  });
+  const openMap = () => {
+    sound.unlock();
+    showMenu(Boolean(G.resumePhase));
+    $('mapresume').focus({ preventScroll: true });
+  };
+  $('welcome-play').onclick = openMap;
+  $('maphome').onclick = () => titleScreen.show();
+  const startParam = params.get('level');
+  if (startParam) {
+    ensureBattleAssets();
+    startLevel(clamp((+startParam || 1) - 1, 0, LEVELS.length - 1), clamp((+params.get('stage') || 1) - 1, 0, 2));
+  } else if (TURBO) {
+    ensureBattleAssets();
+    showMenu();
+    titleScreen.show();
+  } else if (boot?.consumePendingPlay?.()) {
+    openMap();
+  } else {
+    if (!titleScreen.visible) titleScreen.show();
+    if (!titleScreen.painted) titleScreen.render(0, true);
+  }
+  requestAnimationFrame(frame);
+  sceneReady = true;
+}
 
 // test / debug hooks
 window.__game = {
@@ -4466,7 +4452,7 @@ window.__game = {
   // red units closer than maxD to the cannon: [x, d, hp]
   reds(maxD = 16) { const out = []; for (let i = 0; i < R.n; i++) { const d = G.z0 - R.z[i]; if (R.hp[i] > 0 && d < maxD) out.push([R.x[i], d, R.hp[i]]); } return out; },
   // debug only: evaluate an expression inside the engine module (tools/peek, tools/probe)
-  dbg(src) { return eval(src); },
+  dbg(src) { ensureBattleAssets(); return eval(src); },
   units() { const out = []; for (let i = 0; i < B.n; i += 25) out.push([+B.x[i].toFixed(1), +(G.z0 - B.z[i]).toFixed(1), +B.hp[i].toPrecision(2), +B.vx[i].toFixed(1), +B.vz[i].toFixed(1)]); return { n: B.n, z0: G.z0, towerZ: G.stage.tower?.z, alive: G.stage.tower?.alive, out }; },
   snapshot() { return { flux: cannonFlux() }; },
   leaks() {

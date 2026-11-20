@@ -12,7 +12,7 @@
 <style>
   :root { --font: "Arial Black", "Segoe UI Black", "Helvetica Neue", Impact, system-ui, sans-serif; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1440; font-family: var(--font); color: #fff;
+  html, body { margin: 0; height: 100%; overflow: hidden; background: linear-gradient(160deg, #103247, #1c5a6c 55%, #0d2b3e); font-family: var(--font); color: #fff;
     user-select: none; -webkit-user-select: none; touch-action: none; overscroll-behavior: none; }
   #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   .hidden { display: none !important; }
@@ -289,6 +289,35 @@
 <link rel="stylesheet" href="./src/map.css">
 <link rel="stylesheet" href="./src/results.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+<link rel="modulepreload" href="./vendor/three.core.js">
+<link rel="modulepreload" href="./vendor/three.module.js">
+<link rel="modulepreload" href="./vendor/addons/BufferGeometryUtils.js">
+<link rel="modulepreload" href="./src/boot.js">
+<link rel="modulepreload" href="./src/runtime.js">
+<link rel="modulepreload" href="./src/title-scene.js">
+<link rel="modulepreload" href="./src/title-logo.js">
+<link rel="modulepreload" href="./src/title-battle.js">
+<link rel="modulepreload" href="./src/title-islands.js">
+<link rel="modulepreload" href="./src/title-kit.js">
+<link rel="modulepreload" href="./src/postfx.js">
+<link rel="modulepreload" href="./src/render-scale.js">
+<link rel="modulepreload" href="./src/shadow-filter.js">
+<link rel="modulepreload" href="./src/settings.js">
+<link rel="modulepreload" href="./src/sound.js">
+<link rel="modulepreload" href="./src/geo-merge.js">
+<link rel="modulepreload" href="./src/asset-kit.js">
+<link rel="modulepreload" href="./src/boss-shapes.js">
+<link rel="modulepreload" href="./src/boss-sculpted-core.js">
+<link rel="modulepreload" href="./src/character-ink.js">
+<link rel="modulepreload" href="./src/character-surfaces.js">
+<link rel="modulepreload" href="./src/troop-forms.js">
+<link rel="modulepreload" href="./src/infantry-armor.js">
+<link rel="modulepreload" href="./src/unit-assets.js">
+<link rel="modulepreload" href="./src/weapon-assets.js">
+<link rel="modulepreload" href="./src/vehicle-assets.js">
+<link rel="modulepreload" href="./src/supply-assets.js">
+<link rel="modulepreload" href="./src/air-assets.js">
+<link rel="modulepreload" href="./src/scenery-assets.js">
 </head>
 <body>
 <canvas id="c" tabindex="0" aria-label="Battlefield. Use A and D or arrow keys to aim. Press Escape to pause."></canvas>
@@ -387,6 +416,6 @@
 </dialog>
 
 <noscript>This game needs JavaScript.</noscript>
-<script type="module" src="./src/main.js"></script>
+<script type="module" src="./src/boot.js"></script>
 </body>
 </html>
