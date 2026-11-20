@@ -1,5 +1,6 @@
-// A cutaway coastal archipelago and causeway. Shore strata, volcanic boss isle,
-// distant campaign citadels, bridge deck and luminous accents are static batches.
+// A cutaway coastal archipelago and two-lane battle causeway. Shore strata,
+// volcanic boss isle, distant campaign citadels, bridge deck and luminous accents
+// are baked into static batches for instant Frame-1 rendering.
 import * as THREE from 'three';
 import { assetBatch, assetGlow } from './asset-kit.js';
 import { bush, palm, rockCluster } from './scenery-assets.js';
@@ -78,41 +79,39 @@ function addDistantCitadel(batch, glow, x, y, z, scale = 1) {
 export function buildTitleCoast(scene) {
   const shore = assetBatch(), deck = assetBatch(), breakers = assetBatch(), glow = assetBatch();
   const islands = [
-    [0, 9.2, 6.2, 4.9, -.38],
-    [0, -9.8, 6.8, 5.5, -.42],
-    [-9.6, -1.6, 3.3, 2.9, -1.15],
-    [8.4, -12.6, 3.3, 2.8, -.82],
-    [-20, -17, 7, 5, -1],
+    [0, 10.6, 6.9, 4.9, -.38],
+    [0, -10.8, 7.2, 5.7, -.42],
+    [-11.2, -1.6, 3.5, 3.0, -1.15],
+    [10.2, -12.6, 3.6, 3.0, -.82],
+    [-21, -18, 7, 5, -1],
     [-19, 15, 5, 3, -.6],
-    [14, 20, 4, 3, -1],
+    [15, 18, 4.4, 3.2, -1],
   ];
   for (const [i, [x, z, rx, rz, top]] of islands.entries()) {
     const volcanic = i === 1;
     island(shore, breakers, x, z, rx, rz, top, i + 1, volcanic);
     const side = i % 2 ? -1 : 1;
-    const px = x + side * rx * .66;
+    const px = x + side * rx * .68;
     if (volcanic) {
       // Scorched basalt spires and magma cracks frame the Ember Drake's bastion.
       for (const s of [-1, 1]) {
-        shore.add(rockCluster(0x463943, i + (s > 0 ? 7 : 3)).scale(1.15, 1.55, 1.1), 0xffffff, s * 4.35, top, z - .95);
-        shore.add(rockCluster(0x5a4448, i + (s > 0 ? 11 : 9)).scale(.85, 1.1, .85), 0xffffff, s * 3.1, top, z - 3.05);
-        glow.beam([s * 1.15, top + .05, z + 1.25], [s * 3.2, top + .04, z - .6], .16, .06, 0xff7b34);
-        glow.beam([s * 1.5, top + .05, z - .4], [s * 2.55, top + .04, z - 2.3], .12, .05, 0xffa642);
+        shore.add(rockCluster(0x463943, i + (s > 0 ? 7 : 3)).scale(1.2, 1.6, 1.15), 0xffffff, s * 4.7, top, z - .95);
+        shore.add(rockCluster(0x5a4448, i + (s > 0 ? 11 : 9)).scale(.9, 1.15, .9), 0xffffff, s * 3.3, top, z - 3.15);
+        glow.beam([s * 1.2, top + .05, z + 1.3], [s * 3.4, top + .04, z - .6], .16, .06, 0xff7b34);
+        glow.beam([s * 1.55, top + .05, z - .4], [s * 2.75, top + .04, z - 2.3], .12, .05, 0xffa642);
       }
-      glow.ring(2.25, .075, 0, top + .06, z - .15, 0xff7c35, 'y');
-      glow.sphere(.34, 0, top + .02, z - .15, 0xff9f45, 2.4, .18, 2.4);
+      glow.ring(2.45, .08, 0, top + .06, z - .15, 0xff7c35, 'y');
+      glow.sphere(.36, 0, top + .02, z - .15, 0xff9f45, 2.5, .18, 2.5);
       continue;
     }
     if (i === 2) {
-      // Left coastal watchtower beacon visible in both desktop and portrait mobile frames.
-      addDistantCitadel(shore, glow, x - .35, top, z - .4, .74);
+      addDistantCitadel(shore, glow, x - .35, top, z - .4, .78);
       shore.add(rockCluster(0x708d90, 7).scale(1.1, 1.5, 1.05), 0xffffff, x + 1.05, top, z + .55);
       shore.add(bush(0x458878), 0xffffff, x + .45, top, z + .95);
       continue;
     }
     if (i === 3) {
-      // Far horizon campaign fortress spire hinting at the 50 worlds ahead.
-      addDistantCitadel(shore, glow, x + .15, top, z - .2, .86);
+      addDistantCitadel(shore, glow, x + .15, top, z - .2, .9);
       shore.add(rockCluster(0x6e858c, 12).scale(.95, 1.3, .95), 0xffffff, x - 1.4, top, z + .85);
       continue;
     }
@@ -133,37 +132,56 @@ export function buildTitleCoast(scene) {
     shore.add(rockCluster(0x8a7874, i + 3), 0xffffff, px, top, z - 1.1);
     shore.add(bush(0x398877, 0xff8867), 0xffffff, px - .65, top, z + .35);
     if (i === 0) {
-      shore.add(palm({ height: 2.85, lean: .55, leaf: 0x3da28e, leaf2: 0x248272 }), 0xffffff, -rx * .74, top, z + 1.0, 0, 2.6);
+      shore.add(palm({ height: 2.85, lean: .55, leaf: 0x3da28e, leaf2: 0x248272 }), 0xffffff, -rx * .76, top, z + 1.0, 0, 2.6);
       shore.add(bush(0x3d8e7b, 0xffbe5c), 0xffffff, -rx * .62, top, z + .35);
     }
   }
 
-  // Main causeway deck, armor curbs, steel piers & launchpad striping.
-  deck.box(7.65, .49, 24.4, 0, -.26, 0, 0x2e4552);
-  deck.box(7.25, .12, 24.2, 0, -.065, 0, 0x4c5f74);
+  // Single wide gameplay battle road: two decision lanes (left/right), armor curbs,
+  // cannon slide track, painted center divider and dual-lane chevrons.
+  deck.box(9.0, .50, 25.8, 0, -.26, 0, 0x2e4552);
+  deck.box(8.52, .12, 25.5, 0, -.065, 0, 0x4b5f74);
+  // Subtle darker wheel ruts down each choice lane to visually separate Left vs Right.
+  for (const laneX of [-2.12, 2.12]) {
+    deck.box(3.55, .016, 21.8, laneX, .002, -.4, 0x43566a);
+  }
   for (const side of [-1, 1]) {
-    deck.box(.23, .25, 24.3, side * 3.74, .05, 0, 0xe8ddc1);
-    deck.box(.09, .05, 23.7, side * 3.42, .011, 0, 0xf5be69);
-    for (let z = -11; z <= 11; z += 2) {
-      deck.box(.36, .31, .43, side * 3.74, .13, z, 0x30485e);
-      const lampHex = z < -4 ? 0xff9a54 : z > 5 ? 0xffd778 : 0x86f4ee;
-      glow.box(.27, .055, .25, side * 3.74, .30, z, lampHex);
+    deck.box(.26, .26, 25.6, side * 4.38, .05, 0, 0xe8ddc1);
+    deck.box(.10, .05, 24.9, side * 4.02, .011, 0, 0xf5be69);
+    for (let z = -11; z <= 11; z += 2.2) {
+      deck.box(.38, .32, .44, side * 4.38, .13, z, 0x30485e);
+      const lampHex = z < -5 ? 0xff944d : z > 6 ? 0xffd778 : 0x86f4ee;
+      glow.box(.28, .055, .26, side * 4.38, .31, z, lampHex);
     }
-    for (const z of [-5, 0, 5]) {
-      deck.box(.74, 3.25, .86, side * 2.75, -1.8, z, 0x46586b);
-      deck.beam([side * 2.75, -1.75, z], [side * 3.55, -.4, z + 1], .25, .3, 0xb88964);
+    for (const z of [-6, 0, 6]) {
+      deck.box(.78, 3.25, .88, side * 3.35, -1.8, z, 0x46586b);
+      deck.beam([side * 3.35, -1.75, z], [side * 4.18, -.4, z + 1], .25, .3, 0xb88964);
     }
   }
-  for (let z = -10; z <= 10; z += 2) for (const x of [-1.25, 1.25]) deck.box(.055, .025, .66, x, .006, z, 0xa8bcc4);
-  for (const z of [6.0, 1.5, -3.5, -6.2]) {
-    const cHex = z < -2 ? 0xffcc6a : 0x7ef3ef;
-    glow.beam([-.72, .018, z + .38], [0, .018, z - .26], .11, .02, cHex);
-    glow.beam([.72, .018, z + .38], [0, .018, z - .26], .11, .02, cHex);
+  // Crisp dashed center divider between Left and Right gate lanes.
+  for (let z = -9.5; z <= 6.8; z += 1.65) {
+    deck.box(.11, .024, .78, 0, .009, z, 0xd9e3e8);
   }
-  for (let i = 0; i < 14; i++) deck.box(.48, .04, .34, (i - 6.5) * .49, .014, 7.55, i % 2 ? 0xffc85f : 0x263545);
-  for (const z of [-8, -3, 2, 7]) {
-    deck.box(7.15, .012, .045, 0, .006, z, 0x3b4d5e);
-    for (const x of [-3.15, 3.15]) deck.cylinder(.067, .022, x, .02, z, 0xbac6c1);
+  // Dual-lane forward chevrons.
+  for (const z of [6.4, 1.8, -2.9, -7.2]) {
+    for (const laneX of [-2.12, 2.12]) {
+      const cHex = z < -3 ? 0xffcc6a : laneX < 0 ? 0x7ef3ef : 0x7ab4e8;
+      glow.beam([laneX - .58, .018, z + .32], [laneX, .018, z - .24], .095, .02, cHex);
+      glow.beam([laneX + .58, .018, z + .32], [laneX, .018, z - .24], .095, .02, cHex);
+    }
+  }
+  // Cannon defense line hazard bar + lateral steering track at z = 9.0.
+  for (let i = 0; i < 16; i++) {
+    deck.box(.48, .04, .34, (i - 7.5) * .50, .014, 7.65, i % 2 ? 0xffc85f : 0x263545);
+  }
+  deck.box(6.6, .045, .34, 0, .015, 9.05, 0x233344);
+  glow.box(6.2, .02, .08, 0, .042, 9.05, 0x6ce8f2);
+  for (const x of [-2.8, -2.1, -1.4, -.7, 0, .7, 1.4, 2.1, 2.8]) {
+    deck.box(.08, .055, .44, x, .018, 9.05, x === 0 ? 0xffcf63 : 0x8ea9ba);
+  }
+  for (const z of [-8.2, -3.2, 1.8, 6.8]) {
+    deck.box(8.35, .012, .045, 0, .006, z, 0x3b4d5e);
+    for (const x of [-3.75, 3.75]) deck.cylinder(.067, .022, x, .02, z, 0xbac6c1);
   }
 
   const surface = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -195,21 +213,21 @@ export function buildTitleCoast(scene) {
          float sw = sw1 * 0.68 + sw2 * 0.36 + sw3 * 0.14;
 
          // Nearest island normalized radial distance for glowing tropical shallows.
-         float d = iso(p, vec2(0.0, 9.2), vec2(6.2, 4.9));
-         d = min(d, iso(p, vec2(0.0, -9.8), vec2(6.8, 5.5)));
-         d = min(d, iso(p, vec2(-9.6, -1.6), vec2(3.3, 2.9)));
-         d = min(d, iso(p, vec2(8.4, -12.6), vec2(3.3, 2.8)));
-         d = min(d, iso(p, vec2(-20.0, -17.0), vec2(7.0, 5.0)));
+         float d = iso(p, vec2(0.0, 10.6), vec2(6.9, 4.9));
+         d = min(d, iso(p, vec2(0.0, -10.8), vec2(7.2, 5.7)));
+         d = min(d, iso(p, vec2(-11.2, -1.6), vec2(3.5, 3.0)));
+         d = min(d, iso(p, vec2(10.2, -12.6), vec2(3.6, 3.0)));
+         d = min(d, iso(p, vec2(-21.0, -18.0), vec2(7.0, 5.0)));
          d = min(d, iso(p, vec2(-19.0, 15.0), vec2(5.0, 3.0)));
-         d = min(d, iso(p, vec2(14.0, 20.0), vec2(4.0, 3.0)));
-         float pier = length(max(abs(p - vec2(0.0, 0.0)) - vec2(3.8, 9.5), 0.0)) * 0.32 + 1.18;
+         d = min(d, iso(p, vec2(15.0, 18.0), vec2(4.4, 3.2)));
+         float pier = length(max(abs(p - vec2(0.0, 0.0)) - vec2(4.45, 10.2), 0.0)) * 0.30 + 1.18;
          d = min(d, pier);
 
          float shoal = 1.0 - smoothstep(1.16, 1.88, d + 0.04 * sw1);
          float foamPulse = sin(d * 19.0 - time * 2.15 + sw2 * 1.4);
          float shoreFoam = (1.0 - smoothstep(1.18, 1.42, d)) * smoothstep(0.55, 0.96, foamPulse);
 
-         float grad = smoothstep(-22.0, 22.0, p.y * 0.42 - p.x * 0.78 + 2.2 * sw);
+         float grad = smoothstep(-24.0, 24.0, p.y * 0.42 - p.x * 0.78 + 2.2 * sw);
          vec3 deepSea = vec3(0.032, 0.138, 0.235);
          vec3 midSea  = vec3(0.088, 0.355, 0.445);
          vec3 shallow = vec3(0.165, 0.585, 0.595);
@@ -227,7 +245,7 @@ export function buildTitleCoast(scene) {
 
          c = mix(c, vec3(0.68, 0.94, 0.93), shoreFoam * 0.46);
 
-         float horizon = smoothstep(26.0, 68.0, length(p));
+         float horizon = smoothstep(28.0, 74.0, length(p));
          c = mix(c, vec3(0.18, 0.39, 0.49), horizon * 0.52);
 
          gl_FragColor = vec4(c, 1.0);
