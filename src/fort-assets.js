@@ -80,8 +80,7 @@ function grade(g, y0, y1, lo = .72, hi = 1) {
 function bent(batch) {
   const api = {
     add(g, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-      const geo = g.index ? g.toNonIndexed() : g;
-      if (geo !== g) g.dispose();
+      const geo = g;
       geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
       const p = geo.attributes.position;
       for (let i = 0; i < p.count; i++) p.setZ(i, p.getZ(i) + bend(p.getX(i)));

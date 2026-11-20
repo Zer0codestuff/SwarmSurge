@@ -1,9 +1,12 @@
 import { inkMaterial } from './character-ink.js';
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeIndexed } from './geo-merge.js';
 
 // Materials are borrowed by level assets. Each batch owns its geometry.
-export const assetSurface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.52, metalness: 0.15 });
+// Blinn-Phong calibrated to match the previous PBR response without an environment map.
+export const assetSurface = new THREE.MeshPhongMaterial({
+  vertexColors: true, color: 0xededed, specular: 0x3a3f46, shininess: 28,
+});
 export const assetGlow = new THREE.MeshBasicMaterial({ vertexColors: true });
 assetSurface.userData.shared = assetGlow.userData.shared = true;
 
@@ -39,8 +42,7 @@ export function assetBatch() {
   const parts = [];
   const api = {
     add(g, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-      const geo = g.index ? g.toNonIndexed() : g;
-      if (geo !== g) g.dispose();
+      const geo = g;
       geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
       // A color function receives the placed vertex position.
       const pos = geo.attributes.position, count = pos.count, paint = typeof color === 'function';
@@ -82,8 +84,8 @@ export function assetBatch() {
     },
     finish(parent, name = '', material = assetSurface) {
       if (!parts.length) throw new Error('Cannot finish an empty asset batch');
-      material = inkMaterial(material,parts);
-      const geometry = mergeGeometries(parts, false);
+      material = inkMaterial(material, parts);
+      const geometry = mergeIndexed(parts, false);
       parts.forEach(part => part.dispose()); parts.length = 0;
       if (!material.isMeshBasicMaterial) shadeUndersides(geometry);
       geometry.computeBoundingSphere();
