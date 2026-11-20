@@ -173,8 +173,11 @@ function instanced(geo, mat, n, shadow = true) {
 const unitMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 // Allied bodies change form with rank: bot, trooper, paladin, ascended.
 const blueMat = new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x0c3060, gradientMap: M.toonGradient() });
+// Each body has three detail levels: the full sculpt up close, the same parts at coarser
+// tessellation through the crowd, and the light body far away (`troopInstance`).
 const blueForms = TROOP_FORMS.map((_, form) => ({
   near: instanced(troopFormGeometry(form).scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
+  mid: instanced(troopFormGeometry(form, 'mid').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
   far: instanced(troopFormGeometry(form, 'low').scale(1.2, 1.2, 1.2), blueMat, MAX_BLUE),
 }));
 // Allied kind bits are inherited by gate copies and combined on pool overflow.
@@ -184,8 +187,10 @@ const SWEEP_RADIUS = 1.9, COUNTER_WINDOW = .36, COUNTER_POWER = 6, COUNTER_VOLLE
 const SUNWING_RGB = rgb(0xffe4a2);
 const FORM_BY_RANK = RANKS.map((_, rank) => blueForms[troopForm(rank)]);
 const redMesh = instanced(M.redUnitGeo().scale(1.2, 1.2, 1.2), new THREE.MeshToonMaterial({ vertexColors: true, emissive: 0x400808, gradientMap: M.toonGradient() }), MAX_RED);
+const redMidMesh = instanced(M.redUnitGeo('mid').scale(1.2, 1.2, 1.2), redMesh.material, MAX_RED);
 const redFarMesh = instanced(M.redUnitGeo('low').scale(1.2, 1.2, 1.2), redMesh.material, MAX_RED);
-const troopMeshes = [...blueForms.flatMap(form => [form.near, form.far]), redMesh, redFarMesh];
+const redForm = { near: redMesh, mid: redMidMesh, far: redFarMesh };
+const troopMeshes = [...blueForms, redForm].flatMap(form => [form.near, form.mid, form.far]);
 for (const mesh of troopMeshes) {
   mesh.geometry.setAttribute('unitMotion', new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count * 2), 2).setUsage(THREE.DynamicDrawUsage));
   installTroopMotion(mesh.material);
@@ -211,23 +216,27 @@ function addShadowProxy(mesh, silhouette) {
   mesh.userData.shadowProxy = proxy;
   scene.add(proxy);
 }
-function troopShadows(near, far, winged = false) {
+function troopShadows({ near, mid, far }, winged = false) {
   const silhouette = isTouch ? troopShadowGeometry(far.geometry, winged) : far.geometry;
   addShadowProxy(near, silhouette);
+  addShadowProxy(mid, silhouette);
   if (isTouch) addShadowProxy(far, silhouette);
 }
-blueForms.forEach(({ near, far }, form) => troopShadows(near, far, form === SUNWING_FORM || TROOP_FORMS[form] === 'Ascended'));
-troopShadows(redMesh, redFarMesh);
+blueForms.forEach((form, index) => troopShadows(form, index === SUNWING_FORM || TROOP_FORMS[index] === 'Ascended'));
+troopShadows(redForm);
 // Enemy kits follow their body's detail level; spikes and ghost kits are already light.
 const gearMesh = (geometry) => instanced(geometry.scale(1.2, 1.2, 1.2), unitMat, MAX_RED, false);
-const overlays = {}, overlaysFar = {};
+const overlays = {}, overlaysMid = {}, overlaysFar = {};
 for (const kind of [2, 3, 5, 7, 8]) {
   overlays[kind] = gearMesh(enemyGearGeometry(kind));
+  overlaysMid[kind] = gearMesh(enemyGearGeometry(kind, 'mid'));
   overlaysFar[kind] = gearMesh(enemyGearGeometry(kind, 'low'));
 }
-overlays[6] = overlaysFar[6] = gearMesh(M.spikesGeo());
-overlays[9] = overlaysFar[9] = gearMesh(ghostKitGeometry());
-const overlayMeshes = [...new Set([...Object.values(overlays), ...Object.values(overlaysFar)])];
+overlays[6] = overlaysMid[6] = overlaysFar[6] = gearMesh(M.spikesGeo());
+overlays[9] = overlaysMid[9] = overlaysFar[9] = gearMesh(ghostKitGeometry());
+// Indexed by the unit's detail level: far, mid, near.
+const overlaysByDetail = [overlaysFar, overlaysMid, overlays];
+const overlayMeshes = [...new Set(overlaysByDetail.flatMap(set => Object.values(set)))];
 const partMesh = instanced(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), MAX_PART, false);
 // Defeated units are flung away as tumbling bodies instead of vanishing on the spot. Each pool
 // reuses a far body and its material; rows hold x y z, velocity, tumble axis, spin, angle, age, scale.
@@ -603,8 +612,10 @@ function supportAircraft(tier) {
   return airWings.get(tier);
 }
 scene.add(cannon.group, twinCannon.group);
-const weaponMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1), unitMat, MAX_BLUE, false))];
-const weaponFarMeshes = [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1, 'low'), unitMat, MAX_BLUE, false))];
+const weaponSet = (detail) => [null, ...WEAPON_SPECS.slice(1).map((_, k) => instanced(M.troopWeaponGeo(k + 1, detail), unitMat, MAX_BLUE, false))];
+const weaponMeshes = weaponSet('high'), weaponMidMeshes = weaponSet('mid'), weaponFarMeshes = weaponSet('low');
+// Indexed by the troop's detail level: far, mid, near.
+const weaponsByDetail = [weaponFarMeshes, weaponMidMeshes, weaponMeshes];
 const defenseMuzzle = new THREE.Vector3();
 cannon.group.visible = twinCannon.group.visible = false;
 const squadX = (k) => clamp(G.cx + SQUAD_OFF[k], -XLIM + 0.3, XLIM - 0.3);
@@ -3419,12 +3430,17 @@ function troopInView(frustum, pool, index) {
   troopBounds.max.set(x + extent + 1, top, z + extent + 1);
   return frustum.intersectsBox(troopBounds);
 }
-function troopInstance(P, i, near, far) {
+// Projected height in CSS pixels picks the detail level (0 far, 1 mid, 2 near). Each
+// boundary keeps a 4 px band of hysteresis so units at the edge do not flicker.
+const DETAIL_ENTER = [24, 48], DETAIL_KEEP = [20, 44];
+function troopInstance(P, i, form) {
   const dx = P.x[i] - camera.position.x, dz = P.z[i] - camera.position.z;
   const distanceSq = Math.max(1, dx*dx + camera.position.y*camera.position.y + dz*dz);
-  const size = P.sc[i] * troopPixelScale, threshold = P.detail[i] ? 20 : 24;
-  P.detail[i] = size*size > distanceSq * threshold*threshold ? 1 : 0;
-  const mesh = P.detail[i] ? near : far, at = mesh.count++;
+  const size = P.sc[i] * troopPixelScale, sizeSq = size * size, was = P.detail[i];
+  const mid = was >= 1 ? DETAIL_KEEP[0] : DETAIL_ENTER[0], near = was >= 2 ? DETAIL_KEEP[1] : DETAIL_ENTER[1];
+  const detail = sizeSq > distanceSq * mid*mid ? (sizeSq > distanceSq * near*near ? 2 : 1) : 0;
+  P.detail[i] = detail;
+  const mesh = detail === 2 ? form.near : detail ? form.mid : form.far, at = mesh.count++;
   const motion = mesh.geometry.attributes.unitMotion.array;
   motion[at * 2] = P.phase[i];
   const floating = P === R && (RED_TYPES[P.kind[i]].fly || RED_TYPES[P.kind[i]].ghost);
@@ -3435,8 +3451,8 @@ function troopInstance(P, i, near, far) {
   writeMatrix(mesh.instanceMatrix.array, i, P, speed, stride * lean, at);
   return mesh;
 }
-function finishTroopMeshes(near, far) {
-  for (const mesh of [near, far]) {
+function finishTroopMeshes(form) {
+  for (const mesh of [form.near, form.mid, form.far]) {
     mesh.visible = mesh.count > 0;
     uploadUsed(mesh.instanceMatrix, mesh.count);
     uploadUsed(mesh.instanceColor, mesh.count);
@@ -3462,8 +3478,8 @@ function copyTroopPose(mesh, source, index) {
   for (let k = 0; k < 16; k++) target[at+k] = source[from+k];
 }
 function writeBlue(frustum) {
-  for (const form of blueForms) form.near.count = form.far.count = 0;
-  for (let k = 1; k < weaponMeshes.length; k++) weaponMeshes[k].count = weaponFarMeshes[k].count = 0;
+  for (const form of blueForms) form.near.count = form.mid.count = form.far.count = 0;
+  for (const set of weaponsByDetail) for (let k = 1; k < set.length; k++) set[k].count = 0;
   const rb = ((G.t * 5) | 0) % 32;
   let haloCount = 0, topRank = 0;
   for (let i = 0; i < B.n; i++) {
@@ -3473,24 +3489,25 @@ function writeBlue(frustum) {
     const special = specialForm(B.kind[i]);
     const col = specialTint(special) ?? (tier === RANKS.length - 1 ? RAINBOW[(rb + i) & 31] : (B.kind[i] & GIANT) && tier < 2 ? GIANT_RGB : TIER_RGB[tier]);
     const form = special == null ? FORM_BY_RANK[tier] : blueForms[special];
-    const body = troopInstance(B, i, form.near, form.far), index = body.count - 1;
+    const body = troopInstance(B, i, form), index = body.count - 1;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
     if (tier >= 5 && haloCount < 24 && i % 7 === 0) {
       halos.add(B.x[i], 0.3, B.z[i], col, 1.45 * s, 0.19); haloCount++;
     }
     const weapon = B.weapon[i];
     if (weapon) {
-      copyTroopPose((B.detail[i] ? weaponMeshes : weaponFarMeshes)[weapon], m, index);
+      copyTroopPose(weaponsByDetail[B.detail[i]][weapon], m, index);
     }
     const f = Math.max(0, B.flash[i]) * 0.45;
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
   }
   G.rank = topRank;
-  for (let k = 1; k < weaponMeshes.length; k++) for (const mesh of [weaponMeshes[k], weaponFarMeshes[k]]) {
+  for (const set of weaponsByDetail) for (let k = 1; k < set.length; k++) {
+    const mesh = set[k];
     mesh.visible = mesh.count > 0;
     uploadUsed(mesh.instanceMatrix, mesh.count);
   }
-  for (const form of blueForms) finishTroopMeshes(form.near, form.far);
+  for (const form of blueForms) finishTroopMeshes(form);
 }
 // Victory hop strength for allied troops, set by the renderer while a stage is cleared.
 let cheer = 0;
@@ -3524,20 +3541,20 @@ function addUnitGlow(matrix, index, x, y, z, color, size, alpha) {
   );
 }
 function writeRed(frustum) {
-  redMesh.count = redFarMesh.count = 0;
+  redMesh.count = redMidMesh.count = redFarMesh.count = 0;
   for (const mesh of overlayMeshes) mesh.count = 0;
   let labels = 0, specialGlow = 0;
   for (let i = 0; i < R.n; i++) {
     const kind = R.kind[i], col = R.chill[i] > 0 ? TIER_RGB[1] : R.burn[i] > 0 ? TIER_RGB[6] : RED_RGB[kind];
     if (R.st[i]) { R.vx[i] = 0; R.vz[i] = 0.01; }
     if (frustum && !troopInView(frustum, R, i)) continue;
-    const body = troopInstance(R, i, redMesh, redFarMesh), index = body.count - 1;
+    const body = troopInstance(R, i, redForm), index = body.count - 1, detailed = R.detail[i] > 0;
     const m = body.instanceMatrix.array, c = body.instanceColor.array;
     const f = Math.max(0, R.flash[i]) * 0.75;
     c[index * 3] = col[0] + (1 - col[0]) * f; c[index * 3 + 1] = col[1] + (1 - col[1]) * f; c[index * 3 + 2] = col[2] + (1 - col[2]) * f;
-    const ov = (body === redMesh ? overlays : overlaysFar)[kind];
+    const ov = overlaysByDetail[R.detail[i]][kind];
     if (ov) copyTroopPose(ov, m, index);
-    if (body === redMesh && specialGlow < 12) {
+    if (detailed && specialGlow < 12) {
       if (kind === 7 && specialGlow <= 10) {
         for (const side of [-1, 1]) {
           addUnitGlow(m, index, side * .184 * 1.2, .29 * 1.2, -.269 * 1.2, PCOL.ice, .55 * R.sc[i], .4);
@@ -3550,7 +3567,7 @@ function writeRed(frustum) {
     }
     if ((kind === 1 || kind === 5) && labels < bruteLabels.length) placeLabel(bruteLabels[labels++], R.x[i], 1.2 + R.sc[i] * 0.9, R.z[i], fmtHp(R.hp[i]));
   }
-  finishTroopMeshes(redMesh, redFarMesh);
+  finishTroopMeshes(redForm);
   for (const mesh of overlayMeshes) {
     mesh.visible = mesh.count > 0;
     uploadUsed(mesh.instanceMatrix, mesh.count);

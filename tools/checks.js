@@ -72,7 +72,7 @@ window.runGameChecks = (g) => {
   check('Aegis Guard armor follows gate copies and absorbs exactly one blast per soldier', `(() => {
     const g={cur:{t:'mul',v:3},x:0,w:4,z:-9,boost:1,flash:1};
     const i=spawn(B,0,-9,40,AEGIS|SUNWING); B.weapon[i]=3; applyGate(G.stage,g,i);
-    writeBlue(); const mesh=blueForms[AEGIS_FORM], visible=mesh.near.count+mesh.far.count===3;
+    writeBlue(); const mesh=blueForms[AEGIS_FORM], visible=mesh.near.count+mesh.mid.count+mesh.far.count===3;
     blueInCircle(0,-9,3); const blocked=Array.from(B.hp.slice(0,3)).every(n=>n===40) && B.kind.slice(0,3).every(k=>k===SUNWING);
     blueInRect(0,-9,6,6); const hurt=B.hp.slice(0,3).every(n=>n===12);
     G.stage.counterShots=8; $('rretry').click();
@@ -102,7 +102,7 @@ window.runGameChecks = (g) => {
     B.n=0; const i=spawn(B,g.x,g.z,64,SUNWING); B.weapon[i]=4; applyGate(S,g,i);
     const total=B.hp.slice(0,B.n).reduce((sum,n)=>sum+n,0);
     writeBlue(); const form=blueForms[SUNWING_FORM];
-    return {pass:normalPower===g.cur.v && Math.abs(total-64*g.cur.v*10)<.01 && B.kind.slice(0,B.n).every(k=>k===SUNWING) && B.weapon.slice(0,B.n).every(k=>k===4) && form.near.count+form.far.count===B.n && !!g.model.wheel};
+    return {pass:normalPower===g.cur.v && Math.abs(total-64*g.cur.v*10)<.01 && B.kind.slice(0,B.n).every(k=>k===SUNWING) && B.weapon.slice(0,B.n).every(k=>k===4) && form.near.count+form.mid.count+form.far.count===B.n && !!g.model.wheel};
   })()`);
   check('Gate bands preserve overlapping gate order and fast crossings', `(() => {
     const S=G.stage;
@@ -587,23 +587,24 @@ window.runGameChecks = (g) => {
     }
   })()`);
   check('Troop detail and rank forms preserve units, weapons and motion', `(() => {
-    camera.position.set(0,20,20); troopPixelScale=1000;
-    const far=spawn(B,-2,-60,4,0), near=spawn(B,2,-3,1e14,0);
-    B.weapon[far]=8; B.weapon[near]=1; B.phase[far]=.9; B.phase[near]=1.4;
-    B.vz[far]=B.vz[near]=-6; B.age[far]=B.age[near]=1; writeBlue();
-    const bot=blueForms[0].far, ascended=blueForms[3].near;
+    camera.position.set(0,20,20); troopPixelScale=1600;
+    const far=spawn(B,-2,-60,4,0), near=spawn(B,2,-3,1e14,0), mid=spawn(B,0,-25,4,0);
+    B.weapon[far]=8; B.weapon[near]=1; B.weapon[mid]=3; B.phase[far]=.9; B.phase[near]=1.4;
+    B.vz[far]=B.vz[near]=B.vz[mid]=-6; B.age[far]=B.age[near]=B.age[mid]=1; writeBlue();
+    const bot=blueForms[0].far, middle=blueForms[0].mid, ascended=blueForms[3].near;
     const motion=bot.geometry.attributes.unitMotion.array;
-    const others=blueForms.flatMap(f=>[f.near,f.far]).filter(m=>m!==bot&&m!==ascended).every(m=>m.count===0&&!m.visible);
-    return {pass:bot.count===1 && ascended.count===1 && others && bot.instanceMatrix.array[14]===-60 && ascended.instanceMatrix.array[14]===-3 && weaponFarMeshes[8].instanceMatrix.array[14]===-60 && weaponMeshes[1].instanceMatrix.array[14]===-3 && Math.abs(motion[0]-.9)<1e-6 && motion[1]===1};
+    const others=blueForms.flatMap(f=>[f.near,f.mid,f.far]).filter(m=>m!==bot&&m!==middle&&m!==ascended).every(m=>m.count===0&&!m.visible);
+    const midWeapon=weaponMidMeshes[3].count===1 && weaponMidMeshes[3].instanceMatrix.array[14]===-25 && weaponMeshes[3].count===0;
+    return {pass:bot.count===1 && middle.count===1 && ascended.count===1 && others && midWeapon && bot.instanceMatrix.array[14]===-60 && ascended.instanceMatrix.array[14]===-3 && weaponFarMeshes[8].instanceMatrix.array[14]===-60 && weaponMeshes[1].instanceMatrix.array[14]===-3 && Math.abs(motion[0]-.9)<1e-6 && motion[1]===1};
   })()`);
   check('Distant enemy overlays and sleeping motion stay aligned', `(() => {
-    camera.position.set(0,20,20); troopPixelScale=1000;
+    camera.position.set(0,20,20); troopPixelScale=1600;
     const far=spawn(R,-2,-60,4,5), near=spawn(R,2,-3,4,2);
     R.st[far]=1; R.vz[near]=6; R.age[far]=R.age[near]=1; writeRed();
     return {pass:redMesh.count===1 && redFarMesh.count===1 && overlaysFar[5].instanceMatrix.array[14]===-60 && overlays[2].instanceMatrix.array[14]===-3 && redFarMesh.geometry.attributes.unitMotion.array[1]===0};
   })()`);
   check('Special enemy kits follow their hovering bodies', `(() => {
-    camera.position.set(0,20,20); troopPixelScale=1000;
+    camera.position.set(0,20,20); troopPixelScale=1600;
     for(const kind of [7,8,9]) { const i=spawn(R,kind-8,-3,10,kind); R.age[i]=1; R.phase[i]=0; R.vz[i]=3; }
     halos.begin(); writeRed(); halos.end();
     const heights=[7,8,9].map(kind=>overlays[kind].instanceMatrix.array[13]);
@@ -611,7 +612,7 @@ window.runGameChecks = (g) => {
     return {pass:overlays[7].count===1 && overlays[8].count===1 && overlays[9].count===1 && Math.abs(heights[0]-.8)<1e-6 && heights[1]===0 && Math.abs(heights[2]-.22)<1e-6 && motion[1]===0 && motion[5]===0 && redAimY(0)>1.4,heights};
   })()`);
   check('Special enemy lights remain bounded in a large horde', `(() => {
-    camera.position.set(0,20,20); troopPixelScale=1000;
+    camera.position.set(0,20,20); troopPixelScale=1600;
     for(let k=0;k<100;k++){const i=spawn(R,0,-3,10,k%2?7:9);R.age[i]=1;}
     halos.begin();writeRed();halos.end();
     return {pass:halos.n<=12 && overlays[7].count===50 && overlays[9].count===50,lights:halos.n};

@@ -22,28 +22,39 @@ const C = {
 const HAND_R = [0.29, 0.425, 0.19], HAND_L = [-0.265, 0.43, 0.16];
 const TAU = Math.PI * 2;
 
-export function sculptKit(low, animated = true) {
+// Tessellation per detail level. 'mid' keeps every high-detail part and the full
+// silhouette at coarser segment counts for troops in the middle distance.
+const TESSELLATION = {
+  high: { seg: 8, step: 4, limb: [6, 3], blob: [8, 5], plate: 10, ring: 12, cyl: 8, helmet: 20, cuirass: 14 },
+  mid: { seg: 6, step: 3, limb: [5, 2], blob: [6, 4], plate: 7, ring: 9, cyl: 6, helmet: 13, cuirass: 10 },
+  low: { seg: 5, step: 2, limb: [4, 2], blob: [5, 3], plate: 6, ring: 8, cyl: 5, helmet: 8, cuirass: 8 },
+};
+const detailLevel = (detail) => detail === true || detail === 'low' ? 'low' : detail === 'mid' ? 'mid' : 'high';
+
+export function sculptKit(detail, animated = true) {
+  const level = detailLevel(detail), low = level === 'low', t = TESSELLATION[level];
   const b = troopBuilder(animated, low);
-  const seg = low ? 5 : 8, step = low ? 2 : 4;
   return {
-    b, low,
+    b, low, level, t,
     loft(sections, color, pos = [0, 0, 0], rot = [0, 0, 0], leg = 0, o = {}) {
-      b.add(loftGeometry(sections, { segments: o.segments ?? seg, steps: o.steps ?? step, warp: o.warp }), color, pos, rot, leg);
+      // Authored overrides keep their high and low counts; the middle level thins them too.
+      const thin = (n, fallback) => n == null ? fallback : level === 'mid' ? Math.max(4, Math.round(n * 0.75)) : n;
+      b.add(loftGeometry(sections, { segments: thin(o.segments, t.seg), steps: thin(o.steps, t.step), warp: o.warp }), color, pos, rot, leg);
     },
     limb(points, radii, color, leg = 0) {
-      b.add(sweepGeometry(points, radii, { segments: low ? 4 : 6, steps: low ? 2 : 3 }), color, [0, 0, 0], [0, 0, 0], leg);
+      b.add(sweepGeometry(points, radii, { segments: t.limb[0], steps: t.limb[1] }), color, [0, 0, 0], [0, 0, 0], leg);
     },
     blob(r, scale, pos, color, leg = 0, rot = [0, 0, 0]) {
-      b.add(new THREE.SphereGeometry(r, low ? 5 : 8, low ? 3 : 5).scale(...scale), color, pos, rot, leg);
+      b.add(new THREE.SphereGeometry(r, t.blob[0], t.blob[1]).scale(...scale), color, pos, rot, leg);
     },
     plate(outline, depth, bulge, color, pos, rot = [0, 0, 0], leg = 0) {
-      b.add(patchGeometry(outline, depth, bulge, { segments: low ? 6 : 10, rings: 1 }), color, pos, rot, leg);
+      b.add(patchGeometry(outline, depth, bulge, { segments: t.plate, rings: 1 }), color, pos, rot, leg);
     },
     ring(r, tube, pos, color, rot = [Math.PI / 2, 0, 0], arc = TAU) {
-      b.add(new THREE.TorusGeometry(r, tube, 3, low ? 8 : 12, arc), color, pos, rot);
+      b.add(new THREE.TorusGeometry(r, tube, 3, t.ring, arc), color, pos, rot);
     },
     cyl(top, bottom, h, pos, color, rot = [0, 0, 0], sides) {
-      b.add(new THREE.CylinderGeometry(top, bottom, h, sides ?? (low ? 5 : 8)), color, pos, rot);
+      b.add(new THREE.CylinderGeometry(top, bottom, h, sides ?? t.cyl), color, pos, rot);
     },
     gem(r, pos, color, stretch = 1.6, rot = [0, 0, 0]) {
       b.add(new THREE.OctahedronGeometry(r, 0).scale(1, stretch, 1), color, pos, rot);
@@ -53,8 +64,8 @@ export function sculptKit(low, animated = true) {
 
 function finish(k, name) {
   const geometry = k.b.finish();
-  geometry.name = name + (k.low ? ' low' : '');
-  geometry.userData.detail = k.low ? 'low' : 'high';
+  geometry.name = name + (k.level === 'high' ? '' : ' ' + k.level);
+  geometry.userData.detail = k.level;
   return geometry;
 }
 
@@ -67,8 +78,8 @@ function arm(k, s, radius, color, shoulder = 0.6) {
 }
 
 // ------------------------------------------------------------ rank 1-3: Surge bot
-function surgeBot(low) {
-  const k = sculptKit(low);
+function surgeBot(detail) {
+  const k = sculptKit(detail), low = k.low;
   for (const s of [-1, 1]) {
     const x = s * 0.105;
     k.loft([[0.07, 0.048, 0.052], [0.2, 0.052, 0.056], [0.34, 0.066, 0.066]], C.joint, [x, 0, 0], undefined, s);
@@ -104,8 +115,8 @@ function surgeBot(low) {
 
 // ------------------------------------------------------------ rank 4-6: Trooper
 // A toy-soldier read: tinted uniform and face, dark boots, gloves and gear.
-function trooper(low) {
-  const k = sculptKit(low);
+function trooper(detail) {
+  const k = sculptKit(detail), low = k.low;
   for (const s of [-1, 1]) {
     const x = s * 0.105;
     k.loft([[0.08, 0.05, 0.056], [0.18, 0.058, 0.064], [0.35, 0.078, 0.076]], C.cloth, [x, 0, 0], undefined, s);
@@ -134,8 +145,8 @@ function trooper(low) {
 }
 
 // ------------------------------------------------------------ rank 7-9: Paladin
-function paladin(low) {
-  const k = sculptKit(low);
+function paladin(detail) {
+  const k = sculptKit(detail), low = k.low;
   for (const s of [-1, 1]) {
     const x = s * 0.112;
     k.loft([[0.1, 0.056, 0.06], [0.2, 0.066, 0.07], [0.34, 0.085, 0.085]], C.dark, [x, 0, 0], undefined, s);
@@ -163,8 +174,8 @@ function paladin(low) {
 }
 
 // ------------------------------------------------------------ rank 10-13: Ascended
-function ascended(low) {
-  const k = sculptKit(low);
+function ascended(detail) {
+  const k = sculptKit(detail), low = k.low;
   for (const s of [-1, 1]) {
     const x = s * 0.1;
     k.loft([[0.1, 0.042, 0.048], [0.2, 0.05, 0.058], [0.34, 0.07, 0.07]], C.dark, [x, 0, 0], undefined, s);
@@ -198,8 +209,8 @@ const E = {
   armor: 0xffe9df, trim: 0xffdba4, dark: 0x351e2d, joint: 0x5a3549,
   light: 0xffc27b, mid: 0xffcfb4, visor: 0xfff1c0,
 };
-function raider(low) {
-  const k = sculptKit(low);
+function raider(detail) {
+  const k = sculptKit(detail), low = k.low;
   for (const s of [-1, 1]) {
     const x = s * 0.11;
     k.loft([[0.07, 0.05, 0.055], [0.2, 0.056, 0.06], [0.34, 0.07, 0.07]], E.joint, [x, 0, 0], undefined, s);
@@ -231,8 +242,8 @@ function raider(low) {
 
 // A flight suit with a swept, split solar sail. Only the outer vanes flex with
 // the stride shader. The breastplate and arms keep the normal weapon anchors.
-function sunwing(low) {
-  const k = sculptKit(low);
+function sunwing(detail) {
+  const k = sculptKit(detail), low = k.low;
   const enamel = 0xffedcf, copper = 0xca6b28, ceramic = 0x273550, plasma = 0x91fffa;
   cuirass(k,'sunwing');
   sculptHelmet(k,'sunwing');
@@ -260,8 +271,8 @@ function sunwing(low) {
 
 // The left forearm carries a full-height kite shield. A raised rim, inset
 // enamel and rear handgrip give it a silhouette from both sides of the road.
-function aegisGuard(low) {
-  const k = sculptKit(low);
+function aegisGuard(detail) {
+  const k = sculptKit(detail), low = k.low;
   const steel = 0x55677e, ivory = 0xfff5cf, teal = 0x20756d, light = 0xa4fff0, brass = 0xffc168;
   cuirass(k,'aegis');
   sculptHelmet(k,'aegis');
@@ -311,11 +322,11 @@ function aegisGuard(low) {
 }
 
 const BUILDERS = [surgeBot, trooper, paladin, ascended, sunwing, aegisGuard];
-export function raiderGeometry(detail = 'high') { return raider(detail === 'low'); }
+export function raiderGeometry(detail = 'high') { return raider(detail); }
 export function troopFormGeometry(form, detail = 'high') {
   const build = BUILDERS[form];
   if (!build) throw new RangeError(`Unknown troop form: ${form}`);
-  return build(detail === 'low');
+  return build(detail);
 }
 
 // ------------------------------------------------------------ enemy gear overlays
@@ -326,7 +337,7 @@ const GEAR = { iron: 0x59606e, steel: 0x9aa3b1, ink: 0x1d2028, brass: 0xc79a3c, 
 // Color bands follow the surface through its shoulder and turned rim. The
 // same design is sampled at fewer rings for enemies across the battlefield.
 function gearShell(k, sections, palette, zone, pos = [0,0,0], rot = [0,0,0], warp) {
-  const segments = k.low ? 10 : 20, steps = k.low ? 6 : 12;
+  const segments = k.low ? 10 : k.level === 'mid' ? 14 : 20, steps = k.low ? 6 : k.level === 'mid' ? 8 : 12;
   const geometry = loftGeometry(sections,{segments, steps, warp});
   const { color } = geometry.attributes;
   const pigments = palette.map(hex => new THREE.Color(hex));
@@ -425,7 +436,7 @@ const GEAR_BUILDERS = { 2: bomb, 3: shield, 5: helmet, 7: droneGear, 8: crabGear
 export function enemyGearGeometry(kind, detail = 'high') {
   const build = GEAR_BUILDERS[kind];
   if (!build) return null;
-  const k = sculptKit(detail === 'low', false);
+  const k = sculptKit(detail, false);
   build(k);
   const geometry = k.b.finish();
   geometry.userData.shared = false;
