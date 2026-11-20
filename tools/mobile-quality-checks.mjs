@@ -79,6 +79,35 @@ try {
     })()`);
   });
 
+  // The governor climbs from the 1.75 floor while frames hold 60 Hz and returns under load.
+  const scale = await page.evaluate(async () => {
+    const { createRenderScale } = await import('/src/render-scale.js');
+    // A failed probe stays out of reach for its backoff even when frames are calm again.
+    const policy = createRenderScale({ floor: 1.75, ceiling: 3, initial: 2.25 });
+    let t = 0;
+    const run = (seconds, interval, cpu = 2) => { for (const end = t + seconds * 1000; t < end; t += interval) policy.frame(t, interval, cpu); };
+    run(6, 1000 / 60); const probed = policy.ratio;
+    run(4, 24); const failed = policy.ratio;
+    run(12, 1000 / 60); const held = policy.ratio;
+    run(25, 1000 / 60); const retried = policy.ratio;
+    const cpuBound = createRenderScale({ floor: 1.75, ceiling: 3, initial: 2.5 });
+    for (let k = 0; k < 600; k++) cpuBound.frame(k * 25, 25, 14);
+    const backoff = probed === 2.5 && failed < probed && held < probed && retried > held && cpuBound.ratio === 2.5;
+    return window.__game.dbg(`(() => {
+      const feed = (interval, count) => { for (let i = 0; i < count; i++) frame(last + interval); };
+      const dims = () => [canvas.width, canvas.height, renderer.getPixelRatio()];
+      feed(1000 / 60, 420);
+      const [width, height, ratio] = dims();
+      const stored = JSON.parse(localStorage.getItem(RENDER_SCALE_KEY) || 'null');
+      const climbed = ratio > 1.75 && width === Math.floor(390 * ratio) && height === Math.floor(844 * ratio)
+        && stored?.ratio === ratio && post.state.sharpen < .58 && post.state.samples === (ratio >= 2.5 ? 2 : 4);
+      feed(50, 400);
+      const floor = renderer.getPixelRatio() === 1.75 && canvas.width === 682 && post.state.samples === 4 && Math.abs(post.state.sharpen - .5833) < .01;
+      localStorage.removeItem(RENDER_SCALE_KEY);
+      return { climbed, floor, backoff: ${backoff}, ratio };
+    })()`);
+  });
+
   // Verify the real shader and resolve path still produces a frame, then rotate.
   await page.setViewport({ width: 844, height: 390, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
   await page.waitForFunction(() => document.querySelector('canvas#c').width === 1477, { polling: 100 });
@@ -113,7 +142,7 @@ try {
     material.dispose(); geometry.dispose();
     const troops = window.__game.dbg(`(() => {
       B.n = 0;
-      const batches = blueForms.flatMap(form => [form.near,form.far]);
+      const batches = blueForms.flatMap(form => [form.near,form.mid,form.far]);
       spawn(B,0,0,1,0); spawn(B,0,1000,1e26,0);
       const view = new THREE.PerspectiveCamera(60,1,.5,80);
       view.position.set(0,2,10); view.lookAt(0,0,0); view.updateMatrixWorld();
@@ -141,11 +170,14 @@ try {
     })()`);
     return { scenery, troops, crowded };
   });
-  if (process.env.VERBOSE) console.log(JSON.stringify({ result, rotated, culling }));
+  if (process.env.VERBOSE) console.log(JSON.stringify({ result, scale, rotated, culling }));
   const checks = [
-    ['Touch resolution keeps its configured 1.75 pixel ratio', result.initial === '682,1477,1.75'],
-    ['Steady 30 Hz and a long interruption preserve the drawing buffer', result.steady === result.initial && result.resumed === result.initial],
-    ['Sustained 20 Hz frames preserve full scene resolution and the glow preference', result.stressed === result.initial && result.fixedBuffers && result.glowEnabled],
+    ['Touch resolution starts at the 1.75 pixel ratio floor', result.initial === '682,1477,1.75'],
+    ['Steady 30 Hz and a long interruption keep the floor resolution', result.steady === result.initial && result.resumed === result.initial],
+    ['Sustained 20 Hz frames never drop below the floor and keep the glow preference', result.stressed === result.initial && result.fixedBuffers && result.glowEnabled],
+    ['Calm 60 Hz frames raise and persist the resolution with matching samples and sharpening', scale.climbed],
+    ['A heavy load returns the resolution to the 1.75 floor and no lower', scale.floor],
+    ['A failed resolution probe backs off, and CPU-bound frames hold the level', scale.backoff],
     ['Only the blur targets are quarter-size and Glow off skips their draws', result.bloomPixels === result.glowLimit && result.withoutGlow],
     ['Shadows update every other 60 Hz frame and refresh at a stage change', result.cadence[0] === 30 && result.cadence[1] === 60 && result.freshStage],
     ['The composite does not resolve or retain multisampled depth', result.noDepthResolve],

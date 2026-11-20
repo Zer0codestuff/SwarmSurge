@@ -26,6 +26,7 @@ import { createTitleScreen } from './title-scene.js';
 import { LATE_LIGHTS } from './biomes-late.js';
 import * as PL from './props-late.js';
 import { createPostFX } from './postfx.js';
+import { createRenderScale, createGpuTimer } from './render-scale.js';
 import { useCompactShadowFilter } from './shadow-filter.js';
 import { prefs } from './settings.js';
 
@@ -93,8 +94,22 @@ const isTouch = matchMedia('(pointer: coarse)').matches;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Only the multisampled scene target needs depth. The canvas is a fullscreen composite.
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, depth: false, powerPreference: 'high-performance' });
-// The touch rendering scale is fixed at its full quality cap.
-renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.75 : 2));
+// The drawing buffer starts at the previous fixed quality (1.75x on touch, 2x on desktop) and
+// climbs toward the screen's native density, up to 3x, while frames keep their budget.
+const RENDER_SCALE_KEY = 'swarm-render-scale';
+let renderScale, pendingRatio = 0;
+function createScaleGovernor() {
+  let initial = 0;
+  try {
+    const stored = JSON.parse(localStorage.getItem(RENDER_SCALE_KEY));
+    if (stored?.dpr === devicePixelRatio) initial = +stored.ratio || 0;
+  } catch {}
+  const native = Math.min(devicePixelRatio, 3);
+  renderScale = createRenderScale({ floor: Math.min(native, isTouch ? 1.75 : 2), ceiling: native, initial });
+  renderScale.dpr = devicePixelRatio;
+}
+createScaleGovernor();
+renderer.setPixelRatio(renderScale.ratio);
 // Reading a link log forces the driver to finish every new program synchronously, which
 // shows up as a hitch the first time an effect appears. `?shaderdebug=1` restores the check.
 renderer.debug.checkShaderErrors = params.has('shaderdebug');
@@ -105,6 +120,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 renderer.info.autoReset = false; // one frame spans several passes
 const post = createPostFX(renderer, { compactBloom: isTouch });
+const gpuTimer = renderScale.adaptive && !TURBO ? createGpuTimer(renderer.getContext()) : null;
 prefs.watch('glow', (on) => { post.state.glow = on; });
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 400);
@@ -126,7 +142,9 @@ function drawBattlefield(now, forceShadow = false) {
     shadowStage = G.stage;
     shadowPhase = G.phase;
   }
+  gpuTimer?.begin();
   post.render(scene, camera);
+  gpuTimer?.end();
 }
 scene.add(hemi, sun, sun.target);
 const sky = FX.buildSky();
@@ -144,8 +162,19 @@ let labelBoundsDirty = true, labelTop = 110, labelBottom = innerHeight - 75;
 function updateGlowScale() {
   FX.setGlowScale((innerHeight * renderer.getPixelRatio()) / (2 * Math.tan((camera.fov * Math.PI) / 360)));
 }
+function applyRenderScale(ratio) {
+  // From 2.5x the pixels are fine enough that two samples smooth edges as four did at 1.75x,
+  // which halves the multisampled memory. Below native density the composite sharpens what
+  // the browser will stretch to the screen.
+  post.state.samples = ratio >= 2.5 ? 2 : 4;
+  post.state.sharpen = Math.min(0.6, Math.max(0, 1 - ratio / devicePixelRatio) * 1.4);
+  renderer.setPixelRatio(ratio);
+  updateGlowScale();
+}
 function resize() {
   labelBoundsDirty = true;
+  if (renderScale.dpr !== devicePixelRatio) { createScaleGovernor(); pendingRatio = 0; applyRenderScale(renderScale.ratio); }
+  renderScale.reset(performance.now());
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -155,6 +184,7 @@ function resize() {
   }
 }
 addEventListener('resize', resize);
+applyRenderScale(renderScale.ratio);
 resize();
 
 // ---------------------------------------------------------------- instanced unit meshes
@@ -4258,17 +4288,22 @@ function settledResult() {
 function frame(now) {
   requestAnimationFrame(frame);
   if (!TURBO && now - last < MIN_FRAME_MS) return;
+  const work = performance.now();
+  // A new resolution is applied before drawing: resizing clears the canvas, and a cleared
+  // canvas must never reach the screen.
+  if (pendingRatio) { applyRenderScale(pendingRatio); pendingRatio = 0; }
   if (!TURBO) updateMusic();
   const elapsed = (now - last) / 1000;
   const dt = Math.min(0.1, elapsed);
   last = now;
   renderer.info.reset();
-  if (titleScreen?.visible) { acc = 0; titleScreen.render(dt); return; }
+  if (titleScreen?.visible) { acc = 0; renderScale.reset(now); titleScreen.render(dt); return; }
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { G.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
   // The map is opaque, so rendering the battlefield behind it only spends GPU time.
   if (G.phase === 'menu' || G.paused || settledResult()) {
     acc = 0; shadowFrame = -Infinity;
+    renderScale.reset(now);
     return;
   }
   if (TURBO) {
@@ -4300,6 +4335,12 @@ function frame(now) {
     }
   }
   drawBattlefield(now);
+  gpuTimer?.poll(renderScale.gpu);
+  const ratio = renderScale.frame(now, elapsed * 1000, performance.now() - work);
+  if (ratio) {
+    pendingRatio = ratio;
+    try { localStorage.setItem(RENDER_SCALE_KEY, JSON.stringify({ dpr: devicePixelRatio, ratio })); } catch {}
+  }
 }
 
 // Build the battlefield only when a run starts. Opening the map must not consume onboarding.
