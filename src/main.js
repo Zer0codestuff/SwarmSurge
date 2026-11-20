@@ -24,6 +24,7 @@ import { createSupplyDrop, callSupplyDrop, stepSupplyDrop, supplyMessage, poseSu
 import { newReactor, chargePower, triggerReactor, tickReactor, VENT_TIME, BURST_TIME } from './reactor.js';
 import { AEGIS_FORM, SUNWING_FORM, TROOP_FORMS, troopForm, troopFormGeometry, enemyGearGeometry } from './troop-forms.js';
 import { createTitleScreen } from './title-scene.js';
+import { ICONS, starSpan, syncMuteButton } from './ui-icons.js';
 import { LATE_LIGHTS } from './biomes-late.js';
 import * as PL from './props-late.js';
 
@@ -698,7 +699,7 @@ function refreshGate(g) {
   else if (t === 'charge') {
     const atMax = g.val >= c.max;
     const prog = atMax ? 1 : (g.fed % c.per) / c.per;
-    M.drawLabel(L, 'x' + fmt(g.val * g.boost), atMax ? 'MAX!' : `CHARGE ▲ x${fmt(c.max * g.boost)}`, prog, atMax ? '#fff35a' : '#bfffd8');
+    M.drawLabel(L, 'x' + fmt(g.val * g.boost), atMax ? 'MAX!' : `CHARGE UP x${fmt(c.max * g.boost)}`, prog, atMax ? '#fff35a' : '#bfffd8');
   } else if (t === 'portal') M.drawLabel(L, 'WARP', '', -1, '#ffd0ff');
   else if (t === 'prism') M.drawLabel(L, 'PRISM', 'SPLIT x' + g.def.to.length, -1, '#ffffff');
   else if (t === 'mirror') M.drawLabel(L, 'MIRROR', 'TWIN x2', -1, '#e6fbff');
@@ -707,7 +708,7 @@ function refreshGate(g) {
   else if (t === 'slot') {
     if (g.spin > 0) M.drawLabel(L, SLOT_FACES[(Math.random() * SLOT_FACES.length) | 0], 'SLOT', -1, '#fff4a0');
     else M.drawLabel(L, opText(c, c.t === 'div' ? 1 : g.boost), 'SLOT', -1, c.t === 'div' ? '#ffd9d9' : '#ffffff');
-  } else if (t === 'heart') M.drawLabel(L, '+' + (g.def.v ?? 1) + ' ♥', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffd0e0');
+  } else if (t === 'heart') M.drawLabel(L, '+' + (g.def.v ?? 1) + ' LIFE', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffd0e0');
   else if (t === 'hangar') M.drawLabel(L, 'AIR WING', `${fmt(g.prog)}/${fmt(g.need)}`, g.prog / g.need, '#ffe680');
   else if (t === 'tesla') M.drawLabel(L, g.active ? 'ZAP!' : 'TESLA', g.active ? 'ONLINE' : `${fmt(g.prog)}/${fmt(g.need)}`, g.active ? 1 : g.prog / g.need, '#bff6ff');
   else if (t === 'hypno') {
@@ -1130,7 +1131,7 @@ function renderPips() {
   for (let i = 0; i < n; i++) {
     const boss = !!G.stages[i].boss;
     const cls = i < G.stageIdx ? 'done' : i === G.stageIdx ? 'cur' : '';
-    html += `<span class="pip ${cls} ${boss ? 'skull' : ''}">${boss ? '☠' : i + 1}</span>`;
+    html += `<span class="pip ${cls} ${boss ? 'skull' : ''}">${boss ? ICONS.boss : i + 1}</span>`;
   }
   hud.pips.innerHTML = html;
 }
@@ -1722,7 +1723,7 @@ function absorb(S, g, i) {
         const v = g.def.v ?? 1;
         // A one-heart run cannot heal: its hearts are forged into armor instead.
         if (G.hardcore) G.shield = Math.min(6, G.shield + v); else G.lives = Math.min(MAX_LIVES, G.lives + v);
-        const gain = G.hardcore ? `+${v} ARMOR` : `+${v} ♥`;
+        const gain = G.hardcore ? `+${v} ARMOR` : `+${v} LIFE`;
         banner(gain, 'pink', 1.2);
         popup(gain, 'combo c3', G.cx, 2.5, G.cannonZ - 2, 1.2);
         if (!TURBO) { sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.pink, 50, 0.5, 1.2); retriggerClass(hud.lives, 'hit'); }
@@ -2360,7 +2361,7 @@ function attackSweep(b) {
     if (Math.abs(G.cx - x) < SWEEP_RADIUS) {
       const damage = damageCannon(1, x, z1);
       burst(G.cx, 1.2, G.cannonZ, PCOL.orange, 30, 7);
-      if (damage) popup('BURNED! -1 ❤', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 1.0);
+      if (damage) popup('BURNED! -1', 'combo c1', G.cx, 2.5, G.cannonZ - 2, 1.0);
     } else if (sweep.lateExposure) {
       G.stage.counterShots = COUNTER_VOLLEYS;
       popup('COUNTERFIRE ×' + COUNTER_POWER, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.3);
@@ -2641,7 +2642,7 @@ function ballDies(S, b, crashed) {
   sound.play('boom');
   if (crashed) {
     const damage = damageCannon(b.def.dmg ?? 3, b.x, b.z);
-    if (damage) popup(`-${damage} ♥`, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.0);
+    if (damage) popup(`-${damage} LIFE`, 'combo c2', G.cx, 2.5, G.cannonZ - 2, 1.0);
   } else {
     G.overdrive = Math.max(G.overdrive, 4);
     popup('WRECK BONUS x2!', 'combo c3', b.x, 3, b.z, 1.2);
@@ -3965,7 +3966,7 @@ function renderWorld(dt) {
   }
   G.armyPrev = G.armyPrev * 0.9 + G.army * 0.1;
   setHud('armyTier', hud.army, G.army >= 1e9 ? 't4' : G.army >= 1e6 ? 't3' : G.army >= 1000 ? 't2' : '', 'className');
-  setHud('lives', hud.lives, `<span class="heart">${G.hardcore ? '☠' : '❤'}</span>${Math.max(0, G.lives)}`, 'innerHTML');
+  setHud('lives', hud.lives, `<span class="heart">${G.hardcore ? ICONS.hardcore : ICONS.heart}</span>${Math.max(0, G.lives)}`, 'innerHTML');
   const low = G.lives <= 3 && !G.hardcore;
   if (hudCache.livesLow !== low) { hudCache.livesLow = low; hud.lives.classList.toggle('low', low); }
   const rank = RANKS[G.rank];
@@ -4056,7 +4057,7 @@ function openWorldCard(index) {
   const stat = (label, value) => `<span>${label}<b>${value || '-'}</b></span>`;
   cardWorld = index;
   $('wc-body').innerHTML = `<div class="wc-art">${biomeArt(level.theme, THEMES[level.theme])}</div>
-    <small>WORLD ${index + 1}</small><h2 id="wc-title">${level.name}</h2>
+    <small class="wc-sector">WORLD ${index + 1}</small><h2 id="wc-title">${level.name}</h2>
     <p class="wc-boss">Boss: <b>${boss}</b><i>${epithet}</i></p>
     <div class="wc-stars" aria-label="${stars} of 3 stars">${starsHtml(stars)}</div>
     <div class="wc-stats">${stat('BEST ARMY', best.army && fmt(best.army))}${stat('BEST COMBO', best.combo > 1 && 'x' + fmt(best.combo))}${stat('BEST TIME', best.time && clock(best.time))}</div>
@@ -4065,7 +4066,7 @@ function openWorldCard(index) {
     <ul class="wc-medals">${MEDALS.map((medal) => `<li class="${held.includes(medal) ? 'on' : ''}"><i>${medalIcon(medal)}</i><b>${medal.name}</b><span>${medal.hint}</span></li>`).join('')}</ul>`;
   $('wc-play').textContent = resumable ? `RESUME ${index + 1}.${G.stageIdx + 1}` : 'PLAY';
   $('wc-hard').disabled = !stars;
-  $('wc-hard').textContent = stars ? '☠ HARDCORE' : '☠ Clear the world first';
+  $('wc-hard').innerHTML = stars ? `${ICONS.hardcore}<span>HARDCORE</span>` : `${ICONS.lock}<span>Clear the world first</span>`;
   $('wc-hard').title = 'One heart, no healing: hearts turn into armor.';
   if (!$('worldcard').open) $('worldcard').showModal();
 }
@@ -4077,7 +4078,7 @@ $('worldcard').addEventListener('click', (event) => { if (event.target === $('wo
 function medalIcon(medal) {
   return `<svg viewBox="0 0 24 24" class="medal-icon" aria-hidden="true" fill="currentColor">${medal.icon}</svg>`;
 }
-function starsHtml(n) { return [0, 1, 2].map((i) => `<span class="${i < n ? 'on' : ''}">★</span>`).join(''); }
+function starsHtml(n) { return [0, 1, 2].map((i) => starSpan(i < n)).join(''); }
 function showMenu(preserveRun = false) {
   titleScreen?.hide();
   if (preserveRun === true && ['intro','play','clear','move'].includes(G.phase)) G.resumePhase = G.phase;
@@ -4146,7 +4147,7 @@ function showResult(win) {
     return `<span class="medal${has ? ' on' : ''}${fresh ? ' fresh' : ''}" style="--k:${k}" title="${medal.hint}"><i>${medalIcon(medal)}</i>${medal.name}<small>${fresh ? 'NEW!' : has ? 'earned' : medal.hint}</small></span>`;
   }).join('')}</div>` : '';
   $('rmsg').innerHTML = win
-    ? stats + times + medals + `Hearts left: ${G.lives}<br><small>★★★ = 8+ hearts · ★★ = 4+ hearts</small>` +
+    ? stats + times + medals + `Hearts left: ${G.lives}<div class="star-legend"><span class="star-legend-group">${ICONS.star}${ICONS.star}${ICONS.star} 8+ hearts</span><span>·</span><span class="star-legend-group">${ICONS.star}${ICONS.star} 4+ hearts</span></div>` +
       (last ? `<br><b class="champ">ALL ${LEVELS.length} LEVELS CLEARED! You are the Swarm Master!</b>` : '')
     : stats + times + `${G.loseMsg}<br><small>${tip}</small>`;
   $('rretry').classList.toggle('hidden', win);
@@ -4193,15 +4194,15 @@ $('rmenu').addEventListener('click', showMenu);
 $('menubtn').addEventListener('click', () => { if (!pauseGame() && ['won','lost'].includes(G.phase)) showMenu(); });
 // Quick settings in the pause dialog share their state with the title settings.
 const pauseOptions = {
-  sound: { on: () => !sound.muted, flip: () => { sound.unlock(); muteBtn.textContent = sound.toggle() ? '🔇' : '🔊'; } },
+  sound: { on: () => !sound.muted, flip: () => { sound.unlock(); syncMuteButton(sound.toggle(), muteBtn); } },
   music: { on: () => prefs.get('music'), flip: () => prefs.set('music', !prefs.get('music')) },
   glow: { on: () => prefs.get('glow'), flip: () => prefs.set('glow', !prefs.get('glow')) },
 };
 function syncPauseOptions() { for (const button of $('pauseopts').children) button.setAttribute('aria-pressed', String(!!pauseOptions[button.dataset.opt].on())); }
 for (const button of $('pauseopts').children) button.addEventListener('click', () => { pauseOptions[button.dataset.opt].flip(); syncPauseOptions(); });
 const muteBtn = $('mute');
-muteBtn.textContent = sound.muted ? '🔇' : '🔊';
-muteBtn.addEventListener('click', () => { sound.unlock(); muteBtn.textContent = sound.toggle() ? '🔇' : '🔊'; });
+syncMuteButton(sound.muted, muteBtn);
+muteBtn.addEventListener('click', () => { sound.unlock(); syncMuteButton(sound.toggle(), muteBtn); });
 
 // ---------------------------------------------------------------- input
 let drag = null;

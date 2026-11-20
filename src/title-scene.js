@@ -1,6 +1,7 @@
 import { buildTitleBattle } from './title-battle.js';
 import { drawTitleLogo } from './title-logo.js';
 import { prefs } from './settings.js';
+import { syncMuteButton } from './ui-icons.js';
 
 export function createTitleScreen(sound, draw) {
   const root = document.getElementById('welcome'), settings = document.getElementById('settings');
@@ -14,7 +15,7 @@ export function createTitleScreen(sound, draw) {
   function sync() { motion.checked = animated; audio.checked = !sound.muted; glow.checked = prefs.get('glow'); music.checked = prefs.get('music'); root.classList.toggle('still', !animated || preference.matches); document.body.classList.toggle('menu-still', !animated); }
   document.getElementById('welcome-settings').onclick = () => { sync(); settings.showModal(); };
   document.getElementById('settings-close').onclick = () => settings.close();
-  audio.onchange = () => { if (audio.checked === sound.muted) sound.toggle(); document.getElementById('mute').textContent = sound.muted ? '\ud83d\udd07' : '\ud83d\udd0a'; };
+  audio.onchange = () => { if (audio.checked === sound.muted) sound.toggle(); syncMuteButton(sound.muted); };
   motion.onchange = () => { animated = motion.checked; try { localStorage.setItem('swarm-menu-motion', animated ? '1' : '0'); } catch {} sync(); dirty = true; };
   preference.addEventListener('change', () => { sync(); dirty = true; });
   addEventListener('resize', () => { dirty = true; });
