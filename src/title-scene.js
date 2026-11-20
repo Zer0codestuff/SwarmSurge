@@ -36,9 +36,9 @@ export function createTitleScreen(sound, draw) {
         time += Math.min(dt, .1);
         elapsed += dt;
       }
-      if (!force && !dirty && (!moving || elapsed < 1 / 30)) return;
+      if (!force && !dirty && (!moving || elapsed < 1 / 62)) return;
       battle ||= buildTitleBattle();
-      elapsed = moving && !force ? elapsed % (1 / 30) : 0;
+      elapsed = moving && !force ? elapsed % (1 / 62) : 0;
       dirty = false;
       painted = true;
       battle.render(draw, moving ? time : 0);
