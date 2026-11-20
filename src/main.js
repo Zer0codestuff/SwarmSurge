@@ -34,7 +34,7 @@ import { prefs } from './settings.js';
 const SPEED = Math.min(50, Math.max(1, Number(params.get('speed')) || 1)); // test helper: fast-forward
 const STEP = 1 / 60;
 const STAGE_GAP = 80, TOWER_D = 58, SPAWN_D = 55, XLIM = 6.45, BASE_LIVES = 10;
-const MAX_BLUE = 1000, MAX_RED = 900, MAX_PART = 1800;
+const MAX_BLUE = 1000, MAX_RED = 900, MAX_PART = 900;
 const MAX_POWER = 1e30; // per unit: keeps Float32 math far away from Infinity
 const RESERVE = 80; // blue slots only the cannon may use, so the stream never starves
 const BLUE_SPEED = 9, GIANT_SPEED = 6.2, GIANT_HP = 15, CHARGE_MAX = 30, BASE_INTERVAL = 0.15, SPLIT_MAX = 3;
@@ -360,48 +360,66 @@ function seek(C, x, z, maxD, dir) {
 const PT = {
   x: new Float32Array(MAX_PART), y: new Float32Array(MAX_PART), z: new Float32Array(MAX_PART),
   vx: new Float32Array(MAX_PART), vy: new Float32Array(MAX_PART), vz: new Float32Array(MAX_PART),
-  life: new Float32Array(MAX_PART), max: new Float32Array(MAX_PART), col: new Float32Array(MAX_PART * 3), head: 0, scanEnd: 0,
+  life: new Float32Array(MAX_PART), max: new Float32Array(MAX_PART), col: new Float32Array(MAX_PART * 3), n: 0, cursor: 0,
 };
+// Per-frame particle spawn budgets stop simultaneous explosions & wave clears from spiking a frame.
+const FRAME_PART_CAP = 180;
+const FRAME_SPARK_CAP = 150;
+let framePartBudget = FRAME_PART_CAP;
+let frameSparkBudget = FRAME_SPARK_CAP;
 function burst(x, y, z, col, n, spd = 4, size = 1) {
-  if (TURBO) return;
+  if (TURBO || framePartBudget <= 0) return;
+  let count = Math.min(n, framePartBudget);
+  if (PT.n > MAX_PART * 0.65) count = Math.max(1, Math.ceil(count * 0.45));
+  framePartBudget -= count;
   const c = PT.col;
-  for (let k = 0; k < n; k++) {
-    const i = PT.head; PT.head = (PT.head + 1) % MAX_PART;
+  for (let k = 0; k < count; k++) {
+    let i;
+    if (PT.n < MAX_PART) { i = PT.n++; }
+    else { i = PT.cursor; PT.cursor = (PT.cursor + 1) % MAX_PART; }
     PT.x[i] = x; PT.y[i] = y; PT.z[i] = z;
     const a = Math.random() * 6.28, s = spd * (0.4 + Math.random() * 0.8);
     PT.vx[i] = Math.cos(a) * s; PT.vz[i] = Math.sin(a) * s; PT.vy[i] = spd * (0.6 + Math.random());
     PT.max[i] = PT.life[i] = (0.45 + Math.random() * 0.4) * size;
     c[i * 3] = col[0]; c[i * 3 + 1] = col[1]; c[i * 3 + 2] = col[2];
-    if (i + 1 > PT.scanEnd) PT.scanEnd = i + 1;
   }
 }
 function spark(x, y, z, col, n, speed = 4, size = 0.8, life = 0.5, grav = -6) {
-  if (!TURBO) sparks.emit(x, y, z, col, n, speed, size, life, grav);
+  if (TURBO || frameSparkBudget <= 0) return;
+  const count = Math.min(n, frameSparkBudget);
+  frameSparkBudget -= count;
+  sparks.emit(x, y, z, col, count, speed, size, life, grav);
 }
-// Live particles are packed at the front so only they are drawn and uploaded.
+// Dense swap-remove compaction keeps only live particles in [0, PT.n) so dead slots are never scanned.
 function updateParticles(dt) {
-  if (PT.scanEnd === 0) return;
-  const m = partMesh.instanceMatrix.array, c = partMesh.instanceColor.array;
-  let n = 0, last = 0;
-  for (let i = 0; i < PT.scanEnd; i++) {
-    if (PT.life[i] <= 0) continue;
+  if (PT.n === 0) { if (partMesh.count) partMesh.count = 0; return; }
+  const m = partMesh.instanceMatrix.array, c = partMesh.instanceColor.array, col = PT.col;
+  let i = 0;
+  while (i < PT.n) {
     PT.life[i] -= dt;
-    if (PT.life[i] <= 0) continue;
-    last = i + 1;
+    if (PT.life[i] <= 0) {
+      const last = --PT.n;
+      if (i !== last) {
+        PT.x[i] = PT.x[last]; PT.y[i] = PT.y[last]; PT.z[i] = PT.z[last];
+        PT.vx[i] = PT.vx[last]; PT.vy[i] = PT.vy[last]; PT.vz[i] = PT.vz[last];
+        PT.life[i] = PT.life[last]; PT.max[i] = PT.max[last];
+        col[i * 3] = col[last * 3]; col[i * 3 + 1] = col[last * 3 + 1]; col[i * 3 + 2] = col[last * 3 + 2];
+      }
+      continue;
+    }
     PT.vy[i] -= 20 * dt;
     PT.x[i] += PT.vx[i] * dt; PT.y[i] += PT.vy[i] * dt; PT.z[i] += PT.vz[i] * dt;
     if (PT.y[i] < 0.08) { PT.y[i] = 0.08; PT.vy[i] *= -0.4; PT.vx[i] *= 0.7; PT.vz[i] *= 0.7; }
-    const s = PT.life[i] / PT.max[i] * 1.4, o = n * 16;
+    const s = PT.life[i] / PT.max[i] * 1.4, o = i * 16;
     m[o] = s; m[o + 1] = m[o + 2] = m[o + 3] = m[o + 4] = 0; m[o + 5] = s; m[o + 6] = m[o + 7] = m[o + 8] = m[o + 9] = 0;
     m[o + 10] = s; m[o + 11] = 0; m[o + 12] = PT.x[i]; m[o + 13] = PT.y[i]; m[o + 14] = PT.z[i]; m[o + 15] = 1;
-    c[n * 3] = PT.col[i * 3]; c[n * 3 + 1] = PT.col[i * 3 + 1]; c[n * 3 + 2] = PT.col[i * 3 + 2];
-    n++;
+    c[i * 3] = col[i * 3]; c[i * 3 + 1] = col[i * 3 + 1]; c[i * 3 + 2] = col[i * 3 + 2];
+    i++;
   }
-  PT.scanEnd = last;
-  partMesh.count = n;
-  if (n > 0) {
-    uploadUsed(partMesh.instanceMatrix, n);
-    uploadUsed(partMesh.instanceColor, n);
+  partMesh.count = PT.n;
+  if (PT.n > 0) {
+    uploadUsed(partMesh.instanceMatrix, PT.n);
+    uploadUsed(partMesh.instanceColor, PT.n);
   }
 }
 const PCOL = {
@@ -983,7 +1001,8 @@ function startLevel(idx, stageIdx = 0, hardcore = false) {
   G.stages = def.stages.map((sd, i) => buildStage(sd, i, G.root, def.theme));
   for (let i = 0; i < stageIdx; i++) if (G.stages[i].tower) { G.stages[i].tower.alive = false; G.stages[i].tower.model.group.visible = false; }
   B.n = R.n = 0;
-  PT.life.fill(0); PT.scanEnd = 0; partMesh.count = 0;
+  PT.n = 0; PT.cursor = 0; partMesh.count = 0;
+  if (G.shatters) for (const sh of G.shatters) FX.disposeShatter(sh.parts);
   sparks.clear(); debris.clear(); tracers.clear(); impactRings.clear(); G.shatters = [];
   for (const pool of [redToss, ...blueToss]) { pool.n = 0; pool.mesh.count = 0; pool.mesh.visible = false; }
   endCine(true); G.hitStop = 0;
@@ -1026,9 +1045,20 @@ function warmShaders() {
   const hidden = G.stages.filter((S) => !S.group.visible);
   for (const S of hidden) S.group.visible = true;
   const marker = markerWarmed ? null : attackMarker('circle', 0, 0, 1, 0, false);
+  const shard = markerWarmed ? null : FX.warmShatterMesh();
+  const toggled = [];
+  if (!markerWarmed) {
+    for (const m of [partMesh, sparks.points, debris.mesh, tracers.mesh, impactRings.mesh]) {
+      if (m && !m.visible) { m.visible = true; toggled.push(m); }
+    }
+  }
   if (marker) scene.add(marker);
+  if (shard) scene.add(shard);
   renderer.compile(scene, camera);
-  if (marker) { scene.remove(marker); markerWarmed = true; }
+  if (marker) scene.remove(marker);
+  if (shard) { scene.remove(shard); shard.dispose(); }
+  for (const m of toggled) m.visible = false;
+  markerWarmed = true;
   for (const S of hidden) S.group.visible = false;
 }
 function setBarrels(n) {
@@ -1630,7 +1660,8 @@ function upgradeCannon(up) {
 function detonateNuke(S, g, mult = 5, label = 'NUKE! ARMY x5') {
   whiteFlash(); hitStop(0.1);
   buzz([120, 60, 220]);
-  for (let i = 0; i < R.n; i++) if (R.hp[i] > 0) { burst(R.x[i], 0.6, R.z[i], PCOL.orange, 2, 6); R.hp[i] = 0; G.kills++; }
+  const popStride = Math.max(1, Math.ceil(R.n / 28));
+  for (let i = 0; i < R.n; i++) if (R.hp[i] > 0) { if (i % popStride === 0) burst(R.x[i], 0.6, R.z[i], PCOL.orange, 2, 6); R.hp[i] = 0; G.kills++; }
   G.explosions.length = 0; G.splits.length = 0; G.revives.length = 0;
   G.rad = 4;
   for (const s of [...S.spawners, ...S.turrets]) if (s.alive) { s.hp = 0; s.flash = 1; }
@@ -1655,9 +1686,9 @@ function detonateNuke(S, g, mult = 5, label = 'NUKE! ARMY x5') {
     G.effects.push({ kind: 'mush', mesh: M.buildMushroom(), life: 2.2, max: 2.2, z: G.z0 - 30 });
     G.root.add(G.effects[G.effects.length - 1].mesh);
   }
-  for (let k = 0; k < 8; k++) burst(rand(-6, 6), 1, G.z0 - rand(10, 50), PCOL.green, 14, 9, 1.4);
+  for (let k = 0; k < 5; k++) burst(rand(-6, 6), 1, G.z0 - rand(10, 50), PCOL.green, 10, 9, 1.4);
   G.shake = 1.4; G.kick = 1;
-  for (let k = 0; k < 6; k++) spark(rand(-6, 6), 1, G.z0 - rand(8, 55), PCOL.green, 20, 9, 1.4, 0.9);
+  for (let k = 0; k < 4; k++) spark(rand(-6, 6), 1, G.z0 - rand(8, 55), PCOL.green, 14, 9, 1.35, 0.85);
   banner(label, 'gold', 1.6);
   sound.play('nuke');
   // a nuke recharges for 6 s and burns out after 3 blasts, so the x5 can't chain into infinity
@@ -3390,7 +3421,8 @@ function step(dt) {
 }
 
 function popAllRed() {
-  for (let i = 0; i < R.n; i++) if (R.hp[i] > 0) { burst(R.x[i], 0.5, R.z[i], PCOL.red, 2, 4); R.hp[i] = 0; }
+  const stride = Math.max(1, Math.ceil(R.n / 28));
+  for (let i = 0; i < R.n; i++) if (R.hp[i] > 0) { if (i % stride === 0) burst(R.x[i], 0.5, R.z[i], PCOL.red, 2, 4); R.hp[i] = 0; }
   R.n = 0;
   G.explosions.length = 0; G.splits.length = 0; G.revives.length = 0;
 }
@@ -3405,18 +3437,20 @@ function stageCleared(S) {
   T.hp = 0;
   hideLabel(T.label);
   for (const s of [...S.spawners, ...S.turrets]) if (s.alive) { s.alive = false; s.model.group.visible = false; hideLabel(s.label); }
-  burst(0, 2, T.z, PCOL.red, 80, 10, 1.5);
-  burst(0, 2, T.z, PCOL.gold, 40, 9, 1.5);
+  burst(0, 2, T.z, PCOL.red, 44, 10, 1.4);
+  burst(0, 2, T.z, PCOL.gold, 26, 9, 1.4);
   if (!TURBO) {
+    addRing(0, T.z, 15, 0xffcc44, 0.65);
+    addRing(0, T.z, 9, 0xffffff, 0.4);
     G.shatters.push({ parts: FX.shatter(T.model.group, G.root, 0, T.z, 10), t: 0 });
     const tc = rgb(THEMES[LEVELS[G.levelIdx].theme].tower);
-    debris.burst(0, 1, T.z, [tc, tc, PCOL.gold, PCOL.white], 40, 13, 3, 10, 0.5);
-    for (let k = 0; k < 5; k++) spark(rand(-6, 6), rand(1, 4), T.z, k % 2 ? PCOL.gold : PCOL.orange, 16, 9, 1.4, 0.8);
+    debris.burst(0, 1, T.z, [tc, tc, PCOL.gold, PCOL.white], 28, 13, 3, 10, 0.5);
+    for (let k = 0; k < 4; k++) spark(rand(-6, 6), rand(1, 4), T.z, k % 2 ? PCOL.gold : PCOL.orange, 12, 9, 1.3, 0.75);
   }
   G.kick = 0.8;
   popAllRed();
   hitStop(0.09);
-  for (let k = 0; k < 8; k++) spark(G.cx + rand(-5, 5), rand(1.5, 3.5), G.z0 - rand(3, 22), [PCOL.gold, PCOL.ice, PCOL.pink][k % 3], 8, 5, 1.1, 0.8);
+  for (let k = 0; k < 5; k++) spark(G.cx + rand(-5, 5), rand(1.5, 3.5), G.z0 - rand(3, 22), [PCOL.gold, PCOL.ice, PCOL.pink][k % 3], 6, 5, 1.0, 0.75);
   G.phase = 'clear'; G.phaseT = 0; G.shake = 0.8;
   banner('STAGE CLEAR!', 'gold', 1.6);
   if (overkill > T.max) popup(`OVERKILL x${fmt(1 + overkill / T.max)}!`, 'combo c3', 0, 6, T.z, 1.8);
@@ -3431,10 +3465,12 @@ function bossDefeated(S) {
   const overkill = -b.hp;
   b.hp = 0; b.dead = 0.001;
   hideLabel(b.label);
-  for (let k = 0; k < 8; k++) burst(b.x + rand(-2, 2), rand(1, 7), b.z, k % 2 ? PCOL.orange : PCOL.gold, 30, 10, 1.6);
+  for (let k = 0; k < 5; k++) burst(b.x + rand(-2, 2), rand(1, 7), b.z, k % 2 ? PCOL.orange : PCOL.gold, 18, 10, 1.5);
   if (!TURBO) {
+    addRing(b.x, b.z, 19, 0xffcc44, 0.75);
+    addRing(b.x, b.z, 11, 0xffffff, 0.45);
     G.shatters.push({ parts: FX.shatter(b.model.group, G.root, b.x, b.z, 9), t: 0 });
-    for (let k = 0; k < 8; k++) spark(b.x + rand(-3, 3), rand(1, 9), b.z, k % 2 ? PCOL.gold : PCOL.white, 20, 10, 1.6, 1.0);
+    for (let k = 0; k < 5; k++) spark(b.x + rand(-3, 3), rand(1, 9), b.z, k % 2 ? PCOL.gold : PCOL.white, 14, 10, 1.45, 0.9);
   }
   G.kick = 1.2;
   popAllRed();
@@ -3638,17 +3674,17 @@ function renderWorld(dt) {
   const labelVis = G.phase === 'menu' || G.shown || G.cine > 0 ? 'hidden' : 'visible';
   if (hudCache.labelVis !== labelVis) { hudCache.labelVis = labelVis; labelLayer.style.visibility = labelVis; }
   cheer = G.phase === 'clear' || G.phase === 'won' ? Math.min(1, G.phaseT / 0.3) : 0;
-  // Fireworks over the fallen boss while the army cheers.
-  if (G.phase === 'won' && !reducedMotion && G.phaseT > 0.5 && G.phaseT < 7.5) {
+  // Fireworks over the fallen boss while the army cheers (pause new launches once the results dossier opens).
+  if (G.phase === 'won' && !reducedMotion && !G.shown && G.phaseT > 0.45 && G.phaseT < 4.5) {
     G.fireworkT = (G.fireworkT || 0) - dt;
     if (G.fireworkT <= 0) {
-      G.fireworkT = 0.2 + Math.random() * 0.28;
+      G.fireworkT = 0.3 + Math.random() * 0.24;
       const at = G.stage.boss || G.stage.tower, colors = [PCOL.gold, PCOL.pink, PCOL.blue, PCOL.green, PCOL.orange, PCOL.purple];
       // Between the camera and the wreck, so the bursts read at any road length.
       const far = at?.z ?? G.cannonZ - 30, x = (at?.x ?? 0) + rand(-10, 10), y = rand(5, 11), z = far + rand(2, Math.max(6, (camera.position.z - far) * 0.55));
-      spark(x, y, z, colors[Math.floor(Math.random() * colors.length)], 60, 10, 2.6, 1.2, -8);
-      spark(x, y, z, PCOL.white, 14, 5, 1.8, 0.5, -3);
-      if (!G.shown) sound.play('pop');
+      spark(x, y, z, colors[Math.floor(Math.random() * colors.length)], 28, 9.5, 1.65, 1.05, -8);
+      spark(x, y, z, PCOL.white, 8, 5, 1.2, 0.45, -3);
+      sound.play('pop');
     }
   }
   if (labelBoundsDirty && G.phase !== 'menu') {
@@ -4309,10 +4345,12 @@ function updateMusic() {
 // The results UI can stay open indefinitely. Let the last fireworks and
 // debris settle, then leave the completed frame on the canvas.
 function settledResult() {
-  return G.shown && (G.phase === 'won' && G.phaseT >= (reducedMotion ? 4 : 10)
+  return G.shown && (G.phase === 'won' && G.phaseT >= (reducedMotion ? 3.5 : 5.5)
     || G.phase === 'lost' && G.phaseT >= 4);
 }
 function frame(now) {
+  framePartBudget = FRAME_PART_CAP;
+  frameSparkBudget = FRAME_SPARK_CAP;
   requestAnimationFrame(frame);
   if (!TURBO && now - last < MIN_FRAME_MS) return;
   const work = performance.now();

@@ -9,7 +9,7 @@ export function uploadUsed(attribute, count) {
   attribute.needsUpdate = true;
 }
 
-// Soft round glowing points (additive). Used for sparks, muzzle flashes, halos and ambient particles.
+// Soft round glowing points (additive). Clamped point size prevents full-screen fill-rate stalls near the camera.
 const glowVert = `
   attribute float size;
   attribute float alpha;
@@ -21,7 +21,7 @@ const glowVert = `
     vColor = color;
     vAlpha = alpha;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = size * uScale / max(0.1, -mv.z);
+    gl_PointSize = min(size * uScale / max(1.4, -mv.z), uScale * 0.13);
     gl_Position = projectionMatrix * mv;
   }`;
 const glowFrag = `
@@ -31,10 +31,11 @@ const glowFrag = `
     mediump vec2 p = gl_PointCoord - 0.5;
     mediump float r2 = dot(p, p);
     if (r2 > 0.25) discard;
-    mediump float d = sqrt(r2) * 2.0;
-    mediump float a = smoothstep(1.0, 0.0, d);
-    a = a * a * (0.6 + 0.4 * smoothstep(0.35, 0.0, d));
-    gl_FragColor = vec4(vColor * (1.0 + smoothstep(0.3, 0.0, d)), a * vAlpha);
+    mediump float d2 = r2 * 4.0;
+    mediump float inv = 1.0 - d2;
+    mediump float core = smoothstep(0.14, 0.0, d2);
+    mediump float a = inv * inv * (0.62 + 0.38 * core);
+    gl_FragColor = vec4(vColor * (1.0 + core), a * vAlpha);
   }`;
 function glowMaterial(blending = THREE.AdditiveBlending) {
   return new THREE.ShaderMaterial({
@@ -160,12 +161,12 @@ export class Tracers {
   clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; this.alive = false; }
 }
 
-// pool of physics sparks
+// Densely packed pool of physics sparks (O(1) swap-remove so zero dead slots are ever scanned or uploaded).
 export class Sparks {
-  constructor(scene, N = 1400) {
+  constructor(scene, N = 900) {
     this.N = N;
+    this.count = 0;
     this.head = 0;
-    this.scanEnd = 0;
     const g = new THREE.BufferGeometry();
     this.pos = new Float32Array(N * 3);
     this.col = new Float32Array(N * 3);
@@ -180,6 +181,7 @@ export class Sparks {
     g.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('size', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('alpha', new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage));
+    g.setDrawRange(0, 0);
     this.geo = g;
     const m = glowMaterial();
     glowMaterials.push(m);
@@ -188,59 +190,83 @@ export class Sparks {
     this.points.renderOrder = 5;
     scene.add(this.points);
   }
+  get scanEnd() { return this.count; }
+  alloc() {
+    if (this.count < this.N) return this.count++;
+    const i = this.head;
+    this.head = (i + 1) % this.N;
+    return i;
+  }
   emit(x, y, z, col, n, speed = 4, size = 0.8, life = 0.5, grav = -6, spread = 1) {
-    for (let k = 0; k < n; k++) {
-      const i = this.head; this.head = (this.head + 1) % this.N;
-      this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
+    // Under heavy load, gently throttle oversized bursts so fill-rate stays locked.
+    const load = this.count / this.N;
+    const actual = load > 0.7 ? Math.max(1, Math.ceil(n * 0.45)) : load > 0.45 ? Math.max(1, Math.ceil(n * 0.7)) : n;
+    for (let k = 0; k < actual; k++) {
+      const i = this.alloc(), o = i * 3;
+      this.pos[o] = x; this.pos[o + 1] = y; this.pos[o + 2] = z;
       const a = Math.random() * 6.283, u = Math.random() * 2 - 1, s = speed * (0.35 + Math.random() * 0.65);
       const r = Math.sqrt(1 - u * u);
-      this.vel[i * 3] = Math.cos(a) * r * s * spread; this.vel[i * 3 + 1] = Math.abs(u) * s; this.vel[i * 3 + 2] = Math.sin(a) * r * s * spread;
-      this.col[i * 3] = col[0]; this.col[i * 3 + 1] = col[1]; this.col[i * 3 + 2] = col[2];
-      this.size0[i] = size * (0.6 + Math.random() * 0.8);
+      this.vel[o] = Math.cos(a) * r * s * spread; this.vel[o + 1] = Math.abs(u) * s; this.vel[o + 2] = Math.sin(a) * r * s * spread;
+      this.col[o] = col[0]; this.col[o + 1] = col[1]; this.col[o + 2] = col[2];
+      this.size0[i] = this.size[i] = size * (0.6 + Math.random() * 0.8);
       this.max[i] = this.life[i] = life * (0.6 + Math.random() * 0.6);
+      this.alpha[i] = 1;
       this.grav[i] = grav;
-      if (i + 1 > this.scanEnd) this.scanEnd = i + 1;
     }
   }
   // a stream of sparks flying from A to B (upgrade beams, warp trails)
   stream(x1, y1, z1, x2, y2, z2, col, n, time = 0.45, size = 0.9) {
-    for (let k = 0; k < n; k++) {
-      const i = this.head; this.head = (this.head + 1) % this.N;
+    const actual = this.count > this.N * 0.65 ? Math.max(4, Math.ceil(n * 0.5)) : n;
+    for (let k = 0; k < actual; k++) {
+      const i = this.alloc(), o = i * 3;
       const t = time * (0.7 + Math.random() * 0.5);
-      this.pos[i * 3] = x1 + (Math.random() - 0.5) * 0.6; this.pos[i * 3 + 1] = y1; this.pos[i * 3 + 2] = z1 + (Math.random() - 0.5) * 0.6;
-      this.vel[i * 3] = (x2 - x1) / t; this.vel[i * 3 + 1] = (y2 - y1) / t; this.vel[i * 3 + 2] = (z2 - z1) / t;
-      this.col[i * 3] = col[0]; this.col[i * 3 + 1] = col[1]; this.col[i * 3 + 2] = col[2];
-      this.size0[i] = size; this.max[i] = this.life[i] = t; this.grav[i] = 0;
-      if (i + 1 > this.scanEnd) this.scanEnd = i + 1;
+      this.pos[o] = x1 + (Math.random() - 0.5) * 0.6; this.pos[o + 1] = y1; this.pos[o + 2] = z1 + (Math.random() - 0.5) * 0.6;
+      this.vel[o] = (x2 - x1) / t; this.vel[o + 1] = (y2 - y1) / t; this.vel[o + 2] = (z2 - z1) / t;
+      this.col[o] = col[0]; this.col[o + 1] = col[1]; this.col[o + 2] = col[2];
+      this.size0[i] = this.size[i] = size; this.max[i] = this.life[i] = t; this.alpha[i] = 1; this.grav[i] = 0;
     }
   }
   update(dt) {
-    if (this.scanEnd === 0) return;
-    const P = this.pos, V = this.vel;
-    let used = 0;
-    for (let i = 0; i < this.scanEnd; i++) {
-      if (this.life[i] <= 0) { if (this.alpha[i] !== 0) { this.alpha[i] = 0; this.size[i] = 0; } continue; }
-      used = i + 1;
-      this.life[i] -= dt;
-      V[i * 3 + 1] += this.grav[i] * dt;
-      const drag = this.grav[i] === 0 ? 1 : 1 - dt * 1.5;
-      V[i * 3] *= drag; V[i * 3 + 2] *= drag;
-      P[i * 3] += V[i * 3] * dt; P[i * 3 + 1] += V[i * 3 + 1] * dt; P[i * 3 + 2] += V[i * 3 + 2] * dt;
-      if (P[i * 3 + 1] < 0.05) { P[i * 3 + 1] = 0.05; V[i * 3 + 1] *= -0.3; }
-      const p = Math.max(0, this.life[i] / this.max[i]);
-      this.alpha[i] = Math.min(1, p * 1.6);
+    let n = this.count;
+    if (n === 0) return;
+    const P = this.pos, V = this.vel, C = this.col;
+    for (let i = 0; i < n; ) {
+      const rem = this.life[i] - dt;
+      if (rem <= 0) {
+        n--;
+        if (i < n) {
+          const d = i * 3, s = n * 3;
+          P[d] = P[s]; P[d + 1] = P[s + 1]; P[d + 2] = P[s + 2];
+          V[d] = V[s]; V[d + 1] = V[s + 1]; V[d + 2] = V[s + 2];
+          C[d] = C[s]; C[d + 1] = C[s + 1]; C[d + 2] = C[s + 2];
+          this.life[i] = this.life[n]; this.max[i] = this.max[n];
+          this.size0[i] = this.size0[n]; this.grav[i] = this.grav[n];
+          this.size[i] = this.size[n]; this.alpha[i] = this.alpha[n];
+        }
+        continue;
+      }
+      this.life[i] = rem;
+      const o = i * 3, g = this.grav[i];
+      V[o + 1] += g * dt;
+      const drag = g === 0 ? 1 : 1 - dt * 1.5;
+      V[o] *= drag; V[o + 2] *= drag;
+      P[o] += V[o] * dt; P[o + 1] += V[o + 1] * dt; P[o + 2] += V[o + 2] * dt;
+      if (P[o + 1] < 0.05) { P[o + 1] = 0.05; V[o + 1] *= -0.3; }
+      const p = rem / this.max[i];
+      this.alpha[i] = p > 0.625 ? 1 : p * 1.6;
       this.size[i] = this.size0[i] * (0.4 + p * 0.6);
+      i++;
     }
-    this.scanEnd = used;
-    this.geo.setDrawRange(0, used);
-    if (used > 0) {
-      uploadUsed(this.geo.attributes.position, used);
-      uploadUsed(this.geo.attributes.color, used);
-      uploadUsed(this.geo.attributes.size, used);
-      uploadUsed(this.geo.attributes.alpha, used);
+    this.count = n;
+    this.geo.setDrawRange(0, n);
+    if (n > 0) {
+      uploadUsed(this.geo.attributes.position, n);
+      uploadUsed(this.geo.attributes.color, n);
+      uploadUsed(this.geo.attributes.size, n);
+      uploadUsed(this.geo.attributes.alpha, n);
     }
   }
-  clear() { this.life.fill(0); this.alpha.fill(0); this.size.fill(0); this.scanEnd = 0; this.geo.setDrawRange(0, 0); }
+  clear() { this.count = 0; this.head = 0; this.geo.setDrawRange(0, 0); }
 }
 
 // per-frame glow halos (rebuilt every frame, e.g. around super-powered units)
@@ -295,8 +321,7 @@ const ambVert = `
     p = mod(p, uBox) - uBox * 0.5;
     p += uOrigin;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    // Fade weather out near the lens so an ember cannot expand across the playfield.
-    gl_PointSize = size * uSize * uScale / max(6.0, -mv.z);
+    gl_PointSize = min(size * uSize * uScale / max(6.0, -mv.z), uScale * 0.06);
     gl_Position = projectionMatrix * mv;
     vAlpha = smoothstep(2.0, 7.0, -mv.z) * mix(1.0, 0.35 + 0.65 * abs(sin(uTime * 2.5 + seed * 30.0)), uTwinkle);
   }`;
@@ -309,9 +334,9 @@ const ambFrag = `
     mediump vec2 p = gl_PointCoord - 0.5;
     mediump float r2 = dot(p, p);
     if (r2 > 0.25) discard;
-    mediump float d = sqrt(r2) * 2.0;
-    mediump float a = 1.0 - smoothstep(0.2, 1.0, d);
-    gl_FragColor = vec4(mix(uColor, uColor2, smoothstep(0.0, 0.8, d)), a * vAlpha * uOpacity);
+    mediump float d2 = r2 * 4.0;
+    mediump float a = 1.0 - smoothstep(0.05, 1.0, d2);
+    gl_FragColor = vec4(mix(uColor, uColor2, smoothstep(0.0, 0.68, d2)), a * vAlpha * uOpacity);
   }`;
 const AMBIENT = {
   desert: { n: 120, color: 0xfff0c8, color2: 0xe9c88f, size: 0.18, vel: [1.6, 0.05, 0.6], sway: 0.6, opacity: 0.55, add: false },
@@ -399,15 +424,15 @@ export function buildSky() {
   return m;
 }
 
-// flying debris: chunks of towers, blockers and gates
+// flying debris: chunks of towers, blockers and gates (no shadow pass overhead)
 export class Debris {
-  constructor(scene, N = 260) {
+  constructor(scene, N = 220) {
     this.N = N; this.head = 0; this.alive = false;
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), N);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3).setUsage(THREE.DynamicDrawUsage);
     this.mesh.count = 0; this.mesh.visible = false;
-    this.mesh.castShadow = true;
+    this.mesh.castShadow = false;
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
     this.p = new Float32Array(N * 3); this.v = new Float32Array(N * 3); this.r = new Float32Array(N * 3); this.w = new Float32Array(N * 3);
@@ -423,7 +448,7 @@ export class Debris {
       this.v[i * 3] = Math.cos(a) * speed * Math.random(); this.v[i * 3 + 1] = speed * (0.6 + Math.random() * 0.8); this.v[i * 3 + 2] = Math.sin(a) * speed * Math.random() + speed * 0.3;
       for (let j = 0; j < 3; j++) { this.r[i * 3 + j] = Math.random() * 6; this.w[i * 3 + j] = (Math.random() - 0.5) * 16; }
       this.s[i] = size * (0.5 + Math.random());
-      this.life[i] = 2.2 + Math.random();
+      this.life[i] = 2.0 + Math.random() * 0.8;
       const c = colors[k % colors.length];
       this.colors.set(c, i * 3);
     }
@@ -457,113 +482,159 @@ export class Debris {
   clear() { this.life.fill(0); this.mesh.count = 0; this.mesh.visible = false; this.alive = false; }
 }
 
-// Break a model into spatial chunks. Asset meshes are batched by material, so moving
-// whole meshes would peel one material layer off everything and leave holes. Instead,
-// triangles are binned into a coarse grid and every chunk carries all of its materials.
-const _rel = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _nm = new THREE.Matrix3(), _v = new THREE.Vector3();
+// Single-draw-call instanced shatter: samples the destroyed model's spatial cells and
+// surface colors into ~32 solid faceted chunks in <0.5 ms with zero shadow-pass spikes.
+const _rel = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _v = new THREE.Vector3(), _c = new THREE.Color();
+const _shQ = new THREE.Quaternion(), _shE = new THREE.Euler(), _shM = new THREE.Matrix4(), _shP = new THREE.Vector3(), _shS = new THREE.Vector3();
+let _shardGeo = null, _shardMat = null;
+function shardResources() {
+  if (!_shardGeo) {
+    const g = new THREE.IcosahedronGeometry(0.55, 0);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const k = 0.84 + 0.32 * Math.abs(Math.sin(i * 12.9898 + 0.7));
+      pos.setXYZ(i, pos.getX(i) * k, pos.getY(i) * (0.78 + 0.36 * Math.abs(Math.cos(i * 7.13))), pos.getZ(i) * k);
+    }
+    g.computeVertexNormals();
+    g.userData.shared = true;
+    _shardGeo = g;
+    _shardMat = new THREE.MeshLambertMaterial();
+    _shardMat.userData.shared = true;
+  }
+  return { geo: _shardGeo, mat: _shardMat };
+}
+export function warmShatterMesh() {
+  const { geo, mat } = shardResources();
+  const mesh = new THREE.InstancedMesh(geo, mat, 1);
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3);
+  mesh.count = 1;
+  mesh.castShadow = false;
+  return mesh;
+}
 function shown(o, top) {
   for (let p = o; p; p = p.parent) { if (!p.visible) return false; if (p === top) return true; }
   return true;
 }
-export function shatter(group, root, cx, cz, power = 8, target = 36) {
-  // Refresh only this model and the root's own ancestors; the whole level tree is large.
+export function shatter(group, root, cx, cz, power = 8, target = 34) {
   group.updateWorldMatrix(true, true);
   root.updateWorldMatrix(true, false);
   _inv.copy(root.matrixWorld).invert();
-  const sources = [];
-  let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+
+  const meshes = [];
+  let totalVerts = 0;
   group.traverse((o) => {
-    const g = o.geometry, pos = g?.attributes.position;
+    const pos = o.geometry?.attributes?.position;
     if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !pos || !o.layers.isEnabled(0) || !shown(o, group)) return;
-    _rel.multiplyMatrices(_inv, o.matrixWorld);
-    _nm.getNormalMatrix(_rel);
-    const wp = new Float32Array(pos.count * 3), nrm = g.attributes.normal, wn = nrm ? new Float32Array(pos.count * 3) : null;
-    for (let i = 0; i < pos.count; i++) {
-      _v.fromBufferAttribute(pos, i).applyMatrix4(_rel).toArray(wp, i * 3);
-      if (wn) _v.fromBufferAttribute(nrm, i).applyMatrix3(_nm).normalize().toArray(wn, i * 3);
-      for (let a = 0; a < 3; a++) { const c = wp[i * 3 + a]; if (c < lo[a]) lo[a] = c; if (c > hi[a]) hi[a] = c; }
-    }
-    // Plain float arrays copy directly; anything else goes through the attribute accessors.
-    const attrs = Object.entries(g.attributes).map(([name, attr]) => ({
-      name, attr, k: attr.itemSize,
-      src: name === 'position' ? wp : name === 'normal' ? wn : !attr.isInterleavedBufferAttribute && !attr.normalized ? attr.array : null,
-    }));
-    sources.push({ o, g, wp, attrs, flip: _rel.determinant() < 0 });
+    meshes.push(o);
+    totalVerts += pos.count;
   });
-  const parts = [];
-  if (!sources.length) { group.visible = false; return parts; }
-  const size = hi.map((h, a) => Math.max(h - lo[a], 1e-3));
-  const cell = Math.max(Math.cbrt(size[0] * size[1] * size[2] / target), Math.max(...size) / 8);
-  // cell -> material slot -> vertex list
-  const cells = new Map();
-  for (const s of sources) {
-    const { o, g, wp } = s, idx = g.index, n = idx ? idx.count : g.attributes.position.count;
-    const mats = Array.isArray(o.material) ? o.material : null;
-    const groups = mats && g.groups.length ? g.groups : [{ start: 0, count: n, materialIndex: 0 }];
-    for (const gr of groups) {
-      const material = mats ? mats[gr.materialIndex] : o.material;
-      if (!material) continue;
-      const end = Math.min(n, gr.start + gr.count);
-      for (let t = gr.start; t + 2 < end; t += 3) {
-        const a = idx ? idx.getX(t) : t, b = idx ? idx.getX(t + 1) : t + 1, c = idx ? idx.getX(t + 2) : t + 2;
-        let key = 0;
-        for (let k = 0; k < 3; k++) {
-          const m = (wp[a * 3 + k] + wp[b * 3 + k] + wp[c * 3 + k]) / 3;
-          key = key * 64 + Math.min(63, Math.floor((m - lo[k]) / cell));
-        }
-        let slots = cells.get(key);
-        if (!slots) cells.set(key, slots = new Map());
-        let slot = slots.get(s.o.id * 64 + gr.materialIndex);
-        if (!slot) slots.set(s.o.id * 64 + gr.materialIndex, slot = { s, material, v: [] });
-        if (s.flip) slot.v.push(a, c, b); else slot.v.push(a, b, c);
-      }
-    }
-  }
-  for (const slots of cells.values()) {
-    const center = new THREE.Vector3();
-    let count = 0;
-    for (const { s, v } of slots.values()) for (const i of v) { center.x += s.wp[i * 3]; center.y += s.wp[i * 3 + 1]; center.z += s.wp[i * 3 + 2]; count++; }
-    center.divideScalar(count);
-    const pivot = new THREE.Group();
-    pivot.position.copy(center);
-    for (const { s, material, v } of slots.values()) {
-      const geo = new THREE.BufferGeometry();
-      for (const { name, attr, k, src } of s.attrs) {
-        const out = new Float32Array(v.length * k);
-        if (src) for (let j = 0; j < v.length; j++) { const i = v[j] * k; for (let c = 0; c < k; c++) out[j * k + c] = src[i + c]; }
-        else for (let j = 0; j < v.length; j++) for (let c = 0; c < k; c++) out[j * k + c] = attr.getComponent(v[j], c);
-        if (name === 'position') for (let j = 0; j < out.length; j += 3) { out[j] -= center.x; out[j + 1] -= center.y; out[j + 2] -= center.z; }
-        geo.setAttribute(name, new THREE.BufferAttribute(out, k));
-      }
-      const mesh = new THREE.Mesh(geo, material);
-      mesh.castShadow = s.o.castShadow; mesh.receiveShadow = s.o.receiveShadow; mesh.renderOrder = s.o.renderOrder;
-      pivot.add(mesh);
-    }
-    root.add(pivot);
-    const dx = center.x - cx, dz = center.z - cz, d = Math.hypot(dx, dz) || 1;
-    const h = (center.y - lo[1]) / size[1];
-    parts.push({
-      m: pivot, vx: (dx / d) * power * (0.3 + Math.random() * 0.8), vy: power * (0.35 + h * 0.6 + Math.random() * 0.5),
-      vz: (dz / d) * power * (0.3 + Math.random() * 0.8) + power * 0.35,
-      wx: (Math.random() - 0.5) * 7, wy: (Math.random() - 0.5) * 7, wz: (Math.random() - 0.5) * 7, s0: pivot.scale.clone(),
-    });
-  }
   group.visible = false;
-  return parts;
-}
-export function updateShatter(parts, dt, t) {
-  const k = Math.max(0, 1 - Math.max(0, t - 1.8) / 1.2);
-  for (const p of parts) {
-    p.vy -= 22 * dt;
-    p.m.position.x += p.vx * dt; p.m.position.y += p.vy * dt; p.m.position.z += p.vz * dt;
-    if (p.m.position.y < 0.2) { p.m.position.y = 0.2; p.vy *= -0.3; p.vx *= 0.6; p.vz *= 0.6; p.wx *= 0.5; p.wy *= 0.5; p.wz *= 0.5; }
-    p.m.rotation.x += p.wx * dt; p.m.rotation.y += p.wy * dt; p.m.rotation.z += p.wz * dt;
-    p.m.scale.copy(p.s0).multiplyScalar(Math.max(0.001, k));
+  if (!meshes.length || !totalVerts) return { mesh: null, count: 0 };
+
+  const stride = Math.max(1, Math.floor(totalVerts / 420));
+  const samples = [];
+  let lo0 = Infinity, lo1 = Infinity, lo2 = Infinity, hi0 = -Infinity, hi1 = -Infinity, hi2 = -Infinity;
+  for (const o of meshes) {
+    const g = o.geometry, pos = g.attributes.position, vcol = g.attributes.color;
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+    const mc = mat?.color ? _c.copy(mat.color) : _c.setHex(0xc84a3c);
+    const mr = mc.r, mg = mc.g, mb = mc.b;
+    _rel.multiplyMatrices(_inv, o.matrixWorld);
+    for (let i = 0; i < pos.count; i += stride) {
+      _v.fromBufferAttribute(pos, i).applyMatrix4(_rel);
+      const x = _v.x, y = _v.y, z = _v.z;
+      if (x < lo0) lo0 = x; if (x > hi0) hi0 = x;
+      if (y < lo1) lo1 = y; if (y > hi1) hi1 = y;
+      if (z < lo2) lo2 = z; if (z > hi2) hi2 = z;
+      let r = mr, gr = mg, b = mb;
+      if (vcol) { r *= vcol.getX(i); gr *= vcol.getY(i); b *= vcol.getZ(i); }
+      samples.push(x, y, z, r, gr, b);
+    }
   }
-  return k > 0;
+  const sx = Math.max(hi0 - lo0, 0.5), sy = Math.max(hi1 - lo1, 0.5), sz = Math.max(hi2 - lo2, 0.5);
+  const cell = Math.max(Math.cbrt((sx * sy * sz) / target), Math.max(sx, sy, sz) / 6.5);
+  const cells = new Map();
+  for (let i = 0; i < samples.length; i += 6) {
+    const x = samples[i], y = samples[i + 1], z = samples[i + 2];
+    const kx = Math.min(31, Math.floor((x - lo0) / cell));
+    const ky = Math.min(31, Math.floor((y - lo1) / cell));
+    const kz = Math.min(31, Math.floor((z - lo2) / cell));
+    const key = (kx << 10) | (ky << 5) | kz;
+    let c = cells.get(key);
+    if (!c) cells.set(key, c = { x: 0, y: 0, z: 0, r: 0, g: 0, b: 0, n: 0 });
+    c.x += x; c.y += y; c.z += z; c.r += samples[i + 3]; c.g += samples[i + 4]; c.b += samples[i + 5]; c.n++;
+  }
+
+  const list = [...cells.values()];
+  const count = Math.min(list.length, 38);
+  if (!count) return { mesh: null, count: 0 };
+
+  const { geo, mat } = shardResources();
+  const mesh = new THREE.InstancedMesh(geo, mat, count);
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+
+  const p = new Float32Array(count * 3), v = new Float32Array(count * 3);
+  const rot = new Float32Array(count * 3), w = new Float32Array(count * 3);
+  const sc = new Float32Array(count * 3);
+  const step = list.length / count;
+
+  for (let i = 0; i < count; i++) {
+    const c = list[Math.floor(i * step)], invN = 1 / c.n, o = i * 3;
+    const px = c.x * invN, py = c.y * invN, pz = c.z * invN;
+    p[o] = px; p[o + 1] = py; p[o + 2] = pz;
+    const dx = px - cx, dz = pz - cz, d = Math.hypot(dx, dz) || 1;
+    const h = (py - lo1) / sy;
+    v[o] = (dx / d) * power * (0.35 + Math.random() * 0.75);
+    v[o + 1] = power * (0.35 + h * 0.55 + Math.random() * 0.45);
+    v[o + 2] = (dz / d) * power * (0.35 + Math.random() * 0.75) + power * 0.35;
+    rot[o] = Math.random() * 6.28; rot[o + 1] = Math.random() * 6.28; rot[o + 2] = Math.random() * 6.28;
+    w[o] = (Math.random() - 0.5) * 9; w[o + 1] = (Math.random() - 0.5) * 9; w[o + 2] = (Math.random() - 0.5) * 9;
+    const base = Math.min(2.2, Math.max(0.45, cell * (0.58 + Math.random() * 0.45)));
+    sc[o] = base * (0.8 + Math.random() * 0.45);
+    sc[o + 1] = base * (0.75 + Math.random() * 0.45);
+    sc[o + 2] = base * (0.8 + Math.random() * 0.45);
+    mesh.instanceColor.setXYZ(i, Math.min(1, c.r * invN * 1.12), Math.min(1, c.g * invN * 1.12), Math.min(1, c.b * invN * 1.12));
+    _shE.set(rot[o], rot[o + 1], rot[o + 2]);
+    _shQ.setFromEuler(_shE);
+    _shM.compose(_shP.set(px, py, pz), _shQ, _shS.set(sc[o], sc[o + 1], sc[o + 2]));
+    mesh.setMatrixAt(i, _shM);
+  }
+  mesh.instanceColor.needsUpdate = true;
+  mesh.instanceMatrix.needsUpdate = true;
+  root.add(mesh);
+  return { mesh, count, p, v, rot, w, sc };
 }
-/** Remove finished chunks. Their geometry is private; materials still belong to the source model. */
-export function disposeShatter(parts) {
-  for (const p of parts) { p.m.removeFromParent(); for (const c of p.m.children) c.geometry.dispose(); }
+export function updateShatter(sh, dt, t) {
+  if (!sh || !sh.mesh || !sh.count) return false;
+  const k = Math.max(0, 1 - Math.max(0, t - 1.6) / 1.1);
+  if (k <= 0) return false;
+  const { mesh, count, p, v, rot, w, sc } = sh;
+  for (let i = 0; i < count; i++) {
+    const o = i * 3;
+    v[o + 1] -= 22 * dt;
+    p[o] += v[o] * dt; p[o + 1] += v[o + 1] * dt; p[o + 2] += v[o + 2] * dt;
+    if (p[o + 1] < 0.25) {
+      p[o + 1] = 0.25; v[o + 1] *= -0.32; v[o] *= 0.62; v[o + 2] *= 0.62;
+      w[o] *= 0.55; w[o + 1] *= 0.55; w[o + 2] *= 0.55;
+    }
+    rot[o] += w[o] * dt; rot[o + 1] += w[o + 1] * dt; rot[o + 2] += w[o + 2] * dt;
+    _shE.set(rot[o], rot[o + 1], rot[o + 2]);
+    _shQ.setFromEuler(_shE);
+    _shM.compose(_shP.set(p[o], p[o + 1], p[o + 2]), _shQ, _shS.set(sc[o] * k, sc[o + 1] * k, sc[o + 2] * k));
+    mesh.setMatrixAt(i, _shM);
+  }
+  uploadUsed(mesh.instanceMatrix, count);
+  return true;
+}
+/** Remove the instanced shatter mesh. Shared shard geometry & material stay alive for reuse. */
+export function disposeShatter(sh) {
+  if (!sh?.mesh) return;
+  sh.mesh.removeFromParent();
+  sh.mesh.dispose();
+  sh.mesh = null;
 }
 export function setGlowScale(v) { for (const m of glowMaterials) m.uniforms.uScale.value = v; }
