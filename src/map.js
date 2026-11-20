@@ -1,5 +1,6 @@
 import { MEDALS, clock } from './records.js';
 import { lateMapArt } from './biomes-late.js';
+import { ICONS, starSpan } from './ui-icons.js';
 
 // Legacy saves may contain isolated late-level wins. Keep all earlier worlds accessible.
 export function campaignProgress(stars, count) {
@@ -54,7 +55,6 @@ function trail(count, columns, unlocked) {
 export function renderCampaignMap(container, levels, themes, progress, records, start) {
   const status = campaignProgress(progress.stars, levels.length);
   container.innerHTML = trail(levels.length,5,status.unlocked)+trail(levels.length,3,status.unlocked);
-  const lock = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 7V5a3 3 0 016 0v2M4 7h8v7H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
   levels.forEach((level, i) => {
     const button = document.createElement('button'), stars = Number(progress.stars[i]) || 0, locked = i > status.unlocked;
     const row = Math.floor(i/5), mobileRow = Math.floor(i/3);
@@ -65,9 +65,9 @@ export function renderCampaignMap(container, levels, themes, progress, records, 
     const medals = MEDALS.map(medal => !!records.worlds[i]?.medals?.includes(medal.id)), held = medals.filter(Boolean).length;
     if (held === MEDALS.length) button.className += ' mastered';
     button.setAttribute('aria-label', `Level ${i+1}: ${level.name}. ${locked?'Locked':stars?`${stars} stars, ${held} of ${MEDALS.length} medals`:'Ready to play'}`);
-    if (stars) button.title = MEDALS.map((medal, k) => `${medals[k] ? '◆' : '◇'} ${medal.name}: ${medal.hint}`).join('\n') + (records.worlds[i]?.time ? `\nBest time ${clock(records.worlds[i].time)}` : '');
+    if (stars) button.title = MEDALS.map((medal, k) => `${medals[k] ? '[x]' : '[ ]'} ${medal.name}: ${medal.hint}`).join('\n') + (records.worlds[i]?.time ? `\nBest time ${clock(records.worlds[i].time)}` : '');
     if (i===status.unlocked) button.setAttribute('aria-current','step');
-    button.innerHTML = `${biomeArt(level.theme,themes[level.theme])}<span class="map-number">${i+1}${locked?lock:''}</span><span class="map-name">${level.name}</span><span class="map-stars" aria-hidden="true">${[0,1,2].map(k=>`<i class="${k<stars?'earned':''}">★</i>`).join('')}${stars?`<span class="map-medals">${medals.map(has=>`<b class="${has?'earned':''}"></b>`).join('')}</span>`:''}</span>`;
+    button.innerHTML = `${biomeArt(level.theme,themes[level.theme])}<span class="map-number">${i+1}${locked?ICONS.lock:''}</span><span class="map-name">${level.name}</span><span class="map-stars" aria-hidden="true">${[0,1,2].map(k=>starSpan(k<stars)).join('')}${stars?`<span class="map-medals">${medals.map(has=>`<b class="${has?'earned':''}"></b>`).join('')}</span>`:''}</span>`;
     button.addEventListener('click',()=>start(i));
     container.appendChild(button);
   });
