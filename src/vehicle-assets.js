@@ -1,6 +1,6 @@
 import { shadeUndersides } from './asset-kit.js';
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeIndexed } from './geo-merge.js';
 import { loftGeometry, sweepGeometry } from './boss-shapes.js';
 
 // Templates own their geometry and materials for the life of the module. Rig
@@ -8,7 +8,7 @@ import { loftGeometry, sweepGeometry } from './boss-shapes.js';
 // when removing a cannon; do not dispose its shared geometry in a scene walk.
 const templates = new Map();
 const barrelGeometries = new Map();
-const surface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.47, metalness: 0.18 });
+const surface = new THREE.MeshPhongMaterial({ vertexColors: true, color: 0xe9e9e9, specular: 0x47505a, shininess: 36 });
 const luminous = new THREE.MeshBasicMaterial({ vertexColors: true });
 surface.userData.shared = luminous.userData.shared = true;
 const NAVY = 0x142b49, DARK = 0x223d58, RUBBER = 0x102132;
@@ -62,21 +62,22 @@ function pod(sections, segments = 14, steps = 0) {
 function hullCasting(sections, tint, uprightHull=false) {
   const rows=uprightHull ? sections.map(([y,w,d,z=0])=>[y,w,d,0,z,.68])
     : [...sections].sort((a,b)=>b[0]-a[0]).map(([z,w,h,y])=>[-z,w,h,0,y,.68]);
-  const geometry=loftGeometry(rows,{segments:30,steps:24,warp(x,y,z,u,v,a){
+  const segs = 20, steps = 16;
+  const geometry=loftGeometry(rows,{segments:segs,steps,warp(x,y,z,u,v,a){
     const cheek=Math.sin(a)**2,waist=Math.sin(Math.PI*v);
     const taper=1+.15*cheek*waist-.13*v*v;
     return [x*taper,y,z+.055*waist*Math.cos(a*4)];
   }});
   const color=geometry.attributes.color,paint=new THREE.Color(),base=new THREE.Color(tint);
   const ivory=new THREE.Color(IVORY),blue=new THREE.Color(NAVY);
-  for(let j=0;j<=24;j++)for(let k=0;k<=30;k++){
-    const a=k*TAU/30, t=j/24,theta=Math.abs(Math.sin(a));
+  for(let j=0;j<=steps;j++)for(let k=0;k<=segs;k++){
+    const a=k*TAU/segs, t=j/steps,theta=Math.abs(Math.sin(a));
     const shoulder=t-.55-.36*theta, seam=Math.abs(shoulder);
     const stripe=Math.max(0,1-seam/.068);
     const rearVent=t<.32 && theta>.65 && theta<.95;
     paint.copy(base).lerp(blue,.15+.26*theta)
       .lerp(ivory,stripe*.94).lerp(blue,rearVent?.50+.45*Math.cos(t*TAU*12):0);
-    color.setXYZ(j*31+k,paint.r,paint.g,paint.b);
+    color.setXYZ(j*(segs+1)+k,paint.r,paint.g,paint.b);
   }
   for(let i=color.count-2;i<color.count;i++)color.setXYZ(i,base.r,base.g,base.b);
   return uprightHull?geometry:geometry.rotateX(-Math.PI/2);
@@ -116,8 +117,7 @@ function limb(points, radii, segments = 8, steps = 6) { return sweepGeometry(poi
 function batch() {
   const parts = [];
   function add(g, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-    let geo = g.index ? g.toNonIndexed() : g;
-    if (geo !== g) g.dispose();
+    const geo = g;
     geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
     // Colors may be a function of the placed vertex. Existing loft shading is kept as a multiplier.
     const pos = geo.attributes.position, shade = geo.attributes.color, count = pos.count;
@@ -161,7 +161,7 @@ function batch() {
       return add(geo, color, start.x, start.y, start.z);
     },
     geometry(shaded = true) {
-      const geometry = mergeGeometries(parts, false);
+      const geometry = mergeIndexed(parts, false);
       parts.forEach(part => part.dispose());
       if (shaded) shadeUndersides(geometry);
       geometry.computeBoundingSphere();
@@ -274,7 +274,7 @@ function tracks(parent, hull, tint, siege = false) {
     .add(new THREE.BoxGeometry(0.38, 0.022, 0.052), STEEL, 0, 0.052, 0).geometry();
   const belt = new THREE.InstancedMesh(shoeGeo, surface, 56);
   belt.name = 'belt'; belt.userData = { kind: 'belt', x, half, radius: 0.27, y: 0.4, shoes: 28 };
-  belt.castShadow = true; belt.frustumCulled = false; belt.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  belt.castShadow = false; belt.frustumCulled = false; belt.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   parent.add(belt); placeInstances(belt);
   const rollerGeo = batch().cylinder(0.225, 0.48, 0, 0, 0, RUBBER, 'x')
     .cylinder(0.17, 0.5, 0, 0, 0, STEEL, 'x')
@@ -284,7 +284,7 @@ function tracks(parent, hull, tint, siege = false) {
   for (const side of [-1, 1]) for (let k = 0; k < 5; k++) centers.push([side * x, 0.4, (k / 4 * 2 - 1) * half]);
   const rollers = new THREE.InstancedMesh(rollerGeo, surface, centers.length);
   rollers.name = 'rollers'; rollers.userData = { kind: 'rollers', centers };
-  rollers.instanceMatrix.setUsage(THREE.DynamicDrawUsage); rollers.castShadow = true; rollers.frustumCulled = false;
+  rollers.instanceMatrix.setUsage(THREE.DynamicDrawUsage); rollers.castShadow = false; rollers.frustumCulled = false;
   parent.add(rollers); placeInstances(rollers);
 }
 
@@ -614,12 +614,12 @@ function buildDread(root, tint) {
     }
     g.add(new THREE.CylinderGeometry(0.13, 0.13, 0.06, 12).rotateX(Math.PI / 2), STEEL, 0, 0, -0.2)
       .add(new THREE.CylinderGeometry(0.125, 0.125, 0.05, 12).rotateX(Math.PI / 2), IVORY, 0, 0, -0.56)
-      .add(new THREE.CylinderGeometry(0.05, 0.05, 0.66, 8).rotateX(Math.PI / 2), tint, 0, 0, -0.3).finish(gun, 'barrels');
+      .add(new THREE.CylinderGeometry(0.05, 0.05, 0.66, 8).rotateX(Math.PI / 2), tint, 0, 0, -0.3).finish(gun, 'barrels').castShadow = false;
   }
   const radar = node(root, 'radar', 0, 2.36, 0.62);
   batch().add(lathe([[0.001, 0], [0.12, 0.02], [0.24, 0.08], [0.32, 0.18], [0.3, 0.19], [0.22, 0.1], [0.11, 0.045], [0.001, 0.03]], 16).rotateX(-1.1), IVORY, 0, 0.1, 0)
     .add(limb([[0, 0.1, 0], [0, 0.2, -0.16], [0, 0.26, -0.3]], [0.018, 0.015, 0.012], 5, 3), STEEL)
-    .add(new THREE.SphereGeometry(0.04, 8, 6), AMBER, 0, 0.26, -0.3).finish(radar, 'dish');
+    .add(new THREE.SphereGeometry(0.04, 8, 6), AMBER, 0, 0.26, -0.3).finish(radar, 'dish').castShadow = false;
   const lights = batch();
   lights.add(pod([[0.02, 0.33, 0.035, 1.68], [-0.04, 0.35, 0.04, 1.68], [-0.1, 0.3, 0.03, 1.68]], 12), CYAN, 0, 0, -0.14);
   for (const side of [-1, 1]) {
@@ -649,20 +649,22 @@ export function buildCarriage(tint = 0x2f8bff) {
       c.add(pod([[0.42, 0.04, 0.1, 1.0], [0.25, 0.05, 0.12, 1.02], [-0.15, 0.05, 0.12, 1.02], [-0.28, 0.04, 0.08, 1.0]], 10), IVORY, side * 0.64, 0, 0.12);
       c.add(axle([[0.001, -0.9], [0.05, -0.9], [0.05, 0.9], [0.001, 0.9]], 8), STEEL, 0, 0.33, side * 0.55);
     }
-    carriageGeometries.set(tint, {
-      body: c.geometry(),
-      wheel: batch().add(tire(0.24, 0.1), RUBBER)
-        .add(axle([[0.001, -0.15], [0.17, -0.15], [0.19, -0.11], [0.19, 0.11], [0.17, 0.15], [0.001, 0.15]], 16), RED)
-        .add(axle([[0.001, -0.17], [0.06, -0.17], [0.07, -0.16], [0.07, 0.16], [0.06, 0.17], [0.001, 0.17]], 10), STEEL)
-        .add(new THREE.BoxGeometry(0.32, 0.045, 0.3), CHASSIS).add(new THREE.BoxGeometry(0.32, 0.3, 0.045), CHASSIS).geometry(),
-    });
+    const pair = batch();
+    for (const x of [-0.82, 0.82]) {
+      pair.add(tire(0.24, 0.1), RUBBER, x)
+        .add(axle([[0.001, -0.15], [0.17, -0.15], [0.19, -0.11], [0.19, 0.11], [0.17, 0.15], [0.001, 0.15]], 16), RED, x)
+        .add(axle([[0.001, -0.17], [0.06, -0.17], [0.07, -0.16], [0.07, 0.16], [0.06, 0.17], [0.001, 0.17]], 10), STEEL, x)
+        .add(new THREE.BoxGeometry(0.32, 0.045, 0.3), CHASSIS, x)
+        .add(new THREE.BoxGeometry(0.32, 0.3, 0.045), CHASSIS, x);
+    }
+    carriageGeometries.set(tint, { body: c.geometry(), wheel: pair.geometry() });
   }
   const shared = carriageGeometries.get(tint);
   const group = new THREE.Group(); group.name = 'carriage';
   const body = new THREE.Mesh(shared.body, surface); body.castShadow = body.receiveShadow = true; group.add(body);
   const wheels = [];
-  for (const x of [-0.82, 0.82]) for (const z of [-0.55, 0.55]) {
-    const wheel = new THREE.Mesh(shared.wheel, surface); wheel.position.set(x, 0.33, z); wheel.castShadow = true;
+  for (const z of [-0.55, 0.55]) {
+    const wheel = new THREE.Mesh(shared.wheel, surface); wheel.position.set(0, 0.33, z); wheel.castShadow = true;
     group.add(wheel); wheels.push(wheel);
   }
   return { group, body, wheels };
@@ -713,7 +715,7 @@ export function vehicleDisplay(id) {
     });
     for (const [pieces,material] of [[solids,surface],[lamps,luminous]]) {
       if (!pieces.length) continue;
-      const geometry = mergeGeometries(pieces,false);
+      const geometry = mergeIndexed(pieces, false);
       pieces.forEach(piece => piece.dispose());
       geometry.userData.shared = true;
       display.add(new THREE.Mesh(geometry,material));

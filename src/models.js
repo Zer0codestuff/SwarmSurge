@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { sculptIceWall, sculptFence, sculptStatue, sculptSaw, sculptPortal, sculptPortalExit } from './obstacle-assets.js';
-import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeIndexed } from './geo-merge.js';
 import { assetBatch, assetGlow } from './asset-kit.js';
 import { loftGeometry } from './boss-shapes.js';
 import { fittingCollar } from './supply-assets.js';
@@ -55,12 +55,10 @@ export function paint(geo, hex) {
   return geo;
 }
 export function merge(parts) {
-  const clean = parts.map((g) => {
-    const ng = g.index ? g.toNonIndexed() : g;
-    for (const k of Object.keys(ng.attributes)) if (!['position', 'normal', 'color'].includes(k)) ng.deleteAttribute(k);
-    return ng;
-  });
-  return mergeGeometries(clean);
+  for (const g of parts) {
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
+  }
+  return mergeIndexed(parts);
 }
 
 // ---------- units (instanced; instance color multiplies the baked vertex colors) ----------
@@ -140,13 +138,35 @@ export function textPlane(L, w, h, depthTest = true) {
 }
 
 // ---------- cannon ----------
+const mergedBarrelCache = new Map();
+function mergedBarrelGeometry(tint, n) {
+  const key = `${tint}:${n}`;
+  if (!mergedBarrelCache.has(key)) {
+    const baseGeo = cannonBarrelGeometry(tint), sp = n > 4 ? 0.3 : 0.42, sc = n > 4 ? 0.76 : 1;
+    const parts = [];
+    for (let i = 0; i < n; i++) {
+      const part = baseGeo.clone();
+      if (sc !== 1) part.scale(sc, sc, sc);
+      part.translate((i - (n - 1) / 2) * sp, 0, 0);
+      parts.push(part);
+    }
+    const merged = mergeIndexed(parts, false);
+    parts.forEach(p => p.dispose());
+    merged.computeBoundingSphere();
+    merged.userData.shared = true;
+    mergedBarrelCache.set(key, merged);
+  }
+  return mergedBarrelCache.get(key);
+}
 export function buildCannon(tint = 0x2f8bff) {
   const g = new THREE.Group();
   const base = new THREE.Group(); base.name = 'base-cannon'; g.add(base);
   const carriage = buildCarriage(tint); base.add(carriage.group);
   const body = carriage.body, wheels = carriage.wheels;
   const barrels = new THREE.Group(); barrels.position.set(0, 1.1, -0.2); g.add(barrels);
-  const barrelGeo = cannonBarrelGeometry(tint), barrelMaterial = lam(0xffffff, { vertexColors: true });
+  const barrelMaterial = lam(0xffffff, { vertexColors: true });
+  const barrelHolder = new THREE.Group(); barrelHolder.position.copy(barrels.position); g.add(barrelHolder);
+  const barrelMesh = mesh(mergedBarrelGeometry(tint, 1), barrelMaterial); barrelHolder.add(barrelMesh);
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2),
     new THREE.MeshLambertMaterial({ color: 0xbff3ff, transparent: true, opacity: 0.55, emissive: 0x3aa0c0 }));
   dome.position.set(0, 1.55, 0.2); base.add(dome);
@@ -162,8 +182,10 @@ export function buildCannon(tint = 0x2f8bff) {
     const spread = Math.min(1,p/.52), rise = Math.min(1,Math.max(0,(p-.18)/.68));
     const folded = (1-spread)**2, lowered = (1-rise)**2;
     rig.group.scale.set(1-.49*folded,1-.61*lowered,1-.18*folded);
-    barrels.position.copy(rig.barrelAnchor); barrels.position.y *= 1-.59*lowered;
+    barrels.position.copy(rig.barrelAnchor);
+    barrelHolder.position.copy(barrels.position); barrelHolder.rotation.copy(barrels.rotation); barrels.position.y *= 1-.59*lowered;
     barrels.rotation.x = .7*folded;
+    barrelHolder.position.copy(barrels.position); barrelHolder.rotation.copy(barrels.rotation);
     glow.position.copy(rig.glowAnchor); glow.position.y *= 1-.61*lowered;
     socket.position.copy(glow.position); socket.position.y -= .2;
     collar.visible = p<1; collar.position.y = .1+p*(rig.glowAnchor.y+.2);
@@ -190,16 +212,21 @@ export function buildCannon(tint = 0x2f8bff) {
   }
   function setBarrels(n) {
     barrels.clear();
-    const sp = n > 4 ? 0.3 : 0.42;
+    const sp = n > 4 ? 0.3 : 0.42, sc = n > 4 ? .76 : 1;
     for (let i = 0; i < n; i++) {
-      const b = mesh(barrelGeo, barrelMaterial);
-      b.position.x = (i - (n - 1) / 2) * sp;
-      b.scale.setScalar(n > 4 ? .76 : 1);
-      barrels.add(b);
+      const anchor = new THREE.Object3D();
+      anchor.position.x = (i - (n - 1) / 2) * sp;
+      anchor.scale.setScalar(sc);
+      barrels.add(anchor);
     }
+    barrelMesh.geometry = mergedBarrelGeometry(tint, n);
+  }
+  function setRecoil(z) {
+    barrelMesh.position.z = z;
+    for (const anchor of barrels.children) anchor.position.z = z;
   }
   setBarrels(1);
-  return { group: g, setBarrels, setChassis, animateVehicle, rig, barrels, glow, glowMat, bodyMat: body.material, wheels };
+  return { group: g, setBarrels, setRecoil, setChassis, animateVehicle, rig, barrels, glow, glowMat, bodyMat: body.material, wheels };
 }
 
 // ---------- gates ----------
@@ -261,18 +288,28 @@ export function buildGate(w, hex, mega = false) {
     const chevron = new THREE.Shape([[-.22, .05], [0, -.12], [.22, .05], [.22, .14], [0, -.03], [-.22, .14]].map(([x, y]) => new THREE.Vector2(x, y)));
     caps.push(new THREE.ShapeGeometry(chevron).rotateX(-Math.PI / 2).translate((i - 1) * Math.min(.9, w * .28), .085, .02));
   }
-  const frame = mesh(mergeGeometries(parts.map(geo => { const n = geo.index ? geo.toNonIndexed() : geo; n.deleteAttribute('uv'); return n; })), frameMat);
-  const trimMesh = mesh(mergeGeometries(trim.map(geo => { const n = geo.toNonIndexed(); n.deleteAttribute('uv'); return n; })), gateTrim, 0, 0, 0, false);
-  const capMesh = new THREE.Mesh(mergeGeometries(caps.map(geo => { const n = geo.index ? geo.toNonIndexed() : geo; n.deleteAttribute('uv'); return n; })), capMat);
+  for (const list of [parts, trim, caps]) for (const geo of list) geo.deleteAttribute('uv');
+  const frame = mesh(mergeIndexed(parts), frameMat);
+  const trimMesh = mesh(mergeIndexed(trim), gateTrim, 0, 0, 0, false);
+  const capMesh = new THREE.Mesh(mergeIndexed(caps), capMat);
+  for (const list of [parts, trim, caps]) for (const geo of list) geo.dispose();
   g.add(frame, trimMesh, capMesh);
-  const panelMat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
+  // Combine translucent gate tint and shared animated shine texture into one pass to halve gate draw calls and overdraw.
+  const panelMat = new THREE.MeshBasicMaterial({ color: hex, map: shineTexture(), transparent: true, opacity: 0.55, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false });
+  const shineStrength = mega ? 0.55 : 0.4;
+  panelMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uShineStrength = { value: shineStrength };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform mediump float uShineStrength;')
+      .replace('#include <map_fragment>', 'mediump float gateShineAlpha = texture2D( map, vMapUv ).a;')
+      .replace('#include <opaque_fragment>', `
+        outgoingLight += vec3((gateShineAlpha * uShineStrength) / max(diffuseColor.a, 0.02));
+        #include <opaque_fragment>`);
+  };
+  panelMat.customProgramCacheKey = () => 'gate-glass-shine-v2';
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(w - .12, H - 0.16), panelMat);
   panel.position.y = (H - 0.16) / 2 + 0.06;
   g.add(panel);
-  // moving shine stripe (one shared texture animates every gate)
-  const shine = new THREE.Mesh(panel.geometry, new THREE.MeshBasicMaterial({ map: shineTexture(), transparent: true, opacity: mega ? 0.55 : 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true }));
-  shine.position.copy(panel.position); shine.position.z = 0.01;
-  g.add(shine);
   const label = makeCanvasLabel();
   const tw = Math.min(w * 0.98, mega ? 4.6 : 3.7);
   const text = textPlane(label, tw, tw / 2);
@@ -550,8 +587,8 @@ export function buildWorld(theme, len) {
   const roadTexture = new THREE.CanvasTexture(surface); roadTexture.colorSpace = THREE.SRGBColorSpace;
   roadTexture.wrapS = roadTexture.wrapT = THREE.RepeatWrapping; roadTexture.repeat.set(3, total / 5);
   // The road recedes at a grazing angle; anisotropic sampling keeps its print sharp to the horizon.
-  roadTexture.anisotropy = 8;
-  road.material = new THREE.MeshStandardMaterial({ map: roadTexture, roughness: .88, metalness: .08 });
+  roadTexture.anisotropy = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 4 : 8;
+  road.material = new THREE.MeshLambertMaterial({ map: roadTexture, color: 0xf6f6f6 });
   const count = Math.ceil(total / 5), matrix = new THREE.Matrix4();
   const markings = new THREE.InstancedMesh(new THREE.PlaneGeometry(.07, 1.1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .17 }), count * 2);
   for (let i = 0; i < count; i++) for (let side = 0; side < 2; side++) {
@@ -561,9 +598,10 @@ export function buildWorld(theme, len) {
   g.add(markings);
   const glowRoad = ['neon', 'void', 'casino', 'crystal', 'blackhole'].includes(theme) || LATE_GLOW_ROAD.has(theme);
   const lineMat = new THREE.MeshBasicMaterial({ color: glowRoad ? T.rail : 0xf4f4f4 });
-  for (const x of [-6.7, 6.7]) {
-    const l = new THREE.Mesh(new THREE.PlaneGeometry(0.2, total), lineMat); l.rotation.x = -Math.PI / 2; l.position.set(x, 0.01, zc); g.add(l);
-  }
+  const laneLeft = new THREE.PlaneGeometry(0.2, total).rotateX(-Math.PI / 2).translate(-6.7, 0.01, zc);
+  const laneRight = new THREE.PlaneGeometry(0.2, total).rotateX(-Math.PI / 2).translate(6.7, 0.01, zc);
+  const laneGeo = mergeIndexed([laneLeft, laneRight]); laneLeft.dispose(); laneRight.dispose();
+  g.add(new THREE.Mesh(laneGeo, lineMat));
   // rails + posts on both sides
   // Keep the thin lane stripe luminous. The kerb below the fence is painted concrete.
   const kerbColor = glowRoad ? new THREE.Color(T.road).lerp(new THREE.Color(T.rail), .12).getHex() : T.rail;
