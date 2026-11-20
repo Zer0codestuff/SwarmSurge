@@ -26,8 +26,8 @@ const TAU = Math.PI * 2;
 // silhouette at coarser segment counts for troops in the middle distance.
 const TESSELLATION = {
   high: { seg: 8, step: 4, limb: [6, 3], blob: [8, 5], plate: 10, ring: 12, cyl: 8, helmet: 20, cuirass: 14 },
-  mid: { seg: 6, step: 3, limb: [5, 2], blob: [6, 4], plate: 7, ring: 9, cyl: 6, helmet: 13, cuirass: 10 },
-  low: { seg: 5, step: 2, limb: [4, 2], blob: [5, 3], plate: 6, ring: 8, cyl: 5, helmet: 8, cuirass: 8 },
+  mid: { seg: 5, step: 2, limb: [4, 2], blob: [5, 3], plate: 6, ring: 7, cyl: 5, helmet: 10, cuirass: 8 },
+  low: { seg: 4, step: 1, limb: [3, 1], blob: [4, 3], plate: 4, ring: 5, cyl: 4, helmet: 6, cuirass: 6 },
 };
 const detailLevel = (detail) => detail === true || detail === 'low' ? 'low' : detail === 'mid' ? 'mid' : 'high';
 
@@ -37,9 +37,13 @@ export function sculptKit(detail, animated = true) {
   return {
     b, low, level, t,
     loft(sections, color, pos = [0, 0, 0], rot = [0, 0, 0], leg = 0, o = {}) {
-      // Authored overrides keep their high and low counts; the middle level thins them too.
-      const thin = (n, fallback) => n == null ? fallback : level === 'mid' ? Math.max(4, Math.round(n * 0.75)) : n;
-      b.add(loftGeometry(sections, { segments: thin(o.segments, t.seg), steps: thin(o.steps, t.step), warp: o.warp }), color, pos, rot, leg);
+      const thinSeg = (n, fallback) => n == null ? fallback
+        : level === 'low' ? Math.max(4, Math.round(n * 0.55))
+        : level === 'mid' ? Math.max(4, Math.round(n * 0.7)) : n;
+      const thinStep = (n, fallback) => n == null ? fallback
+        : level === 'low' ? Math.max(1, Math.round(n * 0.5))
+        : level === 'mid' ? Math.max(2, Math.round(n * 0.7)) : n;
+      b.add(loftGeometry(sections, { segments: thinSeg(o.segments, t.seg), steps: thinStep(o.steps, t.step), warp: o.warp }), color, pos, rot, leg);
     },
     limb(points, radii, color, leg = 0) {
       b.add(sweepGeometry(points, radii, { segments: t.limb[0], steps: t.limb[1] }), color, [0, 0, 0], [0, 0, 0], leg);
@@ -54,7 +58,10 @@ export function sculptKit(detail, animated = true) {
       b.add(new THREE.TorusGeometry(r, tube, 3, t.ring, arc), color, pos, rot);
     },
     cyl(top, bottom, h, pos, color, rot = [0, 0, 0], sides) {
-      b.add(new THREE.CylinderGeometry(top, bottom, h, sides ?? t.cyl), color, pos, rot);
+      const n = sides == null ? t.cyl
+        : level === 'low' ? Math.max(4, Math.round(sides * 0.5))
+        : level === 'mid' ? Math.max(5, Math.round(sides * 0.75)) : sides;
+      b.add(new THREE.CylinderGeometry(top, bottom, h, n), color, pos, rot);
     },
     gem(r, pos, color, stretch = 1.6, rot = [0, 0, 0]) {
       b.add(new THREE.OctahedronGeometry(r, 0).scale(1, stretch, 1), color, pos, rot);

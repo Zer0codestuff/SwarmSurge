@@ -148,9 +148,8 @@ export function troopShadowGeometry(body, winged = false) {
   return builder.finish().scale(1.2, 1.2, 1.2);
 }
 
-function spectralWisp(points, radius) {
+function spectralWisp(points, radius, steps = 6, sides = 4) {
   const path = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
-  const steps = 8, sides = 4;
   const geometry = new THREE.TubeGeometry(path, steps, radius, sides, false);
   const position = geometry.attributes.position;
   const center = new THREE.Vector3(), offset = new THREE.Vector3();
@@ -167,27 +166,29 @@ function spectralWisp(points, radius) {
   return geometry;
 }
 
-function ghostKit(b) {
+function ghostKit(b, low = false) {
   const pale = 0xdbffff, mist = 0x9ee6f0;
   // Open rings and rear wisps leave the helmet, torso and legs visible.
-  b.add(new THREE.TorusGeometry(0.294, 0.021, 4, 14, Math.PI * 1.7), pale, [0, 1.145, -0.025], [Math.PI / 2, 0, 0.47]);
-  b.add(new THREE.TorusGeometry(0.274, 0.025, 4, 12, Math.PI * 1.6), mist, [0, 0.655, -0.025], [Math.PI / 2, 0, 0.63]);
+  b.add(new THREE.TorusGeometry(0.294, 0.021, 3, low ? 9 : 12, Math.PI * 1.7), pale, [0, 1.145, -0.025], [Math.PI / 2, 0, 0.47]);
+  b.add(new THREE.TorusGeometry(0.274, 0.025, 3, low ? 8 : 10, Math.PI * 1.6), mist, [0, 0.655, -0.025], [Math.PI / 2, 0, 0.63]);
+  const steps = low ? 4 : 6, sides = low ? 3 : 4;
   for (const side of [-1, 1]) {
     b.box([0.09, 0.065, 0.13], [side * 0.252, 0.655, -0.036], pale, 0.022);
     b.add(spectralWisp([
       [side * 0.275, 0.645, -0.075], [side * 0.355, 0.475, -0.145],
       [side * 0.317, 0.27, -0.275], [side * 0.36, 0.105, -0.39],
-    ], 0.037), mist);
+    ], 0.037, steps, sides), mist);
   }
-  b.add(spectralWisp([[0, 0.57, -0.29], [0.075, 0.405, -0.35], [-0.035, 0.23, -0.43], [-0.015, 0.08, -0.51]], 0.033), pale);
+  b.add(spectralWisp([[0, 0.57, -0.29], [0.075, 0.405, -0.35], [-0.035, 0.23, -0.43], [-0.015, 0.08, -0.51]], 0.033, steps, sides), pale);
 }
 
 /** Fresh phase-ghost overlay at nominal troop scale. */
-export function ghostKitGeometry() {
-  const b = troopBuilder();
-  ghostKit(b);
+export function ghostKitGeometry(detail = 'high') {
+  const low = detail === 'low' || detail === true;
+  const b = troopBuilder(false, low);
+  ghostKit(b, low);
   const geometry = b.finish();
-  geometry.name = 'Ghost halo';
+  geometry.name = low ? 'Ghost halo low' : 'Ghost halo';
   return geometry;
 }
 
