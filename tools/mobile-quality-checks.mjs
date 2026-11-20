@@ -100,7 +100,7 @@ try {
       const [width, height, ratio] = dims();
       const stored = JSON.parse(localStorage.getItem(RENDER_SCALE_KEY) || 'null');
       const climbed = ratio > 1.75 && width === Math.floor(390 * ratio) && height === Math.floor(844 * ratio)
-        && stored?.ratio === ratio && post.state.sharpen < .58 && post.state.samples === (ratio >= 2.5 ? 2 : 4);
+        && stored?.ratio === ratio && post.state.sharpen < .58 && post.state.samples === (ratio >= 2 ? 2 : 4);
       feed(50, 400);
       const floor = renderer.getPixelRatio() === 1.75 && canvas.width === 682 && post.state.samples === 4 && Math.abs(post.state.sharpen - .5833) < .01;
       localStorage.removeItem(RENDER_SCALE_KEY);

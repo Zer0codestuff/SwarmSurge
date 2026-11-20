@@ -302,7 +302,7 @@ export const DECOR = {
 
   // 43 Tar Pits: glossy pools with bubbles, bones, dead trees, steam vents and glowing seams.
   tarpit(g, zc, total) {
-    const tar = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .2, metalness: .72 });
+    const tar = new THREE.MeshPhongMaterial({ vertexColors: true, color: 0x8f8f8f, specular: 0x8a8a8a, shininess: 110 });
     scatter(g, P.tarPool(), tar, 26, 9.5, 24, zc, total, .9, 2.1, .02, false);
     scatter(g, P.steamVent(), vc(false), 44, 10, 28, zc, total, .7, 1.3, 0, false);
     scatter(g, S.crystalCluster(0xff6a1a, 6, 0x2a1c14), emissiveVC(0xa03a00, 1.2), 34, 9.5, 22, zc, total, .4, .9, 0, false);
@@ -319,7 +319,7 @@ export const DECOR = {
     scatter(g, S.crystalCluster(0xffa02a, 3, 0x3a200e), glowMat, 120, 9.5, 38, zc, total, .5, 1.5);
     scatter(g, P.amberSpike(2.6, .45), glowMat, 70, 9.5, 30, zc, total, .5, 1.4);
     scatter(g, P.amberSpike(3.4, .5, true), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x8a4208 }), 60, 8.8, 38, zc, total, .6, 1.5, 16.5, false);
-    const amberSkin = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: .85, roughness: .18, metalness: .05 });
+    const amberSkin = new THREE.MeshPhongMaterial({ vertexColors: true, transparent: true, opacity: .85, specular: 0x6b6048, shininess: 120 });
     scatter(g, P.insectAmber(), amberSkin, 42, 9.2, 22, zc, total, .7, 1.3, .15, false);
     scatter(g, S.rockCluster(0x4a2e14, 11), vc(false), 56, 11, 40, zc, total, .6, 1.4, 0, false);
     scatter(g, S.pebble(9, 0x6a4420), vc(false), 240, 9, 50, zc, total, .3, .6, 0, false);
@@ -344,7 +344,7 @@ export const DECOR = {
 
   // 46 Prism Labs: glass prisms on pedestals, emitter posts, tech panels, rainbow strips.
   prismlab(g, zc, total) {
-    const prismMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: .6, roughness: .06, metalness: .05 });
+    const prismMat = new THREE.MeshPhongMaterial({ vertexColors: true, transparent: true, opacity: .6, specular: 0x98b0c8, shininess: 180 });
     scatter2(g, P.pedestal(), vc(false), P.glassPrism().translate(0, 1.0, 0), prismMat, 34, 9.6, 26, zc, total, .8, 1.2, 0);
     scatter(g, P.glassPrism(), prismMat, 26, 12, 30, zc, total, .7, 1.2);
     scatter2(g, P.laserPost(), vc(false), new THREE.SphereGeometry(.19, 8, 6).translate(0, 2.5, 0), glow(0x8af0ff, .85), 40, 9.4, 4, zc, total, .9, 1.15);
