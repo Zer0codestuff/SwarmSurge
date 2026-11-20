@@ -34,8 +34,8 @@ const UP = `
     gl_FragColor = vec4(c / 12.0, 0.62);
   }`;
 const COMPOSITE = `
-  varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tBloom;
-  uniform float uBloom; uniform float uVignette; uniform float uPunch; uniform vec3 uFlash;
+  varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tBloom; uniform vec2 uTexel;
+  uniform float uBloom; uniform float uVignette; uniform float uPunch; uniform vec3 uFlash; uniform float uSharpen;
   float dither(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
   void main() {
     vec2 d = vUv - 0.5;
@@ -44,7 +44,19 @@ const COMPOSITE = `
       // Split the color channels toward the corners for a few frames after a heavy hit.
       vec2 o = d * dot(d, d) * uPunch * 0.11;
       c = vec3(texture2D(tScene, vUv + o).r, texture2D(tScene, vUv).g, texture2D(tScene, vUv - o).b);
-    } else c = texture2D(tScene, vUv).rgb;
+    } else {
+      c = texture2D(tScene, vUv).rgb;
+      if (uSharpen > 0.0) {
+        // Contrast adaptive sharpening (after AMD CAS): the cross of neighbours sets how much
+        // headroom the pixel has, so flat areas and strong edges are not pushed into halos.
+        vec3 n = texture2D(tScene, vUv + vec2(0.0, uTexel.y)).rgb, s = texture2D(tScene, vUv - vec2(0.0, uTexel.y)).rgb;
+        vec3 e = texture2D(tScene, vUv + vec2(uTexel.x, 0.0)).rgb, w = texture2D(tScene, vUv - vec2(uTexel.x, 0.0)).rgb;
+        vec3 lo = min(c, min(min(n, s), min(e, w))), hi = max(c, max(max(n, s), max(e, w)));
+        vec3 amp = sqrt(clamp(min(lo, 1.0 - hi) / max(hi, vec3(1e-4)), 0.0, 1.0));
+        vec3 k = -amp / mix(8.0, 5.0, uSharpen);
+        c = clamp((c + (n + s + e + w) * k) / (1.0 + 4.0 * k), 0.0, 1.0);
+      }
+    }
     // Screen blending keeps bright scenes from clipping to white.
     if (uBloom > 0.0) c += (1.0 - c) * min(vec3(1.0), texture2D(tBloom, vUv).rgb * uBloom);
     float edge = smoothstep(0.32, 0.86, length(d * vec2(1.0, 0.92)));
@@ -69,8 +81,8 @@ export function createPostFX(renderer, { compactBloom = false } = {}) {
     transparent: true, blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendEquation: THREE.AddEquation,
   });
   const composite = pass(COMPOSITE, {
-    tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0 }, uVignette: { value: 0.22 },
-    uPunch: { value: 0 }, uFlash: { value: new THREE.Color(0, 0, 0) },
+    tScene: { value: null }, tBloom: { value: null }, uTexel: texel(), uBloom: { value: 0 }, uVignette: { value: 0.22 },
+    uPunch: { value: 0 }, uFlash: { value: new THREE.Color(0, 0, 0) }, uSharpen: { value: 0 },
   });
   // The scene target reports itself as a display surface so three.js applies the same tone
   // mapping and sRGB encoding it uses for the canvas (render targets normally skip both).
@@ -89,7 +101,8 @@ export function createPostFX(renderer, { compactBloom = false } = {}) {
   }));
   const size = new THREE.Vector2();
   let levels = 0;
-  const state = { glow: true, strength: 0.5, punch: 0 };
+  // `samples` is the scene MSAA count and `sharpen` the composite sharpening (0 to 1).
+  const state = { glow: true, strength: 0.5, punch: 0, samples: sceneTarget.samples, sharpen: 0 };
   function draw(material, target) {
     quad.material = material;
     renderer.setRenderTarget(target);
@@ -98,7 +111,9 @@ export function createPostFX(renderer, { compactBloom = false } = {}) {
   function setSize() {
     renderer.getDrawingBufferSize(size);
     const w = Math.max(1, size.x), h = Math.max(1, size.y);
-    if (sceneTarget.width === w && sceneTarget.height === h) return;
+    const samples = Math.min(state.samples, renderer.capabilities.maxSamples);
+    if (sceneTarget.width === w && sceneTarget.height === h && sceneTarget.samples === samples) return;
+    if (sceneTarget.samples !== samples) { sceneTarget.samples = samples; sceneTarget.dispose(); }
     sceneTarget.setSize(w, h);
     levels = 0;
     // Skip the largest blur surface on touch screens. The scene stays at
@@ -138,6 +153,8 @@ export function createPostFX(renderer, { compactBloom = false } = {}) {
       }
     }
     composite.uniforms.tScene.value = sceneTarget.texture;
+    composite.uniforms.uTexel.value.set(1 / sceneTarget.width, 1 / sceneTarget.height);
+    composite.uniforms.uSharpen.value = state.sharpen;
     composite.uniforms.tBloom.value = mips[0].texture;
     composite.uniforms.uBloom.value = bloom ? state.strength : 0;
     composite.uniforms.uPunch.value = state.punch;

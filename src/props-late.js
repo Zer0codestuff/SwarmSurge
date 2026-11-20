@@ -4,6 +4,7 @@
 import { loftGeometry, sweepGeometry } from './boss-shapes.js';
 import { assetBatch } from './asset-kit.js';
 import * as THREE from 'three';
+import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 import { lam, mesh, makeCanvasLabel, textPlane, buildGate } from './models.js';
 
 const V2 = (r, y) => new THREE.Vector2(Math.max(0.001, r), y);
@@ -29,11 +30,13 @@ export function buildBumper(r = 0.9, color = 0xff3fae) {
   const capMat = glow(color);
   const cap = mesh(lathe([[r * 0.86, 0], [r * 0.9, 0.06], [r * 0.82, 0.2], [r * 0.6, 0.34], [r * 0.3, 0.42], [0, 0.44]], 28), capMat, 0, 0.82, 0, false);
   const lights = new THREE.Group();
-  const bulb = new THREE.SphereGeometry(r * 0.07, 8, 6), bulbMat = glow(0xfff2a0);
-  for (let k = 0; k < 10; k++) {
+  // The bulbs only spin as a ring, so they are one merged draw.
+  const bulbs = Array.from({ length: 10 }, (_, k) => {
     const a = k / 10 * Math.PI * 2;
-    lights.add(mesh(bulb, bulbMat, Math.cos(a) * r * 0.86, 0.3, Math.sin(a) * r * 0.86, false));
-  }
+    return new THREE.SphereGeometry(r * 0.07, 8, 6).translate(Math.cos(a) * r * 0.86, 0.3, Math.sin(a) * r * 0.86);
+  });
+  lights.add(mesh(mergeGeometries(bulbs), glow(0xfff2a0), 0, 0, 0, false));
+  for (const bulb of bulbs) bulb.dispose();
   const top = new THREE.Mesh(new THREE.CircleGeometry(r * 0.26, 20), glow(0xffffff));
   top.rotation.x = -Math.PI / 2; top.position.y = 1.27;
   g.add(base, drum, ring, cap, lights, top);
@@ -85,11 +88,13 @@ export function buildHypnoGate(w) {
 export function buildRails(len) {
   const g = new THREE.Group();
   const wood = lam(0x6b4a2c), steel = lam(0x9aa4b2);
-  const sleeper = new THREE.BoxGeometry(1.7, 0.1, 0.28);
+  // Sleepers and rails are merged per material: a long track is two draws, not one per tie.
   const n = Math.max(2, Math.round(len / 1.1));
-  for (let k = 0; k <= n; k++) g.add(mesh(sleeper, wood, 0, 0.05, -k * len / n, false));
-  const rail = new THREE.BoxGeometry(0.1, 0.12, len);
-  for (const sx of [-0.55, 0.55]) g.add(mesh(rail, steel, sx, 0.16, -len / 2, false));
+  const sleepers = Array.from({ length: n + 1 }, (_, k) => new THREE.BoxGeometry(1.7, 0.1, 0.28).translate(0, 0.05, -k * len / n));
+  g.add(mesh(mergeGeometries(sleepers), wood, 0, 0, 0, false));
+  const rails = [-0.55, 0.55].map(sx => new THREE.BoxGeometry(0.1, 0.12, len).translate(sx, 0.16, -len / 2));
+  g.add(mesh(mergeGeometries(rails), steel, 0, 0, 0, false));
+  for (const part of [...sleepers, ...rails]) part.dispose();
   const bumper = mesh(lathe([[0.18, 0], [0.18, 0.4], [0.26, 0.48], [0, 0.5]], 10), lam(0xe8333a), 0, 0.1, -len - 0.3, false);
   g.add(bumper);
   return g;

@@ -549,6 +549,8 @@ export function buildWorld(theme, len) {
   ink.strokeStyle = '#ffffff12'; ink.lineWidth = 1; ink.strokeRect(1, 1, 126, 126);
   const roadTexture = new THREE.CanvasTexture(surface); roadTexture.colorSpace = THREE.SRGBColorSpace;
   roadTexture.wrapS = roadTexture.wrapT = THREE.RepeatWrapping; roadTexture.repeat.set(3, total / 5);
+  // The road recedes at a grazing angle; anisotropic sampling keeps its print sharp to the horizon.
+  roadTexture.anisotropy = 8;
   road.material = new THREE.MeshStandardMaterial({ map: roadTexture, roughness: .88, metalness: .08 });
   const count = Math.ceil(total / 5), matrix = new THREE.Matrix4();
   const markings = new THREE.InstancedMesh(new THREE.PlaneGeometry(.07, 1.1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .17 }), count * 2);

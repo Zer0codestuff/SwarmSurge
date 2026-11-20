@@ -94,7 +94,7 @@ export function helmet(k,form) {
     return f<-.55 && j<8?0:2;
   };
   const silhouette = k.low ? [0, 2, 3, 4, 5, 6, 7, 8, 10] : profile.map((_, j) => j);
-  k.b.add(shell(k.low ? 8 : 20, silhouette, sample, color, paint), 0xffffff);
+  k.b.add(shell(k.t.helmet, silhouette, sample, color, paint), 0xffffff);
 }
 
 export function cuirass(k,form) {
@@ -119,5 +119,5 @@ export function cuirass(k,form) {
     return j<5?1:2;
   };
   const silhouette = k.low ? [0, 2, 4, 6, 7, 9, 10] : rows.map((_, j) => j);
-  k.b.add(shell(k.low ? 8 : 14, silhouette, sample, color, paint), 0xffffff);
+  k.b.add(shell(k.t.cuirass, silhouette, sample, color, paint), 0xffffff);
 }

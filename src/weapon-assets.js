@@ -157,11 +157,11 @@ function mortar(k) {
   body(k, [[0.1, 0.06, 0.06], [0.16, 0.08, 0.078], [0.3, 0.075, 0.072], [0.36, 0.055, 0.055]], G.dark);
   const tilt = 0.5, ax = [0, Math.sin(tilt), Math.cos(tilt)], c = [X, 0.6, 0.44];
   const at = d => [X, c[1] + ax[1] * d, c[2] + ax[2] * d];
-  k.cyl(0.088, 0.078, 0.52, c, G.body, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : 10);
+  k.cyl(0.088, 0.078, 0.52, c, G.body, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : k.level === 'mid' ? 8 : 10);
   for (const d of [-0.2, 0.02, 0.24]) k.ring(0.092, 0.018, at(d), d > 0.2 ? G.ivory : G.edge, [-tilt, 0, 0]);
-  k.cyl(0.06, 0.06, 0.02, at(0.262), G.dark, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : 10);
+  k.cyl(0.06, 0.06, 0.02, at(0.262), G.dark, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : k.level === 'mid' ? 8 : 10);
   k.blob(0.052, [1, 1, 1.5], at(0.3), G.amber, 0, [-tilt, 0, 0]);
-  k.cyl(0.1, 0.11, 0.03, at(-0.275), G.edge, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : 10);
+  k.cyl(0.1, 0.11, 0.03, at(-0.275), G.edge, [Math.PI / 2 - tilt, 0, 0], k.low ? 6 : k.level === 'mid' ? 8 : 10);
   for (const s of [-1, 1]) k.limb([[X + s * 0.05, 0.63, 0.5], [X + s * 0.13, 0.5, 0.6], [X + s * 0.17, 0.36, 0.66]], [0.017, 0.015, 0.011], G.edge);
   k.blob(1, [0.02, 0.03, 0.02], [X + 0.1, 0.66, 0.4], G.cyan);
   for (let i = 0; i < 3; i++) {
@@ -192,12 +192,12 @@ function shockLance(k) {
 const WEAPONS = [null, blaster, rocketLauncher, arcRifle, scattergun, railgun, flamethrower, frostProjector, plasmaCaster, mortar, shockLance];
 const NAMES = [null, 'Blaster', 'Rocket launcher', 'Arc rifle', 'Scattergun', 'Railgun', 'Flamethrower', 'Frost projector', 'Plasma caster', 'Mortar', 'Shock lance'];
 
-/** Includes the overlay's 1.2 scale and right-hand placement. 'low' halves the segment counts for distant troops. */
+/** Includes the overlay's 1.2 scale and right-hand placement. 'mid' and 'low' thin the segment counts for distant troops. */
 export function sculptedWeaponGeometry(id, detail = 'high') {
   const kind = Number.isInteger(id) && WEAPONS[id] ? id : 1;
-  const k = sculptKit(detail === 'low', false);
+  const k = sculptKit(detail, false);
   WEAPONS[kind](k);
   const geometry = k.b.finish().scale(1.2, 1.2, 1.2);
-  geometry.name = NAMES[kind] + (detail === 'low' ? ' low' : '');
+  geometry.name = NAMES[kind] + (k.level === 'high' ? '' : ' ' + k.level);
   return geometry;
 }
