@@ -1,21 +1,20 @@
 import { shadeUndersides } from './asset-kit.js';
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeIndexed } from './geo-merge.js';
 import { loftGeometry } from './boss-shapes.js';
 import { pod, lathe } from './vehicle-assets.js';
 
 const IVORY = 0xeaf5fa, NAVY = 0x142b49, BLUE = 0x2f8bff;
 const STEEL = 0x7597b1, CYAN = 0x65f4ff, GOLD = 0xffbc50;
 const templates = new Map();
-const surface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.47, metalness: 0.18 });
+const surface = new THREE.MeshPhongMaterial({ vertexColors: true, color: 0xe9e9e9, specular: 0x47505a, shininess: 36 });
 const light = new THREE.MeshBasicMaterial({ vertexColors: true });
 surface.userData.shared = light.userData.shared = true;
 
 function batch() {
   const parts = [];
   function add(source, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-    const g = source.index ? source.toNonIndexed() : source;
-    if (g !== source) source.dispose();
+    const g = source;
     g.rotateX(rx); g.rotateY(ry); g.rotateZ(rz); g.translate(x, y, z);
     // Colors may depend on the placed vertex; loft shading stays as a multiplier.
     const pos = g.attributes.position, shade = g.attributes.color;
@@ -58,7 +57,7 @@ function batch() {
       return add(new THREE.CylinderGeometry(radius, radius, length, sides), color, x, y, z, Math.PI / 2);
     },
     finish(parent, name, material = surface) {
-      const geometry = mergeGeometries(parts, false);
+      const geometry = mergeIndexed(parts, false);
       parts.forEach(part => part.dispose());
       if (material === surface) shadeUndersides(geometry);
       geometry.computeBoundingBox(); geometry.computeBoundingSphere(); geometry.userData.shared = true;

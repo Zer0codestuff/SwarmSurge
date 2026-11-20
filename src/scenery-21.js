@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeIndexed } from './geo-merge.js';
 import { loftGeometry, sweepGeometry, patchGeometry } from './boss-shapes.js';
 import { boulder } from './scenery-assets.js';
 
@@ -50,14 +50,11 @@ function place(g, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = 1) {
 }
 
 function combine(parts) {
-  const clean = parts.map(g => {
-    const n = g.index ? g.toNonIndexed() : g;
-    if (n !== g) g.dispose();
-    for (const k of Object.keys(n.attributes)) if (!['position', 'normal', 'color'].includes(k)) n.deleteAttribute(k);
-    return n;
-  });
-  const out = mergeGeometries(clean);
-  clean.forEach(g => g.dispose());
+  for (const g of parts) {
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
+  }
+  const out = mergeIndexed(parts);
+  parts.forEach(g => g.dispose());
   out.computeBoundingSphere();
   return out;
 }
@@ -89,9 +86,9 @@ function starShape(color, r, depth = .14) {
 // Pinball bumper: dark plinth, cushioned body, bright band. Pair with bumperCap for a lit top.
 export function bumper(body = 0x35e0ff, band = 0xff4fd8) {
   return combine([
-    paint(lathe([[1.04, 0], [1.04, .14], [.78, .24], [.6, .26]], 20), 0x241c44, rise(.26, .8)),
-    paint(lathe([[.6, .24], [.76, .52], [.68, .92], [.5, 1.12]], 20), body, rise(1.12, .74)),
-    paint(lathe([[.52, 1.1], [.56, 1.22], [.4, 1.32], [.26, 1.34]], 20), band),
+    paint(lathe([[1.04, 0], [1.04, .14], [.78, .24], [.6, .26]], 14), 0x241c44, rise(.26, .8)),
+    paint(lathe([[.6, .24], [.76, .52], [.68, .92], [.5, 1.12]], 14), body, rise(1.12, .74)),
+    paint(lathe([[.52, 1.1], [.56, 1.22], [.4, 1.32], [.26, 1.34]], 14), band),
   ]);
 }
 export function bumperCap(color = 0xffd21a) {
@@ -112,8 +109,8 @@ export function rolloverLens(color = 0xaffff0) {
 // Shiny pinball resting in a shallow cradle.
 export function steelBall() {
   return combine([
-    paint(lathe([[.86, 0], [.82, .16], [.62, .22], [.5, .22]], 18), 0x241c44, rise(.22, .8)),
-    paint(place(new THREE.SphereGeometry(.58, 18, 12), 0, .44, 0), 0xd6deec, (x, y, z) => {
+    paint(lathe([[.86, 0], [.82, .16], [.62, .22], [.5, .22]], 14), 0x241c44, rise(.22, .8)),
+    paint(place(new THREE.SphereGeometry(.58, 14, 10), 0, .44, 0), 0xd6deec, (x, y, z) => {
       const d = Math.max(0, (x * .45 + y * .8 + z * .25) / .95);
       return .58 + .42 * d;
     }),
@@ -127,10 +124,10 @@ export function laneGuide(color = 0x3affd0) {
 
 // Rounded toy block with studs on top and a letter, dots or plus on every face.
 export function toyBlock(color = 0xff6a4a, kind = 0) {
-  const body = loftGeometry([[0, .9, .9, 0, 0, .3], [1.0, 1.0, 1.0, 0, 0, .27], [2.0, .9, .9, 0, 0, .3]], { segments: 18, steps: 6 });
+  const body = loftGeometry([[0, .9, .9, 0, 0, .3], [1.0, 1.0, 1.0, 0, 0, .27], [2.0, .9, .9, 0, 0, .3]], { segments: 12, steps: 4 });
   const parts = [paint(body, color, (x, y) => .78 + .22 * y / 2)];
   for (const [sx, sz] of [[-.44, -.44], [.44, -.44], [-.44, .44], [.44, .44]]) {
-    parts.push(paint(new THREE.CylinderGeometry(.17, .17, .2, 10).translate(sx, 2.05, sz), color, () => .94));
+    parts.push(paint(new THREE.CylinderGeometry(.17, .17, .2, 7).translate(sx, 2.05, sz), color, () => .94));
   }
   // letter strokes as thin plates on all four side faces
   const plateX = (w, h, y, z, tilt = 0) => { for (const sx of [-1, 1]) parts.push(paint(new THREE.BoxGeometry(.06, h, w).rotateX(tilt).translate(sx * 1.04, y, z), 0xfff4e0)); };
@@ -142,8 +139,8 @@ export function toyBlock(color = 0xff6a4a, kind = 0) {
   } else if (kind === 1) {
     for (const [py, pu] of [[.6, .32], [1.3, .32], [.6, -.32], [1.3, -.32]]) {
       for (const sx of [-1, 1]) {
-        parts.push(paint(new THREE.CylinderGeometry(.13, .13, .07, 8).rotateX(Math.PI / 2).translate(sx * 1.04, py, pu), 0xfff4e0));
-        parts.push(paint(new THREE.CylinderGeometry(.13, .13, .07, 8).rotateZ(Math.PI / 2).translate(pu, py, sx * 1.04), 0xfff4e0));
+        parts.push(paint(new THREE.CylinderGeometry(.13, .13, .07, 6).rotateX(Math.PI / 2).translate(sx * 1.04, py, pu), 0xfff4e0));
+        parts.push(paint(new THREE.CylinderGeometry(.13, .13, .07, 6).rotateZ(Math.PI / 2).translate(pu, py, sx * 1.04), 0xfff4e0));
       }
     }
   } else if (kind === 2) {

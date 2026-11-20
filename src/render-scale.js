@@ -13,7 +13,7 @@ const UP_LATE = 0.04, DOWN_LATE = 0.15;
 const UP_GPU = 0.62, DOWN_GPU = 0.86;
 // JavaScript at this share of the budget makes the frame CPU bound; resolution would not help.
 const CPU_BOUND = 0.75;
-const BACKOFF_MS = 20000, MAX_BACKOFF_MS = 320000;
+const BACKOFF_MS = 20000, MAX_BACKOFF_MS = 120000;
 
 export function scaleLevels(floor, ceiling) {
   const levels = [floor];

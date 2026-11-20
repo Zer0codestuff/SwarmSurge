@@ -1,11 +1,13 @@
 // Sculpted roadside: a rounded kerb and one fence design per fort architecture family.
-// Posts and spans are instanced in chunks along the road so distant chunks are culled.
+// Posts and spans share one instanced batch per chunk along the road so distant chunks are culled.
 import * as THREE from 'three';
 import { assetBatch, bevelBox } from './asset-kit.js';
 import { sweepGeometry } from './boss-shapes.js';
+import { mergeIndexed } from './geo-merge.js';
+import { SceneryBatch, finalizeSceneryBatch } from './scenery-batches.js';
 
 export const ROAD_SPAN = 2.5;
-const SPAN = ROAD_SPAN, CHUNK = 100, GOLD = 0xffc85a;
+const SPAN = ROAD_SPAN, CHUNK = 70, GOLD = 0xffc85a;
 const lathe = (profile, sides, phase = 0) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(Math.max(.001, r), y)), sides, phase);
 const faceted = (geometry) => { const flat = geometry.toNonIndexed(); geometry.dispose(); flat.computeVertexNormals(); return flat; };
 const tone = (hex, factor) => new THREE.Color(hex).multiplyScalar(factor).getHex();
@@ -26,7 +28,7 @@ function bar(batch, radius, y, color, sides = 6, x = 0) {
 }
 // A rope or garland hanging between two posts.
 function sag(batch, top, drop, radius, color) {
-  batch.add(sweepGeometry([[0, top, 0], [0, top - drop * .78, SPAN * .25], [0, top - drop, SPAN * .5], [0, top - drop * .78, SPAN * .75], [0, top, SPAN]], [radius, radius], { segments: 5, steps: 8 }), color);
+  batch.add(sweepGeometry([[0, top, 0], [0, top - drop * .78, SPAN * .25], [0, top - drop, SPAN * .5], [0, top - drop * .78, SPAN * .75], [0, top, SPAN]], [radius, radius], { segments: 4, steps: 5 }), color);
 }
 
 // Each family fills a post batch and a span batch; `lit` parts use the unlit glow material.
@@ -103,31 +105,34 @@ export function buildRoadside(family, total, zc, colors, kerb) {
   const group = new THREE.Group(); group.name = `roadside-${family}`;
   const half = [[.27, 0], [.27, .1], [.2, .17], [.2, .52], [.15, .68], [.05, .75]];
   const section = [...half.map(([x, y]) => [-x, y]), ...half.map(([x, y]) => [x, y]).reverse()];
-  const kerbGeometry = extrudeZ(section, total, true);
-  for (const x of [-7.6, 7.6]) {
-    const side = new THREE.Mesh(kerbGeometry, kerb); side.position.set(x, 0, zc - total / 2);
-    side.castShadow = true; side.receiveShadow = true; group.add(side);
-  }
-  const parts = { post: assetBatch(), span: assetBatch(), lit: assetBatch() };
-  (FAMILIES[family] || FAMILIES.bastion)(parts, colors);
+  const leftKerb = extrudeZ(section, total, true).translate(-7.6, 0, 0);
+  const rightKerb = extrudeZ(section, total, true).translate(7.6, 0, 0);
+  const kerbGeometry = mergeIndexed([leftKerb, rightKerb]);
+  leftKerb.dispose(); rightKerb.dispose();
+  const kerbs = new THREE.Mesh(kerbGeometry, kerb);
+  kerbs.position.set(0, 0, zc - total / 2);
+  kerbs.castShadow = true; kerbs.receiveShadow = true; group.add(kerbs);
+  // Posts and spans share the same material, so merging them halves instanced fence draw calls.
+  const solidBatch = assetBatch(), litBatch = assetBatch();
+  (FAMILIES[family] || FAMILIES.bastion)({ post: solidBatch, span: solidBatch, lit: litBatch }, colors);
   const solid = new THREE.MeshLambertMaterial({ vertexColors: true }), glow = new THREE.MeshBasicMaterial({ vertexColors: true });
-  const post = finish(parts.post, solid), span = finish(parts.span, solid), lit = finish(parts.lit, glow);
+  const unit = finish(solidBatch, solid), lit = finish(litBatch, glow);
   if (!lit) glow.dispose();
   const count = Math.floor(total / SPAN), start = zc - total / 2, perChunk = Math.round(CHUNK / SPAN);
   const matrix = new THREE.Matrix4(), turn = new THREE.Matrix4().makeRotationY(Math.PI);
   for (let first = 0; first < count; first += perChunk) {
     const n = Math.min(perChunk, count - first);
-    const meshes = [[post, solid, 0], [span, solid, 1], [lit, glow, family === 'station' ? 0 : 1]].filter(([geometry]) => geometry)
-      .map(([geometry, material, spans]) => ({ mesh: new THREE.InstancedMesh(geometry, material, n * 2), spans }));
+    const meshes = [[unit, solid, 1], [lit, glow, 1]].filter(([geometry]) => geometry)
+      .map(([geometry, material, spans]) => ({ mesh: new SceneryBatch(geometry, material, n * 2), spans }));
     for (let i = 0; i < n; i++) {
       const z = start + (first + i) * SPAN;
       for (const { mesh, spans } of meshes) {
-        // The far side is turned around, so its spans start from the next post.
+        // The far side is turned around, so each combined post+span starts from the next post.
         matrix.makeTranslation(8.2, 0, z); mesh.setMatrixAt(i * 2, matrix);
         matrix.copy(turn).setPosition(-8.2, 0, z + (spans ? SPAN : 0)); mesh.setMatrixAt(i * 2 + 1, matrix);
       }
     }
-    for (const { mesh } of meshes) { mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere?.(); group.add(mesh); }
+    for (const { mesh } of meshes) { mesh.instanceMatrix.needsUpdate = true; group.add(mesh); finalizeSceneryBatch(mesh); }
   }
   return group;
 }

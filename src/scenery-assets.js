@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { mergeGeometries, mergeVertices } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeVertices } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeIndexed } from './geo-merge.js';
 import { loftGeometry, sweepGeometry, patchGeometry } from './boss-shapes.js';
 
 // Sculpted roadside props. Each builder returns one vertex-colored geometry,
@@ -34,14 +35,11 @@ function place(g, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = 1) {
 }
 
 function combine(parts) {
-  const clean = parts.map(g => {
-    const n = g.index ? g.toNonIndexed() : g;
-    if (n !== g) g.dispose();
-    for (const k of Object.keys(n.attributes)) if (!['position', 'normal', 'color'].includes(k)) n.deleteAttribute(k);
-    return n;
-  });
-  const out = mergeGeometries(clean);
-  clean.forEach(g => g.dispose());
+  for (const g of parts) {
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
+  }
+  const out = mergeIndexed(parts);
+  parts.forEach(g => g.dispose());
   out.computeBoundingSphere();
   return out;
 }
@@ -90,7 +88,7 @@ export function rockCluster(color, seed = 1, opts = {}) {
 export function saguaro() {
   const green = new THREE.Color(0x467c49), lit = new THREE.Color(0x8aba59);
   const rib = (points,radii,steps) => {
-    const sides=16;
+    const sides=10;
     const stem=sweepGeometry(points,radii,{segments:sides,steps,flutes:.11});
     return paint(stem,green,(x,y,z,i)=>{
       const crease=.5+.5*Math.cos((i%(sides+1))*TAU/sides*5);
@@ -98,13 +96,13 @@ export function saguaro() {
     });
   };
   const parts=[
-    rib([[0,0,0],[-.024,1.1,.02],[.035,2.40,0],[.012,2.68,0],[0,2.74,.005]], [.35,.33,.285,.19,.018],10),
-    rib([[.18,.97,0],[.57,1.05,.035],[.73,1.40,.02],[.70,1.96,0],[.68,2.055,0]],[.20,.205,.185,.151,.012],8),
-    rib([[-.17,1.31,.035],[-.51,1.42,.07],[-.615,1.66,.07],[-.585,1.91,.05],[-.58,1.98,.045]], [.18,.173,.157,.126,.01],7),
+    rib([[0,0,0],[-.024,1.1,.02],[.035,2.40,0],[.012,2.68,0],[0,2.74,.005]], [.35,.33,.285,.19,.018],7),
+    rib([[.18,.97,0],[.57,1.05,.035],[.73,1.40,.02],[.70,1.96,0],[.68,2.055,0]],[.20,.205,.185,.151,.012],6),
+    rib([[-.17,1.31,.035],[-.51,1.42,.07],[-.615,1.66,.07],[-.585,1.91,.05],[-.58,1.98,.045]], [.18,.173,.157,.126,.01],5),
   ];
   for(const [x,y,z,s] of [[.07,2.64,.12,1],[-.57,1.92,.12,.7]]) {
     const bloom=loftGeometry([[0,.022,.022],[.058,.054,.05],[.11,.127,.12],[.126,.113,.105],[.078,.038,.04]],
-      {segments:15,steps:5,warp(px,py,pz,u,v,a){
+      {segments:10,steps:3,warp(px,py,pz,u,v,a){
         const petal=.5+.5*Math.cos(a*5);
         return [px*(.8+.2*petal),py+.047*petal*Math.sin(v*Math.PI),pz*(.8+.2*petal)];
       }});
@@ -137,13 +135,13 @@ export function spookyTree() {
 
 // Layered pine with drooping tiers and optional snow on each shelf.
 export function pine(snow = false, dark = 0x2f6b4f, light = 0x3d8a60) {
-  const trunk=paint(lathe([[.18,0],[.13,.35],[.10,1.25]],7),0x705132);
+  const trunk=paint(lathe([[.18,0],[.13,.35],[.10,1.25]],6),0x705132);
   // A single canopy winds around the trunk. Each whorl turns between the
   // boughs below it and a hanging tip breaks the lower outline.
   const sections=[[.50,.43,.45],[.65,1.04,1.07],[.92,.95,.91],[1.30,.61,.63],
     [1.37,.82,.86],[1.61,.72,.77],[1.99,.47,.49],[2.05,.62,.61],
     [2.33,.51,.50],[2.65,.31,.32],[2.67,.35,.36],[2.98,.20,.19],[3.29,.012,.012]];
-  const canopy=loftGeometry(sections,{segments:16,steps:15,warp(x,y,z,u,v,a){
+  const canopy=loftGeometry(sections,{segments:10,steps:11,warp(x,y,z,u,v,a){
     const cluster=.5+.5*Math.cos(5*a+v*9), scale=.77+.28*cluster;
     return [x*scale+.07*v*v, y-.24*cluster*(1-v), z*scale];
   }});
@@ -161,7 +159,7 @@ export function pine(snow = false, dark = 0x2f6b4f, light = 0x3d8a60) {
 function frond(angle,len,droop,width,color) {
   const pos=[],colors=[],idx=[],base=new THREE.Color(color);
   const dir=new THREE.Vector3(Math.cos(angle),0,Math.sin(angle)), side=new THREE.Vector3(-dir.z,0,dir.x);
-  const steps=14;
+  const steps=8;
   for(let j=0;j<=steps;j++){
     const t=j/steps, along=dir.clone().multiplyScalar(t*len);
     const y=.53*Math.sin(Math.PI*t)-droop*t*t;
@@ -193,7 +191,7 @@ export function palm({ height = 4.3, lean = .7, trunk = 0x9a6a3a, leaf = 0x3fb84
 
 export function bush(color = 0x2f8a35, flower = 0xff4f9a) {
   const canopy=loftGeometry([[.02,.50,.42],[.19,.91,.69],[.46,.88,.71],[.67,.59,.46],[.75,.02,.02]],
-    {segments:18,steps:7,warp(x,y,z,u,v,a){
+    {segments:12,steps:5,warp(x,y,z,u,v,a){
       const tuft=Math.sin(5*a+v*4)*Math.cos(2*a-v*3);
       return [x*(1+.17*tuft),y+.15*tuft*Math.sin(Math.PI*v),z*(1+.12*tuft)];
     }});
@@ -201,7 +199,7 @@ export function bush(color = 0x2f8a35, flower = 0xff4f9a) {
   if(flower)for(let i=0;i<4;i++){
     const a=.7+i*1.7,x=.48*Math.cos(a),z=.38*Math.sin(a);
     const bloom=loftGeometry([[0,.016,.016],[.045,.064,.064],[.086,.116,.116],[.095,.078,.078]],
-      {segments:10,steps:3,warp(x,y,z,u,v,ang){
+      {segments:6,steps:2,warp(x,y,z,u,v,ang){
         const petal=Math.cos(5*ang),r=1+.29*v*petal;
         return [x*r,y+.025*v*petal,z*r];
       }});
@@ -303,11 +301,11 @@ export function coral(color, seed = 0) {
   for (let b = 0; b < 4; b++) {
     const a = b / 4 * TAU + seed, ca = Math.cos(a), sa = Math.sin(a), out = .45 + (b % 2) * .2;
     const end = [ca * (out + .35), 2.0 + (b % 2) * .4, sa * (out + .35)];
-    parts.push(paint(sweepGeometry([[0, 1.1, 0], [ca * out, 1.5, sa * out], end], [.13, .1, .06], { segments: 4, steps: 5 }), color, sh));
-    parts.push(paint(lathe([[.055,-.07],[.084,-.033],[.081,.021],[.056,.053],[.029,.038],[.024,.005]],7),color,(x,y)=> y>.018 ? tmp.set(tip) : 1).translate(...end));
+    parts.push(paint(sweepGeometry([[0, 1.1, 0], [ca * out, 1.5, sa * out], end], [.13, .1, .06], { segments: 4, steps: 3 }), color, sh));
+    parts.push(paint(lathe([[.055,-.07],[.084,-.033],[.081,.021],[.056,.053],[.029,.038],[.024,.005]],5),color,(x,y)=> y>.018 ? tmp.set(tip) : 1).translate(...end));
     const mid = [ca * out, 1.5, sa * out], twig = [mid[0] + sa * .3, 1.95, mid[2] - ca * .3];
     parts.push(paint(sweepGeometry([mid, [mid[0] + sa * .2, 1.7, mid[2] - ca * .2], twig], [.07, .05, .03], { segments: 4, steps: 3 }), color, sh));
-    parts.push(paint(lathe([[.031,-.052],[.057,-.021],[.055,.027],[.038,.036],[.018,.009]],6),color,(x,y)=> y>.018 ? tmp.set(tip) : 1).translate(...twig));
+    parts.push(paint(lathe([[.031,-.052],[.057,-.021],[.055,.027],[.038,.036],[.018,.009]],5),color,(x,y)=> y>.018 ? tmp.set(tip) : 1).translate(...twig));
   }
   return combine(parts);
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { mergeGeometries, mergeVertices } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeVertices } from '../vendor/addons/BufferGeometryUtils.js';
+import { mergeIndexed } from './geo-merge.js';
 import { loftGeometry, sweepGeometry, patchGeometry } from './boss-shapes.js';
 import { boulder } from './scenery-assets.js';
 
@@ -34,14 +35,11 @@ function place(g, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = 1) {
 }
 
 function combine(parts) {
-  const clean = parts.map(g => {
-    const n = g.index ? g.toNonIndexed() : g;
-    if (n !== g) g.dispose();
-    for (const k of Object.keys(n.attributes)) if (!['position', 'normal', 'color'].includes(k)) n.deleteAttribute(k);
-    return n;
-  });
-  const out = mergeGeometries(clean);
-  clean.forEach(g => g.dispose());
+  for (const g of parts) {
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
+  }
+  const out = mergeIndexed(parts);
+  parts.forEach(g => g.dispose());
   out.computeBoundingSphere();
   return out;
 }
@@ -202,8 +200,8 @@ export function windmill() {
 }
 
 // Broad-canopy tree with lumpy foliage and optional fruit.
-export function fruitTree(seed = 1, { leaf = 0x3f9a3a, leaf2 = 0x2f8a30, trunk = 0x7a5a3a, fruit = 0xd83a2a, fruits = 7 } = {}) {
-  const parts = [paint(sweepGeometry([[0, 0, 0], [.04, .55, 0], [-.05, 1.1, .03], [.02, 1.55, 0]], [.24, .18, .13, .09], { segments: 6, steps: 5 }), trunk, (x, y) => .74 + .26 * Math.min(1, y / 1.5))];
+export function fruitTree(seed = 1, { leaf = 0x3f9a3a, leaf2 = 0x2f8a30, trunk = 0x7a5a3a, fruit = 0xd83a2a, fruits = 5 } = {}) {
+  const parts = [paint(sweepGeometry([[0, 0, 0], [.04, .55, 0], [-.05, 1.1, .03], [.02, 1.55, 0]], [.24, .18, .13, .09], { segments: 5, steps: 4 }), trunk, (x, y) => .74 + .26 * Math.min(1, y / 1.5))];
   for (let b = 0; b < 3; b++) {
     const c = blob(1.05 - b * .14, seed + b * 3, .82);
     c.translate((b - 1) * .78, 1.9 + (b % 2) * .38, b % 2 ? .42 : -.38);
@@ -211,7 +209,7 @@ export function fruitTree(seed = 1, { leaf = 0x3f9a3a, leaf2 = 0x2f8a30, trunk =
   }
   for (let f = 0; f < fruits; f++) {
     const a = f * 2.4 + seed, r = .92 + .2 * ((f + seed) % 3) / 3;
-    parts.push(paint(new THREE.SphereGeometry(.13, 6, 4), fruit, () => .95).translate(Math.cos(a) * r, 1.5 + .8 * ((f * 7 + seed) % 4) / 4, Math.sin(a) * r));
+    parts.push(paint(new THREE.SphereGeometry(.13, 5, 3), fruit, () => .95).translate(Math.cos(a) * r, 1.5 + .8 * ((f * 7 + seed) % 4) / 4, Math.sin(a) * r));
   }
   return combine(parts);
 }
@@ -251,11 +249,11 @@ export function hillMound(color = 0x6ab84a, seed = 1) {
 // Segmented bamboo stalk with ring joints and drooping leaves.
 export function bambooStalk(seed = 1) {
   const h = 4.4 + (seed % 3) * .8, lean = .06;
-  const parts = [paint(sweepGeometry([[0, 0, 0], [lean, h * .35, 0], [-lean, h * .7, .04], [lean * 2, h, 0]], [.17, .14, .115, .09], { segments: 6, steps: 6 }), 0x7ab84a,
+  const parts = [paint(sweepGeometry([[0, 0, 0], [lean, h * .35, 0], [-lean, h * .7, .04], [lean * 2, h, 0]], [.17, .14, .115, .09], { segments: 5, steps: 4 }), 0x7ab84a,
     (x, y) => .8 + .2 * y / h - .18 * (Math.abs(Math.sin(y * 4.2)) > .88 ? 1 : 0))];
-  for (let l = 0; l < 5; l++) {
+  for (let l = 0; l < 4; l++) {
     const a = l * 1.55 + seed, len = .85 + .3 * ((l + seed) % 3) / 3;
-    const leaf = patchGeometry([[-.07, 0], [.07, 0], [.05, len * .7], [0, len], [-.05, len * .7]], .015, .02, { segments: 7, rings: 1 });
+    const leaf = patchGeometry([[-.07, 0], [.07, 0], [.05, len * .7], [0, len], [-.05, len * .7]], .015, .02, { segments: 5, rings: 1 });
     leaf.rotateX(1.3 + .25 * (l % 2));
     leaf.rotateY(a);
     leaf.translate(Math.cos(a) * .12, h - .1 - l * .32, Math.sin(a) * .12);

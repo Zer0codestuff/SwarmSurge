@@ -14,8 +14,8 @@ const glowVert = `
   attribute float size;
   attribute float alpha;
   attribute vec3 color;
-  varying vec3 vColor;
-  varying float vAlpha;
+  varying mediump vec3 vColor;
+  varying mediump float vAlpha;
   uniform float uScale;
   void main() {
     vColor = color;
@@ -25,11 +25,14 @@ const glowVert = `
     gl_Position = projectionMatrix * mv;
   }`;
 const glowFrag = `
-  varying vec3 vColor;
-  varying float vAlpha;
+  varying mediump vec3 vColor;
+  varying mediump float vAlpha;
   void main() {
-    float d = length(gl_PointCoord - 0.5) * 2.0;
-    float a = smoothstep(1.0, 0.0, d);
+    mediump vec2 p = gl_PointCoord - 0.5;
+    mediump float r2 = dot(p, p);
+    if (r2 > 0.25) discard;
+    mediump float d = sqrt(r2) * 2.0;
+    mediump float a = smoothstep(1.0, 0.0, d);
     a = a * a * (0.6 + 0.4 * smoothstep(0.35, 0.0, d));
     gl_FragColor = vec4(vColor * (1.0 + smoothstep(0.3, 0.0, d)), a * vAlpha);
   }`;
@@ -45,10 +48,10 @@ export const glowMaterials = [];
 // Reuse impact rings so dense splash weapons do not allocate scene objects per shot.
 export class Rings {
   constructor(scene, capacity = 64) {
-    this.capacity = capacity; this.head = 0;
+    this.capacity = capacity; this.head = 0; this.alive = false;
     for (const key of ['life', 'duration', 'radius', 'x', 'z']) this[key] = new Float32Array(capacity);
     this.colors = new Float32Array(capacity * 3); this.color = new THREE.Color();
-    const geometry = new THREE.RingGeometry(.82, 1, 32);
+    const geometry = new THREE.RingGeometry(.82, 1, 20);
     geometry.setAttribute('ringAlpha', new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.DynamicDrawUsage));
     const material = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false,
@@ -80,8 +83,10 @@ export class Rings {
     this.x[i] = x; this.z[i] = z; this.radius[i] = radius;
     this.life[i] = this.duration[i] = duration;
     this.color.set(color).toArray(this.colors, i * 3);
+    this.alive = true;
   }
   update(dt) {
+    if (!this.alive) return;
     let count = 0;
     const matrices = this.mesh.instanceMatrix.array, colors = this.mesh.instanceColor.array;
     const alpha = this.mesh.geometry.attributes.ringAlpha.array;
@@ -98,16 +103,17 @@ export class Rings {
       alpha[count] = fade; count++;
     }
     this.mesh.count = count;
+    this.alive = count > 0;
     uploadUsed(this.mesh.instanceMatrix, count); uploadUsed(this.mesh.instanceColor, count);
     uploadUsed(this.mesh.geometry.attributes.ringAlpha, count);
   }
-  clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; }
+  clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; this.alive = false; }
 }
 
 // One reusable draw call for blaster shots, lightning and air-strike trails.
 export class Tracers {
   constructor(scene, capacity = 128) {
-    this.capacity = capacity; this.head = 0;
+    this.capacity = capacity; this.head = 0; this.alive = false;
     this.life = new Float32Array(capacity); this.duration = new Float32Array(capacity);
     this.base = new Float32Array(capacity * 16); this.colors = new Float32Array(capacity * 3);
     this.matrix = new THREE.Matrix4(); this.rotation = new THREE.Quaternion();
@@ -130,8 +136,10 @@ export class Tracers {
     this.matrix.compose(this.position,this.rotation,this.scale).toArray(this.base,i*16);
     this.color.set(color).toArray(this.colors,i*3);
     this.duration[i] = this.life[i] = duration;
+    this.alive = true;
   }
   update(dt) {
+    if (!this.alive) return;
     let count = 0;
     const matrices = this.mesh.instanceMatrix.array, colors = this.mesh.instanceColor.array;
     for (let i = 0; i < this.capacity; i++) {
@@ -146,9 +154,10 @@ export class Tracers {
       count++;
     }
     this.mesh.count = count;
+    this.alive = count > 0;
     uploadUsed(this.mesh.instanceMatrix, count); uploadUsed(this.mesh.instanceColor, count);
   }
-  clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; }
+  clear() { this.life.fill(0); this.mesh.count = 0; this.head = 0; this.alive = false; }
 }
 
 // pool of physics sparks
@@ -156,6 +165,7 @@ export class Sparks {
   constructor(scene, N = 1400) {
     this.N = N;
     this.head = 0;
+    this.scanEnd = 0;
     const g = new THREE.BufferGeometry();
     this.pos = new Float32Array(N * 3);
     this.col = new Float32Array(N * 3);
@@ -189,6 +199,7 @@ export class Sparks {
       this.size0[i] = size * (0.6 + Math.random() * 0.8);
       this.max[i] = this.life[i] = life * (0.6 + Math.random() * 0.6);
       this.grav[i] = grav;
+      if (i + 1 > this.scanEnd) this.scanEnd = i + 1;
     }
   }
   // a stream of sparks flying from A to B (upgrade beams, warp trails)
@@ -200,12 +211,14 @@ export class Sparks {
       this.vel[i * 3] = (x2 - x1) / t; this.vel[i * 3 + 1] = (y2 - y1) / t; this.vel[i * 3 + 2] = (z2 - z1) / t;
       this.col[i * 3] = col[0]; this.col[i * 3 + 1] = col[1]; this.col[i * 3 + 2] = col[2];
       this.size0[i] = size; this.max[i] = this.life[i] = t; this.grav[i] = 0;
+      if (i + 1 > this.scanEnd) this.scanEnd = i + 1;
     }
   }
   update(dt) {
+    if (this.scanEnd === 0) return;
     const P = this.pos, V = this.vel;
     let used = 0;
-    for (let i = 0; i < this.N; i++) {
+    for (let i = 0; i < this.scanEnd; i++) {
       if (this.life[i] <= 0) { if (this.alpha[i] !== 0) { this.alpha[i] = 0; this.size[i] = 0; } continue; }
       used = i + 1;
       this.life[i] -= dt;
@@ -218,10 +231,16 @@ export class Sparks {
       this.alpha[i] = Math.min(1, p * 1.6);
       this.size[i] = this.size0[i] * (0.4 + p * 0.6);
     }
+    this.scanEnd = used;
     this.geo.setDrawRange(0, used);
-    for (const k of ['position', 'color', 'size', 'alpha']) uploadUsed(this.geo.attributes[k], used);
+    if (used > 0) {
+      uploadUsed(this.geo.attributes.position, used);
+      uploadUsed(this.geo.attributes.color, used);
+      uploadUsed(this.geo.attributes.size, used);
+      uploadUsed(this.geo.attributes.alpha, used);
+    }
   }
-  clear() { this.life.fill(0); }
+  clear() { this.life.fill(0); this.alpha.fill(0); this.size.fill(0); this.scanEnd = 0; this.geo.setDrawRange(0, 0); }
 }
 
 // per-frame glow halos (rebuilt every frame, e.g. around super-powered units)
@@ -282,13 +301,16 @@ const ambVert = `
     vAlpha = smoothstep(2.0, 7.0, -mv.z) * mix(1.0, 0.35 + 0.65 * abs(sin(uTime * 2.5 + seed * 30.0)), uTwinkle);
   }`;
 const ambFrag = `
-  uniform vec3 uColor;
-  uniform vec3 uColor2;
-  uniform float uOpacity;
-  varying float vAlpha;
+  uniform mediump vec3 uColor;
+  uniform mediump vec3 uColor2;
+  uniform mediump float uOpacity;
+  varying mediump float vAlpha;
   void main() {
-    float d = length(gl_PointCoord - 0.5) * 2.0;
-    float a = 1.0 - smoothstep(0.2, 1.0, d);
+    mediump vec2 p = gl_PointCoord - 0.5;
+    mediump float r2 = dot(p, p);
+    if (r2 > 0.25) discard;
+    mediump float d = sqrt(r2) * 2.0;
+    mediump float a = 1.0 - smoothstep(0.2, 1.0, d);
     gl_FragColor = vec4(mix(uColor, uColor2, smoothstep(0.0, 0.8, d)), a * vAlpha * uOpacity);
   }`;
 const AMBIENT = {
@@ -380,7 +402,7 @@ export function buildSky() {
 // flying debris: chunks of towers, blockers and gates
 export class Debris {
   constructor(scene, N = 260) {
-    this.N = N; this.head = 0;
+    this.N = N; this.head = 0; this.alive = false;
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), N);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3).setUsage(THREE.DynamicDrawUsage);
@@ -405,10 +427,11 @@ export class Debris {
       const c = colors[k % colors.length];
       this.colors.set(c, i * 3);
     }
+    if (n > 0) this.alive = true;
   }
   update(dt) {
+    if (!this.alive) return;
     let count = 0;
-    if (!this.mesh.visible && !this.life.some(life => life > 0)) return;
     for (let i = 0; i < this.N; i++) {
       if (this.life[i] <= dt) { this.life[i] = 0; continue; }
       this.life[i] -= dt;
@@ -429,9 +452,9 @@ export class Debris {
     }
     uploadUsed(this.mesh.instanceMatrix, count);
     uploadUsed(this.mesh.instanceColor, count);
-    this.mesh.count = count; this.mesh.visible = count > 0;
+    this.mesh.count = count; this.mesh.visible = count > 0; this.alive = count > 0;
   }
-  clear() { this.life.fill(0); this.mesh.count = 0; this.mesh.visible = false; }
+  clear() { this.life.fill(0); this.mesh.count = 0; this.mesh.visible = false; this.alive = false; }
 }
 
 // Break a model into spatial chunks. Asset meshes are batched by material, so moving

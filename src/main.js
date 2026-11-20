@@ -115,7 +115,7 @@ renderer.setPixelRatio(renderScale.ratio);
 renderer.debug.checkShaderErrors = params.has('shaderdebug');
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
-if (isTouch) useCompactShadowFilter();
+useCompactShadowFilter();
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 renderer.info.autoReset = false; // one frame spans several passes
@@ -128,7 +128,9 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8a9a, 1.7);
 const sun = new THREE.DirectionalLight(0xffffff, 2.3);
 sun.castShadow = true;
 sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
-Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 42, bottom: -42, near: 1, far: 140 });
+Object.assign(sun.shadow.camera, isTouch
+  ? { left: -21, right: 21, top: 38, bottom: -36, near: 1, far: 130 }
+  : { left: -26, right: 26, top: 42, bottom: -42, near: 1, far: 140 });
 sun.shadow.bias = -0.0008;
 sun.shadow.autoUpdate = !isTouch;
 const SHADOW_REFRESH_MS = 1000 / 30;
@@ -166,7 +168,7 @@ function applyRenderScale(ratio) {
   // From 2.5x the pixels are fine enough that two samples smooth edges as four did at 1.75x,
   // which halves the multisampled memory. Below native density the composite sharpens what
   // the browser will stretch to the screen.
-  post.state.samples = ratio >= 2.5 ? 2 : 4;
+  post.state.samples = ratio >= (isTouch ? 2 : 2.5) ? 2 : 4;
   post.state.sharpen = Math.min(0.6, Math.max(0, 1 - ratio / devicePixelRatio) * 1.4);
   renderer.setPixelRatio(ratio);
   updateGlowScale();
@@ -247,10 +249,10 @@ function addShadowProxy(mesh, silhouette) {
   scene.add(proxy);
 }
 function troopShadows({ near, mid, far }, winged = false) {
-  const silhouette = isTouch ? troopShadowGeometry(far.geometry, winged) : far.geometry;
+  const silhouette = troopShadowGeometry(far.geometry, winged);
   addShadowProxy(near, silhouette);
   addShadowProxy(mid, silhouette);
-  if (isTouch) addShadowProxy(far, silhouette);
+  addShadowProxy(far, silhouette);
 }
 blueForms.forEach((form, index) => troopShadows(form, index === SUNWING_FORM || TROOP_FORMS[index] === 'Ascended'));
 troopShadows(redForm);
@@ -263,7 +265,8 @@ for (const kind of [2, 3, 5, 7, 8]) {
   overlaysFar[kind] = gearMesh(enemyGearGeometry(kind, 'low'));
 }
 overlays[6] = overlaysMid[6] = overlaysFar[6] = gearMesh(M.spikesGeo());
-overlays[9] = overlaysMid[9] = overlaysFar[9] = gearMesh(ghostKitGeometry());
+overlays[9] = overlaysMid[9] = gearMesh(ghostKitGeometry());
+overlaysFar[9] = gearMesh(ghostKitGeometry('low'));
 // Indexed by the unit's detail level: far, mid, near.
 const overlaysByDetail = [overlaysFar, overlaysMid, overlays];
 const overlayMeshes = [...new Set(overlaysByDetail.flatMap(set => Object.values(set)))];
@@ -427,7 +430,7 @@ function seek(C, x, z, maxD, dir) {
 const PT = {
   x: new Float32Array(MAX_PART), y: new Float32Array(MAX_PART), z: new Float32Array(MAX_PART),
   vx: new Float32Array(MAX_PART), vy: new Float32Array(MAX_PART), vz: new Float32Array(MAX_PART),
-  life: new Float32Array(MAX_PART), max: new Float32Array(MAX_PART), col: new Float32Array(MAX_PART * 3), head: 0,
+  life: new Float32Array(MAX_PART), max: new Float32Array(MAX_PART), col: new Float32Array(MAX_PART * 3), head: 0, scanEnd: 0,
 };
 function burst(x, y, z, col, n, spd = 4, size = 1) {
   if (TURBO) return;
@@ -439,6 +442,7 @@ function burst(x, y, z, col, n, spd = 4, size = 1) {
     PT.vx[i] = Math.cos(a) * s; PT.vz[i] = Math.sin(a) * s; PT.vy[i] = spd * (0.6 + Math.random());
     PT.max[i] = PT.life[i] = (0.45 + Math.random() * 0.4) * size;
     c[i * 3] = col[0]; c[i * 3 + 1] = col[1]; c[i * 3 + 2] = col[2];
+    if (i + 1 > PT.scanEnd) PT.scanEnd = i + 1;
   }
 }
 function spark(x, y, z, col, n, speed = 4, size = 0.8, life = 0.5, grav = -6) {
@@ -446,12 +450,14 @@ function spark(x, y, z, col, n, speed = 4, size = 0.8, life = 0.5, grav = -6) {
 }
 // Live particles are packed at the front so only they are drawn and uploaded.
 function updateParticles(dt) {
+  if (PT.scanEnd === 0) return;
   const m = partMesh.instanceMatrix.array, c = partMesh.instanceColor.array;
-  let n = 0;
-  for (let i = 0; i < MAX_PART; i++) {
+  let n = 0, last = 0;
+  for (let i = 0; i < PT.scanEnd; i++) {
     if (PT.life[i] <= 0) continue;
     PT.life[i] -= dt;
     if (PT.life[i] <= 0) continue;
+    last = i + 1;
     PT.vy[i] -= 20 * dt;
     PT.x[i] += PT.vx[i] * dt; PT.y[i] += PT.vy[i] * dt; PT.z[i] += PT.vz[i] * dt;
     if (PT.y[i] < 0.08) { PT.y[i] = 0.08; PT.vy[i] *= -0.4; PT.vx[i] *= 0.7; PT.vz[i] *= 0.7; }
@@ -461,9 +467,12 @@ function updateParticles(dt) {
     c[n * 3] = PT.col[i * 3]; c[n * 3 + 1] = PT.col[i * 3 + 1]; c[n * 3 + 2] = PT.col[i * 3 + 2];
     n++;
   }
+  PT.scanEnd = last;
   partMesh.count = n;
-  uploadUsed(partMesh.instanceMatrix, n);
-  uploadUsed(partMesh.instanceColor, n);
+  if (n > 0) {
+    uploadUsed(partMesh.instanceMatrix, n);
+    uploadUsed(partMesh.instanceColor, n);
+  }
 }
 const PCOL = {
   blue: rgb(0x55b8ff), red: rgb(0xff3030), gold: rgb(0xffcc22), orange: rgb(0xff7a1a), white: rgb(0xffffff), ice: rgb(0xb8f0ff),
@@ -479,7 +488,7 @@ function makeLabel(cls) {
   el.className = 'lbl ' + cls;
   el.style.display = 'none';
   labelLayer.appendChild(el);
-  return { el, cls, text: null, vis: false };
+  return { el, cls, text: null, vis: false, tx: '' };
 }
 function project(x, y, z) {
   tmpV.set(x, y, z).project(camera);
@@ -491,7 +500,8 @@ function placeLabel(L, x, y, z, text) {
   if (!project(x, y, z)) { hideLabel(L); return; }
   const height = L.cls === 'boss' ? 64 : 40;
   if (tmpV.y - height < labelTop || tmpV.y > labelBottom || tmpV.x < -40 || tmpV.x > innerWidth + 40) { hideLabel(L); return; }
-  L.el.style.transform = `translate(${clamp(tmpV.x, 60, innerWidth - 60).toFixed(1)}px,${tmpV.y.toFixed(1)}px) translate(-50%,-100%)`;
+  const tx = `translate(${clamp(tmpV.x, 60, innerWidth - 60).toFixed(1)}px,${tmpV.y.toFixed(1)}px) translate(-50%,-100%)`;
+  if (L.tx !== tx) { L.el.style.transform = tx; L.tx = tx; }
   if (L.text !== text) { L.el.textContent = text; L.text = text; }
   if (!L.vis) { L.el.style.display = ''; L.vis = true; }
 }
@@ -531,18 +541,20 @@ function popup(text, cls, x, y, z, life = 1.3) {
     }
   }
   p.inner.textContent = text;
-  p.inner.className = '';
-  void p.inner.offsetWidth;
-  p.inner.className = cls;
+  if (p.inner.className === cls) restartAnimations(p.inner);
+  else p.inner.className = cls;
   p.el.style.display = '';
   return p;
 }
 function targetDamagePopup(target, amount) {
-  const p = popup('-' + fmt(amount), amount >= target.max * .05 ? 'dmg target big' : 'dmg target', 0, 0, 0, .85);
+  const big = amount >= target.max * .05, label = '-' + fmt(amount);
+  const p = popup(label, big ? 'dmg target big' : 'dmg target', 0, 0, 0, .85);
   if (!p) return;
   target.damageSide = -(target.damageSide || -1);
   p.target = target; p.side = target.damageSide;
-  p.width = p.inner.offsetWidth; p.height = p.inner.offsetHeight;
+  // Estimate popup bounds from font clamp rules instead of forcing a synchronous layout read.
+  const fs = big ? clamp(innerWidth * .045, 20, 28) : clamp(innerWidth * .037, 16, 22);
+  p.width = label.length * fs * .66 + 10; p.height = fs * 1.25;
   p.el.style.display = 'none';
   // One number per flank keeps rapid damage readable without covering the face.
   for (const q of popups) if (q !== p && q.target === target && q.side === p.side) {
@@ -577,9 +589,20 @@ function updatePopups(dt) {
   }
 }
 
+function restartAnimations(el) {
+  if (!el.getAnimations) return;
+  for (const anim of el.getAnimations()) { anim.currentTime = 0; anim.play(); }
+}
+function retriggerClass(el, cls) {
+  if (el.classList.contains(cls)) restartAnimations(el);
+  else el.classList.add(cls);
+}
 const hud = {
   root: $('hud'), army: $('army'), armybox: $('armybox'), lives: $('lives'), level: $('lvlname'), pips: $('pips'),
-  charge: $('chargefill'), ups: $('ups'), banner: $('banner'), tip: $('tip'), hint: $('hint'), white: $('white'),
+  charge: $('chargefill'), chargeBox: $('charge'), giantCount: $('giant-count'), ups: $('ups'), banner: $('banner'),
+  tip: $('tip'), hint: $('hint'), white: $('white'), rankname: $('rankname'), rankdot: $('rankdot'),
+  targetghost: $('targetghost'), targetfill: $('targetfill'), targetname: $('targetname'), clock: $('clock'),
+  shieldcount: $('shieldcount'), surge: $('surge'), sweepAction: $('sweep-action'), sweepClock: $('sweep-clock'),
 };
 if (typeof ResizeObserver !== 'undefined') {
   const bounds = new ResizeObserver(() => { labelBoundsDirty = true; });
@@ -588,10 +611,10 @@ if (typeof ResizeObserver !== 'undefined') {
 let bannerTimer = 0, tipTimer = 0;
 function banner(text, cls = '', dur = 1.6) {
   if (TURBO) return;
-  hud.banner.className = '';
-  void hud.banner.offsetWidth;
+  const nextCls = 'show ' + cls;
   hud.banner.textContent = text;
-  hud.banner.className = 'show ' + cls;
+  if (hud.banner.className === nextCls) restartAnimations(hud.banner);
+  else hud.banner.className = nextCls;
   bannerTimer = dur;
 }
 function showTip(text) {
@@ -603,7 +626,7 @@ function showTip(text) {
 }
 function whiteFlash() {
   if (TURBO) return;
-  hud.white.classList.remove('on'); void hud.white.offsetWidth; hud.white.classList.add('on');
+  retriggerClass(hud.white, 'on');
 }
 const hudCache = {};
 function setHud(key, el, val, prop = 'textContent') {
@@ -987,14 +1010,14 @@ function startLevel(idx, stageIdx = 0, hardcore = false) {
   const world = M.buildWorld(def.theme, def.stages.length * STAGE_GAP);
   W.decorate(def.theme, world, def.stages.length * STAGE_GAP);
   G.root.add(world);
-  if (isTouch) chunkScenery(world);
+  chunkScenery(world);
   // Ground, road and scenery never move: compose their matrices once instead of every frame.
   world.updateMatrixWorld(true);
   world.traverse((o) => { o.matrixAutoUpdate = o.matrixWorldAutoUpdate = false; });
   G.stages = def.stages.map((sd, i) => buildStage(sd, i, G.root, def.theme));
   for (let i = 0; i < stageIdx; i++) if (G.stages[i].tower) { G.stages[i].tower.alive = false; G.stages[i].tower.model.group.visible = false; }
   B.n = R.n = 0;
-  PT.life.fill(0);
+  PT.life.fill(0); PT.scanEnd = 0; partMesh.count = 0;
   sparks.clear(); debris.clear(); tracers.clear(); impactRings.clear(); G.shatters = [];
   for (const pool of [redToss, ...blueToss]) { pool.n = 0; pool.mesh.count = 0; pool.mesh.visible = false; }
   endCine(true); G.hitStop = 0;
@@ -1314,7 +1337,16 @@ function updateArsenal(S, dt) {
     // Balls intercept direct fire, including shots fired before they start rolling.
     const ball = S.balls.find(b => b.alive && b.hp > 0 && b.z < z && Math.hypot(b.x - x, b.z - z) < range + b.r && (lob || !shotBlocked(S, x, z, b.x, b.z)));
     let j = ball ? -1 : nearestVisibleRed(S, x, z, range, null, true, lob);
-    const target = !ball && j < 0 ? [S.tower, S.boss, ...S.spawners, ...S.turrets].find(t => t?.alive && t.hp > 0 && t.z < z && Math.hypot((t.x ?? 0) - x, t.z - z) < range + 2 && (lob || !shotBlocked(S, x, z, t.x ?? 0, t.z))) : null;
+    let target = null;
+    if (!ball && j < 0) {
+      const hitTarget = (t) => t?.alive && t.hp > 0 && t.z < z && Math.hypot((t.x ?? 0) - x, t.z - z) < range + 2 && (lob || !shotBlocked(S, x, z, t.x ?? 0, t.z));
+      if (hitTarget(S.tower)) target = S.tower;
+      else if (hitTarget(S.boss)) target = S.boss;
+      else {
+        for (let k = 0; k < S.spawners.length; k++) if (hitTarget(S.spawners[k])) { target = S.spawners[k]; break; }
+        if (!target) for (let k = 0; k < S.turrets.length; k++) if (hitTarget(S.turrets[k])) { target = S.turrets[k]; break; }
+      }
+    }
     if (!ball && j < 0 && !target) { B.shot[i] = .12; continue; }
     B.shot[i] = spec.cooldown; budget--;
     B.flash[i] = Math.max(B.flash[i], .25);
@@ -1728,7 +1760,7 @@ function absorb(S, g, i) {
         const gain = G.hardcore ? `+${v} ARMOR` : `+${v} ♥`;
         banner(gain, 'pink', 1.2);
         popup(gain, 'combo c3', G.cx, 2.5, G.cannonZ - 2, 1.2);
-        if (!TURBO) { sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.pink, 50, 0.5, 1.2); hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit'); }
+        if (!TURBO) { sparks.stream(g.x, 1.5, g.z, G.cx, 1.4, G.cannonZ, PCOL.pink, 50, 0.5, 1.2); retriggerClass(hud.lives, 'hit'); }
         sound.play('upgrade');
         g.need = Math.round(g.need * 2.5); g.prog = 0;
       } else if (t === 'hypno') {
@@ -1867,6 +1899,10 @@ function moveBlue(S, dt, indexed = false) {
   const late = S.bumpers.length + S.carts.length + S.eggs.length + S.fusions.length > 0;
 
   const k = Math.min(1, dt * 5), halt = G.phase === 'clear' || G.phase === 'won';
+  const bx = B.x, bz = B.z, brad = B.rad, gHead = gB.head, gNext = gB.next;
+  const hasZones = G.zones.length > 0, hasBelts = S.belts.length > 0, hasBalls = S.balls.length > 0;
+  const hasPillars = S.pillars.length > 0, hasSpawners = S.spawners.length > 0, hasTurrets = S.turrets.length > 0;
+  const hasReds = R.n > 0;
   for (let i = 0; i < B.n; i++) {
     if (B.hp[i] <= 0) continue;
     if (B.adur[i] > 0) {
@@ -1889,9 +1925,9 @@ function moveBlue(S, dt, indexed = false) {
     const giant = B.kind[i] & GIANT;
     let sp = giant ? GIANT_SPEED : BLUE_SPEED;
     let x = B.x[i], z = B.z[i];
-    for (const zn of G.zones) if (Math.abs(x - zn.x) < zn.w / 2 && Math.abs(z - zn.z) < zn.d / 2) sp *= 0.3;
+    if (hasZones) for (let zi = 0; zi < G.zones.length; zi++) { const zn = G.zones[zi]; if (Math.abs(x - zn.x) < zn.w / 2 && Math.abs(z - zn.z) < zn.d / 2) sp *= 0.3; }
     let dx = 0, dz = -1;
-    if (seek(cR, x, z, 9, -1)) {
+    if (hasReds && seek(cR, x, z, 9, -1)) {
       const tx = TX - x, tz = TZ - z, d = Math.hypot(tx, tz) || 1;
       dx = tx / d; dz = Math.min(tz / d, -0.35);
     } else if (boss && z < G.z0 - 34) {
@@ -1901,35 +1937,38 @@ function moveBlue(S, dt, indexed = false) {
     const n = Math.hypot(dx, dz);
     B.vx[i] += (dx / n * sp - B.vx[i]) * k;
     B.vz[i] += (dz / n * sp - B.vz[i]) * k;
-    // separation from neighbours
+    // separation from neighbours (early-reject d2 >= 1.96 since md <= 1.4)
     let pxs = 0, pzs = 0;
-    const cx = cellX(x), cz = cellZ(z), ri = B.rad[i];
-    for (let gz = cz - 1; gz <= cz + 1; gz++) {
-      if (gz < 0 || gz >= GROWS) continue;
-      for (let gx = cx - 1; gx <= cx + 1; gx++) {
-        if (gx < 0 || gx >= GCOLS) continue;
-        let j = gB.head[gz * GCOLS + gx];
+    const cx = cellX(x), cz = cellZ(z), ri = brad[i];
+    const gz0 = cz > 0 ? cz - 1 : 0, gz1 = cz < GROWS - 1 ? cz + 1 : GROWS - 1;
+    const gx0 = cx > 0 ? cx - 1 : 0, gx1 = cx < GCOLS - 1 ? cx + 1 : GCOLS - 1;
+    for (let gz = gz0; gz <= gz1; gz++) {
+      const row = gz * GCOLS;
+      for (let gx = gx0; gx <= gx1; gx++) {
+        let j = gHead[row + gx];
         while (j !== -1) {
           if (j !== i) {
-            const ddx = x - B.x[j], ddz = z - B.z[j], d2 = ddx * ddx + ddz * ddz;
-            const md = Math.min(1.4, (ri + B.rad[j]) * 0.85);
-            if (d2 < md * md && d2 > 1e-6) { const d = Math.sqrt(d2), f = (md - d) / d * 0.3; pxs += ddx * f; pzs += ddz * f; }
+            const ddx = x - bx[j], ddz = z - bz[j], d2 = ddx * ddx + ddz * ddz;
+            if (d2 < 1.96 && d2 > 1e-6) {
+              const md = Math.min(1.4, (ri + brad[j]) * 0.85);
+              if (d2 < md * md) { const d = Math.sqrt(d2), f = (md - d) / d * 0.3; pxs += ddx * f; pzs += ddz * f; }
+            }
           }
-          j = gB.next[j];
+          j = gNext[j];
         }
       }
     }
     B.px[i] = x; B.pz[i] = z;
     x += B.vx[i] * dt + clamp(pxs, -0.12, 0.12);
     z += B.vz[i] * dt + clamp(pzs, -0.08, 0.08);
-    for (const bt of S.belts) if (z > bt.zTop && z < bt.zBot && Math.abs(x - bt.x) < bt.w / 2) x += bt.v * dt;
+    if (hasBelts) for (let bi = 0; bi < S.belts.length; bi++) { const bt = S.belts[bi]; if (z > bt.zTop && z < bt.zBot && Math.abs(x - bt.x) < bt.w / 2) x += bt.v * dt; }
     x = wallClamp(S, B.px[i], clamp(x, -XLIM, XLIM), z);
     B.x[i] = x; B.z[i] = z;
     B.phase[i] += dt * (giant ? 9 : 15);
     if (B.flash[i] > 0) B.flash[i] -= dt * 2.5;
 
     // Balls intercept troops before gates, combat and the fort, including during deployment delay.
-    collideBalls(S, i);
+    if (hasBalls) collideBalls(S, i);
     if (B.hp[i] <= 0) continue;
     // gates
     const pz = B.pz[i], band = ccZ(z);
@@ -1953,16 +1992,18 @@ function moveBlue(S, dt, indexed = false) {
     if (B.hp[i] <= 0 || B.adur[i] > 0) continue;
     x = B.x[i]; z = B.z[i];
     if (S.saws.length && sawHit(S, x, z)) { hurt(i, 4, 0.12); if (B.hp[i] <= 0) continue; }
-    for (const p of S.pillars) if (p.alive && Math.abs(x - p.x) < 1.05 && Math.abs(z - p.z) < 1.05) { hitThing(p, i, PCOL.sand); break; }
+    if (hasPillars) for (let pi = 0; pi < S.pillars.length; pi++) { const p = S.pillars[pi]; if (p.alive && Math.abs(x - p.x) < 1.05 && Math.abs(z - p.z) < 1.05) { hitThing(p, i, PCOL.sand); break; } }
     if (B.hp[i] <= 0) continue;
     if (late) { lateContacts(S, i); if (B.hp[i] <= 0 || B.adur[i] > 0) continue; }
     // targets
     if (tower && z <= tower.z + 1.1) { damageTarget(tower, i, PCOL.red); continue; }
-    for (const s of S.spawners) {
+    if (hasSpawners) for (let si = 0; si < S.spawners.length; si++) {
+      const s = S.spawners[si];
       if (s.alive && Math.abs(x - s.x) < 1.6 && Math.abs(z - s.z) < 1.6) { damageTarget(s, i, PCOL.ice); break; }
     }
     if (B.hp[i] <= 0) continue;
-    for (const s of S.turrets) {
+    if (hasTurrets) for (let ti = 0; ti < S.turrets.length; ti++) {
+      const s = S.turrets[ti];
       if (s.alive && Math.abs(x - s.x) < 1.3 && Math.abs(z - s.z) < 1.3) { damageTarget(s, i, PCOL.metal); break; }
     }
     if (B.hp[i] <= 0) continue;
@@ -1982,6 +2023,8 @@ function moveBlue(S, dt, indexed = false) {
 function moveRed(S, dt, indexed = false) {
   if (!indexed && R.n) indexGateBands(S);
   const k = Math.min(1, dt * 4);
+  const rx = R.x, rz = R.z, rrad = R.rad, rHead = gR.head, rNext = gR.next;
+  const hasBlues = B.n > 0, hasBelts = S.belts.length > 0, hasPillars = S.pillars.length > 0;
   for (let i = 0; i < R.n; i++) {
     if (R.hp[i] <= 0) continue;
     if (R.burn[i] > 0) {
@@ -2003,7 +2046,7 @@ function moveRed(S, dt, indexed = false) {
       else continue;
     }
     let dx = 0, dz = 1;
-    if (seek(cB, x, z, 8, 1)) {
+    if (hasBlues && seek(cB, x, z, 8, 1)) {
       const tx = TX - x, tz = TZ - z, d = Math.hypot(tx, tz) || 1;
       dx = tx / d; dz = Math.max(tz / d, 0.35);
     }
@@ -2011,26 +2054,29 @@ function moveRed(S, dt, indexed = false) {
     R.vx[i] += (dx / n * T.speed * slow - R.vx[i]) * k;
     R.vz[i] += (dz / n * T.speed * slow - R.vz[i]) * k;
     let pxs = 0, pzs = 0;
-    const cx = cellX(x), cz = cellZ(z), ri = R.rad[i];
-    for (let gz = cz - 1; gz <= cz + 1; gz++) {
-      if (gz < 0 || gz >= GROWS) continue;
-      for (let gx = cx - 1; gx <= cx + 1; gx++) {
-        if (gx < 0 || gx >= GCOLS) continue;
-        let j = gR.head[gz * GCOLS + gx];
+    const cx = cellX(x), cz = cellZ(z), ri = rrad[i];
+    const gz0 = cz > 0 ? cz - 1 : 0, gz1 = cz < GROWS - 1 ? cz + 1 : GROWS - 1;
+    const gx0 = cx > 0 ? cx - 1 : 0, gx1 = cx < GCOLS - 1 ? cx + 1 : GCOLS - 1;
+    for (let gz = gz0; gz <= gz1; gz++) {
+      const row = gz * GCOLS;
+      for (let gx = gx0; gx <= gx1; gx++) {
+        let j = rHead[row + gx];
         while (j !== -1) {
           if (j !== i) {
-            const ddx = x - R.x[j], ddz = z - R.z[j], d2 = ddx * ddx + ddz * ddz;
-            const md = ri + R.rad[j] + 0.05;
-            if (d2 < md * md && d2 > 1e-6) { const d = Math.sqrt(d2), f = (md - d) / d * 0.3; pxs += ddx * f; pzs += ddz * f; }
+            const ddx = x - rx[j], ddz = z - rz[j], d2 = ddx * ddx + ddz * ddz;
+            if (d2 < 3.2 && d2 > 1e-6) {
+              const md = ri + rrad[j] + 0.05;
+              if (d2 < md * md) { const d = Math.sqrt(d2), f = (md - d) / d * 0.3; pxs += ddx * f; pzs += ddz * f; }
+            }
           }
-          j = gR.next[j];
+          j = rNext[j];
         }
       }
     }
     R.px[i] = x; R.pz[i] = z;
     x += R.vx[i] * dt + clamp(pxs, -0.1, 0.1);
     z += R.vz[i] * dt + clamp(pzs, -0.06, 0.06);
-    if (!T.fly) for (const bt of S.belts) if (z > bt.zTop && z < bt.zBot && Math.abs(x - bt.x) < bt.w / 2) x += bt.v * dt;
+    if (!T.fly && hasBelts) for (let bi = 0; bi < S.belts.length; bi++) { const bt = S.belts[bi]; if (z > bt.zTop && z < bt.zBot && Math.abs(x - bt.x) < bt.w / 2) x += bt.v * dt; }
     x = clamp(x, -XLIM, XLIM);
     const band = ccZ(z), crossed = ccZ(R.pz[i]) === band ? gateBands[band] : S.gates;
     for (const g of crossed) {
@@ -2043,7 +2089,7 @@ function moveRed(S, dt, indexed = false) {
       redGate(g, i, x, z);
     }
     if (R.hp[i] <= 0) continue;
-    for (const p of S.pillars) {
+    if (hasPillars) for (let pi = 0; pi < S.pillars.length; pi++) { const p = S.pillars[pi];
       if (!p.alive || Math.abs(z - p.z) > 1.0) continue;
       const hw = 0.95 + R.rad[i];
       if (Math.abs(x - p.x) < hw) x = p.x + (R.px[i] >= p.x ? hw : -hw);
@@ -2656,7 +2702,7 @@ function hurtFlash() {
   buzz(70);
   if (TURBO) return;
   G.hurtT = 1; hitStop(0.06);
-  hud.lives.classList.remove('hit'); void hud.lives.offsetWidth; hud.lives.classList.add('hit');
+  retriggerClass(hud.lives, 'hit');
   sound.play('hit');
 }
 function meteorStrike(S, r, from) {
@@ -3456,18 +3502,25 @@ function troopInView(frustum, pool, index) {
   // Include the longest projection of the unit's shadow on the ground.
   // The battle sun is always offset by +12 on x and +30 on z,
   // at a height of 34. Keep an extra unit for the shadow filter.
-  troopBounds.min.set(x - extent - top * (12 / 34) - 1, -1, z - extent - top * (30 / 34) - 1);
-  troopBounds.max.set(x + extent + 1, top, z + extent + 1);
-  return frustum.intersectsBox(troopBounds);
+  const minX = x - extent - top * (12 / 34) - 1, maxX = x + extent + 1;
+  const minZ = z - extent - top * (30 / 34) - 1, maxZ = z + extent + 1;
+  const planes = frustum.planes;
+  for (let p = 0; p < 6; p++) {
+    const plane = planes[p], n = plane.normal;
+    if (n.x * (n.x > 0 ? maxX : minX) + n.y * (n.y > 0 ? top : -1) + n.z * (n.z > 0 ? maxZ : minZ) + plane.constant < 0) return false;
+  }
+  return true;
 }
 // Projected height in CSS pixels picks the detail level (0 far, 1 mid, 2 near). Each
 // boundary keeps a 4 px band of hysteresis so units at the edge do not flicker.
 const DETAIL_ENTER = [24, 48], DETAIL_KEEP = [20, 44];
+let crowdLodScale = 1;
 function troopInstance(P, i, form) {
   const dx = P.x[i] - camera.position.x, dz = P.z[i] - camera.position.z;
   const distanceSq = Math.max(1, dx*dx + camera.position.y*camera.position.y + dz*dz);
   const size = P.sc[i] * troopPixelScale, sizeSq = size * size, was = P.detail[i];
-  const mid = was >= 1 ? DETAIL_KEEP[0] : DETAIL_ENTER[0], near = was >= 2 ? DETAIL_KEEP[1] : DETAIL_ENTER[1];
+  const mid = (was >= 1 ? DETAIL_KEEP[0] : DETAIL_ENTER[0]) * crowdLodScale;
+  const near = (was >= 2 ? DETAIL_KEEP[1] : DETAIL_ENTER[1]) * crowdLodScale;
   const detail = sizeSq > distanceSq * mid*mid ? (sizeSq > distanceSq * near*near ? 2 : 1) : 0;
   P.detail[i] = detail;
   const mesh = detail === 2 ? form.near : detail ? form.mid : form.far, at = mesh.count++;
@@ -3544,7 +3597,7 @@ let cheer = 0;
 // unit matrix: heading + forward lean while running, squash & stretch on each step, pop-in when spawned
 function writeMatrix(m, i, P, speed, run, instance) {
   const s = P.sc[i], c = speed ? P.vz[i]/speed : 1, si = speed ? P.vx[i]/speed : 0;
-  const pitch = 0.22 * run, cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const pitch = 0.22 * run, p2 = pitch * pitch, cp = 1 - p2 * 0.5, sp = pitch - pitch * p2 * (1 / 6);
   const ph = P.phase[i];
   const age = P.age[i];
   const pop = age < 0.2 ? 1 + 2.70158 * (age / 0.2 - 1) ** 3 + 1.70158 * (age / 0.2 - 1) ** 2 : 1; // easeOutBack
@@ -3616,7 +3669,8 @@ function defensePose(target) {
 const starColor = new THREE.Color();
 function renderWorld(dt) {
   updateTroopMotion(G.t);
-  labelLayer.style.visibility = G.phase === 'menu' || G.shown || G.cine > 0 ? 'hidden' : 'visible';
+  const labelVis = G.phase === 'menu' || G.shown || G.cine > 0 ? 'hidden' : 'visible';
+  if (hudCache.labelVis !== labelVis) { hudCache.labelVis = labelVis; labelLayer.style.visibility = labelVis; }
   cheer = G.phase === 'clear' || G.phase === 'won' ? Math.min(1, G.phaseT / 0.3) : 0;
   // Fireworks over the fallen boss while the army cheers.
   if (G.phase === 'won' && !reducedMotion && G.phaseT > 0.5 && G.phaseT < 7.5) {
@@ -3735,7 +3789,7 @@ function renderWorld(dt) {
   }
 
   for (const actor of fleet) if (actor.group.visible) {
-    for (const barrel of actor.barrels.children) barrel.position.z = G.recoil * .19;
+    actor.setRecoil(G.recoil * .19);
   }
   if (!TURBO && !reducedMotion) muzzleJets.pose(G.t);
   for (const model of airWings.values()) model.group.visible = false;
@@ -3851,14 +3905,18 @@ function renderWorld(dt) {
       c.model.animate?.();
       c.model.shadow.material.opacity = (c.warn || 0) * 0.5 + (c.down ? 0.3 : 0);
     }
-    for (const s of [...S.spawners, ...S.turrets]) {
-      if (!s.alive) continue;
-      s.flash = Math.max(0, s.flash - dt * 4);
-      s.model.group.scale.setScalar(1 + s.flash * 0.08);
-      if (s.model.head && s.aim !== undefined) s.model.head.rotation.y = s.aim;
-      s.model.animate?.(G.t, defensePose(s));
-      if (cur) placeLabel(s.label, s.x, s.model.head ? 2.8 : 3.2, s.z, fmtHp(s.hp));
-      else hideLabel(s.label);
+    for (let listIdx = 0; listIdx < 2; listIdx++) {
+      const list = listIdx === 0 ? S.spawners : S.turrets;
+      for (let k = 0; k < list.length; k++) {
+        const s = list[k];
+        if (!s.alive) continue;
+        s.flash = Math.max(0, s.flash - dt * 4);
+        s.model.group.scale.setScalar(1 + s.flash * 0.08);
+        if (s.model.head && s.aim !== undefined) s.model.head.rotation.y = s.aim;
+        s.model.animate?.(G.t, defensePose(s));
+        if (cur) placeLabel(s.label, s.x, s.model.head ? 2.8 : 3.2, s.z, fmtHp(s.hp));
+        else hideLabel(s.label);
+      }
     }
     if (S.tower) {
       const T = S.tower;
@@ -3895,8 +3953,10 @@ function renderWorld(dt) {
   }
 
   troopPixelScale = innerHeight * 1.2 / (2 * Math.tan(camera.fov * Math.PI / 360));
+  const crowd = B.n + R.n;
+  crowdLodScale = crowd > 120 ? Math.min(1.65, 1 + (crowd - 120) / 500) : 1;
   let frustum;
-  if (isTouch && B.n + R.n > 80) {
+  if (B.n + R.n > 40) {
     camera.updateMatrixWorld();
     troopViewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum = troopFrustum.setFromProjectionMatrix(troopViewProjection);
@@ -3936,7 +3996,7 @@ function renderWorld(dt) {
   G.pumpT -= dt;
   if (G.army > G.armyPrev * 1.6 && G.army > 20 && G.pumpT <= 0) {
     G.pumpT = 0.35;
-    hud.armybox.classList.remove('pump'); void hud.armybox.offsetWidth; hud.armybox.classList.add('pump');
+    retriggerClass(hud.armybox, 'pump');
   }
   G.armyPrev = G.armyPrev * 0.9 + G.army * 0.1;
   setHud('armyTier', hud.army, G.army >= 1e9 ? 't4' : G.army >= 1e6 ? 't3' : G.army >= 1000 ? 't2' : '', 'className');
@@ -3944,32 +4004,33 @@ function renderWorld(dt) {
   const low = G.lives <= 3 && !G.hardcore;
   if (hudCache.livesLow !== low) { hudCache.livesLow = low; hud.lives.classList.toggle('low', low); }
   const rank = RANKS[G.rank];
-  setHud('rank', $('rankname'), rank.name);
-  $('rankdot').style.backgroundColor = '#' + rank.color.toString(16).padStart(6, '0');
+  setHud('rank', hud.rankname, rank.name);
+  if (hudCache.rankColor !== rank.color) { hudCache.rankColor = rank.color; hud.rankdot.style.backgroundColor = '#' + rank.color.toString(16).padStart(6, '0'); }
   const target = G.stage?.tower?.alive ? G.stage.tower : G.stage?.boss;
   const health = target ? Math.max(0, target.hp / target.max) : 0;
   // The ghost bar only trails on the way down; refills and new targets snap.
-  if (hudCache.targetHealth !== `${health * 100}%`) $('targetghost').classList.toggle('snap', health >= (hudCache.targetLevel ?? 0));
+  const healthPct = `${health * 100}%`;
+  if (hudCache.targetHealth !== healthPct) hud.targetghost.classList.toggle('snap', health >= (hudCache.targetLevel ?? 0));
   hudCache.targetLevel = health;
-  setHud('targetGhost', $('targetghost'), `${health * 100}%`, 'width');
-  setHud('targetHealth', $('targetfill'), `${health * 100}%`, 'width');
-  setHud('targetText', $('targetname'), `${G.stage?.boss ? BOSS_CARDS[G.levelIdx][0].replace(/^The /, '') : 'Fort'} · ${fmtHp(Math.max(0, target?.hp || 0))} · ${Math.ceil(health * 100)}%`);
+  setHud('targetGhost', hud.targetghost, healthPct, 'width');
+  setHud('targetHealth', hud.targetfill, healthPct, 'width');
+  setHud('targetText', hud.targetname, `${G.stage?.boss ? BOSS_CARDS[G.levelIdx][0].replace(/^The /, '') : 'Fort'} · ${fmtHp(Math.max(0, target?.hp || 0))} · ${Math.ceil(health * 100)}%`);
   const seconds = Math.floor(G.time);
-  setHud('clock', $('clock'), `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
-  setHud('clockLate', $('clock'), !G.fullRun || G.time >= SWIFT_SECONDS ? 'late' : '', 'className');
+  setHud('clock', hud.clock, `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
+  setHud('clockLate', hud.clock, !G.fullRun || G.time >= SWIFT_SECONDS ? 'late' : '', 'className');
   const danger = G.lives <= 2 && !G.hardcore && G.phase === 'play';
   if (hudCache.danger !== danger) { hudCache.danger = danger; hud.root.classList.toggle('danger', danger); }
-  setHud('shield', $('shieldcount'), G.shield > 0 ? `Armor ${G.shield}` : '');
+  setHud('shield', hud.shieldcount, G.shield > 0 ? `Armor ${G.shield}` : '');
   renderSweep(G.phase === 'play' ? G.stage.sweep : null);
   const counter = G.phase === 'play' && G.stage.counterShots ? `Aegis guards ×${COUNTER_POWER} · ${G.stage.counterShots} ${G.stage.counterShots === 1 ? 'volley' : 'volleys'}` : '';
   const supply = G.phase === 'play' ? supplyMessage(G.stage.drop,G.cx) : '';
   const route = G.phase === 'play' ? routeMessage(G.stage) : '';
-  setHud('surgeKind', $('surge'), supply ? 'supply' : route && !counter ? 'route' : '', 'className');
-  setHud('surge', $('surge'), supply || counter || route || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
+  setHud('surgeKind', hud.surge, supply ? 'supply' : route && !counter ? 'route' : '', 'className');
+  setHud('surge', hud.surge, supply || counter || route || (G.overdrive > 0 ? `Wreck bonus x2 / ${Math.ceil(G.overdrive)}s` : G.stage?.breach >= 2 ? `Breach x${G.stage.breach.toFixed(1)}` : ''));
   renderReactor(reactor);
   const giantLaunched = G.t - cannon.giantAt < .4;
-  setHud('giantCount', $('giant-count'), giantLaunched ? 'Launched' : (CHARGE_MAX-G.charge) + (CHARGE_MAX-G.charge === 1 ? ' volley' : ' volleys'));
-  setHud('giantReady', $('charge'), giantLaunched || G.charge >= CHARGE_MAX - 5 ? 'ready' : '', 'className');
+  setHud('giantCount', hud.giantCount, giantLaunched ? 'Launched' : (CHARGE_MAX-G.charge) + (CHARGE_MAX-G.charge === 1 ? ' volley' : ' volleys'));
+  setHud('giantReady', hud.chargeBox, giantLaunched || G.charge >= CHARGE_MAX - 5 ? 'ready' : '', 'className');
   setHud('charge', hud.charge, ((G.charge / CHARGE_MAX) * 100).toFixed(0) + '%', 'width');
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) hud.banner.className = ''; }
   if (tipTimer > 0) { tipTimer -= dt; if (tipTimer <= 0) hud.tip.className = 'stroke'; }
@@ -3981,8 +4042,8 @@ function renderSweep(sweep) {
   if (!sweep) return;
   const safe = Math.abs(G.cx - sweep.x) >= SWEEP_RADIUS, late = sweep.life <= COUNTER_WINDOW;
   setHud('sweepClass', sweepPanel, safe ? 'safe' : late ? 'late' : '', 'className');
-  setHud('sweepAction', $('sweep-action'), safe ? 'Lane clear' : late ? 'Dodge now!' : 'Boss sweep');
-  setHud('sweepTime', $('sweep-clock'), (Math.ceil(sweep.life * 10) / 10).toFixed(1) + ' s');
+  setHud('sweepAction', hud.sweepAction, safe ? 'Lane clear' : late ? 'Dodge now!' : 'Boss sweep');
+  setHud('sweepTime', hud.sweepClock, (Math.ceil(sweep.life * 10) / 10).toFixed(1) + ' s');
   const lane = x => clamp((x / XLIM + 1) * 50, 0, 100);
   if (hudCache.sweepX !== sweep.x) {
     hudCache.sweepX = sweep.x;

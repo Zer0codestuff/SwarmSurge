@@ -93,7 +93,9 @@ export function helmet(k,form) {
     if(j>=7 && s<.24)return form==='trooper'||form==='raider'?1:5;
     return f<-.55 && j<8?0:2;
   };
-  const silhouette = k.low ? [0, 2, 3, 4, 5, 6, 7, 8, 10] : profile.map((_, j) => j);
+  const silhouette = k.low ? [0, 2, 3, 4, 6, 8, 10]
+    : k.level === 'mid' ? [0, 2, 3, 4, 5, 6, 7, 8, 10]
+    : profile.map((_, j) => j);
   k.b.add(shell(k.t.helmet, silhouette, sample, color, paint), 0xffffff);
 }
 
@@ -118,6 +120,8 @@ export function cuirass(k,form) {
     if(f<-.55 && j>3 && s<.41)return j===5?4:0;
     return j<5?1:2;
   };
-  const silhouette = k.low ? [0, 2, 4, 6, 7, 9, 10] : rows.map((_, j) => j);
+  const silhouette = k.low ? [0, 2, 4, 6, 9, 10]
+    : k.level === 'mid' ? [0, 2, 4, 5, 6, 7, 9, 10]
+    : rows.map((_, j) => j);
   k.b.add(shell(k.t.cuirass, silhouette, sample, color, paint), 0xffffff);
 }

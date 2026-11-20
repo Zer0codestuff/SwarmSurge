@@ -2,10 +2,10 @@ import * as THREE from 'three';
 
 // Closed continuous surfaces for boss anatomy, forged armor and folded cloth.
 // Callers own geometry. Materials are shared for the module lifetime.
-export const bossSkin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .64, metalness: .02 });
-export const bossMetal = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .31, metalness: .48 });
-export const bossCloth = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .94, metalness: 0 });
-export const bossShell = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .39, metalness: .12 });
+export const bossSkin = new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x202226, shininess: 18 });
+export const bossMetal = new THREE.MeshPhongMaterial({ vertexColors: true, color: 0xbdbdbd, specular: 0x7a828c, shininess: 72 });
+export const bossCloth = new THREE.MeshLambertMaterial({ vertexColors: true });
+export const bossShell = new THREE.MeshPhongMaterial({ vertexColors: true, color: 0xf1f1f1, specular: 0x484d54, shininess: 48 });
 for (const m of [bossSkin,bossMetal,bossCloth,bossShell]) m.userData.shared = true;
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

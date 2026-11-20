@@ -131,7 +131,7 @@ export function buildTitleBattle() {
     const t = time + 1.97, fire = mod(t, BEAT), recoil = Math.exp(-fire * 15);
     tide.value = t;
     cannon.animateVehicle(t, 0, recoil, 0, 0);
-    cannon.barrels.children[0].position.z = .21 * recoil;
+    cannon.setRecoil(.21 * recoil);
     flash.visible = fire < .13;
     flash.position.copy(muzzle);
     flash.position.z -= .36;
